@@ -6,6 +6,8 @@ import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import ListsPage from './pages/ListsPage';
 import ListDetailPage from './pages/ListDetailPage';
+import TodosPage from './pages/TodosPage';
+import TodoDetailPage from './pages/TodoDetailPage';
 import Layout from './components/Layout';
 import './index.css';
 
@@ -33,6 +35,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route index element={<DashboardPage />} />
             <Route path="lists" element={<ListsPage />} />
             <Route path="lists/:id" element={<ListDetailPage />} />
+            <Route path="todos" element={<TodosPage />} />
+            <Route path="todos/:id" element={<TodoDetailPage />} />
           </Route>
         </Routes>
       </BrowserRouter>
