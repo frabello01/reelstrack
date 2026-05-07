@@ -8,6 +8,7 @@ const listsRouter = require('./routes/lists');
 const creatorsRouter = require('./routes/creators');
 const reelsRouter = require('./routes/reels');
 const fetchRouter = require('./routes/fetch');
+const todosRouter = require('./routes/todos');
 const { runDailyFetch } = require('./services/fetchService');
 
 const app = express();
@@ -24,6 +25,7 @@ app.use('/api/lists', listsRouter);
 app.use('/api/creators', creatorsRouter);
 app.use('/api/reels', reelsRouter);
 app.use('/api/fetch', fetchRouter);
+app.use('/api/todos', todosRouter);
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date() }));
 
