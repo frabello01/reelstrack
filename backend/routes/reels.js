@@ -8,6 +8,7 @@ router.get('/', async (req, res) => {
   const daysAgo = new Date();
   daysAgo.setDate(daysAgo.getDate() - parseInt(days));
 
+  // If list_id, get creator IDs once
   let creatorIds = null;
   if (list_id) {
     const { data: lc } = await supabase
@@ -18,45 +19,32 @@ router.get('/', async (req, res) => {
     creatorIds = lc.map((r) => r.creator_id);
   }
 
-  let reelsQuery = supabase
+  // Map sort key to actual column
+  const sortColumn = sort === 'views' ? 'views'
+    : sort === 'posted_at' ? 'posted_at'
+    : 'outlier_score';
+
+  // Single query — DB does the sorting with indexes, returns just the page we need
+  let query = supabase
     .from('reels')
-    .select(`
-      id, instagram_id, url, thumbnail_url, caption,
-      views, likes, comments, posted_at, creator_id,
-      creators ( id, username, display_name, profile_pic_url, avg_views_30d )
-    `)
-    .gte('posted_at', daysAgo.toISOString());
+    .select(
+      `id, instagram_id, url, thumbnail_url, caption,
+       views, likes, comments, posted_at, creator_id,
+       outlier_score, creator_avg_views,
+       creators ( id, username, display_name, profile_pic_url )`,
+      { count: 'exact' }
+    )
+    .gte('posted_at', daysAgo.toISOString())
+    .order(sortColumn, { ascending: false })
+    .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
 
-  if (creatorIds) reelsQuery = reelsQuery.in('creator_id', creatorIds);
+  if (creatorIds) query = query.in('creator_id', creatorIds);
 
-  const { data: reels, error: reelsErr } = await reelsQuery;
-  if (reelsErr) return res.status(500).json({ error: reelsErr.message });
-  if (!reels || reels.length === 0) return res.json({ data: [], count: 0 });
+  const { data: reels, error, count } = await query;
+  if (error) return res.status(500).json({ error: error.message });
 
-  const reelIds = reels.map((r) => r.id);
-  const { data: scores } = await supabase
-    .from('reel_scores')
-    .select('reel_id, outlier_score, creator_avg_views')
-    .in('reel_id', reelIds);
-
-  const scoreMap = {};
-  (scores || []).forEach((s) => { scoreMap[s.reel_id] = s; });
-
-  const merged = reels.map((r) => ({
-    ...r,
-    outlier_score: scoreMap[r.id]?.outlier_score || 0,
-    creator_avg_views: scoreMap[r.id]?.creator_avg_views || r.creators?.avg_views_30d || 0,
-    creator: r.creators,
-  }));
-
-  const sortKey = sort === 'views' ? 'views' : sort === 'posted_at' ? 'posted_at' : 'outlier_score';
-  merged.sort((a, b) => {
-    if (sortKey === 'posted_at') return new Date(b.posted_at) - new Date(a.posted_at);
-    return (b[sortKey] || 0) - (a[sortKey] || 0);
-  });
-
-  const paged = merged.slice(parseInt(offset), parseInt(offset) + parseInt(limit));
-  res.json({ data: paged, count: merged.length });
+  const data = (reels || []).map((r) => ({ ...r, creator: r.creators }));
+  res.json({ data, count: count || 0 });
 });
 
 router.get('/stats', async (req, res) => {
@@ -76,21 +64,16 @@ router.get('/stats', async (req, res) => {
     }
   }
 
-  let reelsQ = supabase.from('reels').select('id').gte('posted_at', daysAgo.toISOString());
-  if (creatorFilter) reelsQ = reelsQ.in('creator_id', creatorFilter);
-  const { data: reelsData } = await reelsQ;
-  const reelIds = (reelsData || []).map((r) => r.id);
+  // Single query: get top outlier + count via head request
+  let topQ = supabase
+    .from('reels')
+    .select('outlier_score', { count: 'exact' })
+    .gte('posted_at', daysAgo.toISOString())
+    .order('outlier_score', { ascending: false })
+    .limit(1);
+  if (creatorFilter) topQ = topQ.in('creator_id', creatorFilter);
 
-  let topOutlier = 0;
-  if (reelIds.length > 0) {
-    const { data: topScore } = await supabase
-      .from('reel_scores')
-      .select('outlier_score')
-      .in('reel_id', reelIds)
-      .order('outlier_score', { ascending: false })
-      .limit(1);
-    topOutlier = topScore?.[0]?.outlier_score || 0;
-  }
+  const { data: top, count } = await topQ;
 
   const { data: lastJob } = await supabase
     .from('fetch_jobs')
@@ -100,8 +83,8 @@ router.get('/stats', async (req, res) => {
     .limit(1);
 
   res.json({
-    top_outlier_score: topOutlier,
-    total_reels: reelIds.length,
+    top_outlier_score: top?.[0]?.outlier_score || 0,
+    total_reels: count || 0,
     last_fetch: lastJob?.[0]?.finished_at || null,
   });
 });
