@@ -7,19 +7,42 @@ const ACTOR_ID = 'hpix/ig-reels-scraper';
 
 async function fetchCreatorReels(username, daysBack = 30) {
   console.log(`[Apify] Fetching reels for @${username}, last ${daysBack} days`);
-  const run = await apify.actor(ACTOR_ID).call(
-    {
-      profiles: [username],
-      reels_count: 200, // higher limit; we'll trim by date below
-    },
-    {
-      memory: 4096, // 4GB instead of default 512MB → much faster
-      timeout: 300, // 5 min max per creator
-    }
-  );
+
+  let run;
+  try {
+    run = await apify.actor(ACTOR_ID).call(
+      {
+        profiles: [username],
+        reels_count: 200,
+      },
+      {
+        memory: 4096,
+        timeout: 300,
+      }
+    );
+  } catch (err) {
+    return { items: [], status: 'inactive', error: `Apify call failed: ${err.message}` };
+  }
+
   const { items } = await apify.dataset(run.defaultDatasetId).listItems();
 
-  // Filter out error/empty items and reels older than daysBack
+  // Detect inactive/banned profile: actor returns 1 empty item with no real reel data
+  const hasRealReels = items.some(r => r.code || r.shortCode || r.id);
+  if (!hasRealReels) {
+    return {
+      items: [],
+      status: 'inactive',
+      error: 'Profile not accessible (banned, private, or deleted)',
+      profilePic: null,
+    };
+  }
+
+  // Try to grab profile_pic_url from any item that has owner info
+  const profilePic = items.find(r => r.owner_profile_pic_url || r.user?.profile_pic_url)?.owner_profile_pic_url
+    || items.find(r => r.user?.profile_pic_url)?.user?.profile_pic_url
+    || null;
+
+  // Filter to date range
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - daysBack);
   const filtered = items.filter(r => {
@@ -30,7 +53,7 @@ async function fetchCreatorReels(username, daysBack = 30) {
   });
 
   console.log(`[Apify] Got ${items.length} items, ${filtered.length} within last ${daysBack} days for @${username}`);
-  return filtered;
+  return { items: filtered, status: 'active', error: null, profilePic };
 }
 
 async function runDailyFetch(creatorIds = null) {
@@ -56,18 +79,37 @@ async function runDailyFetch(creatorIds = null) {
 
     const runOne = async (creator) => {
       try {
-        const rawReels = await fetchCreatorReels(creator.username, 30);
-        const stored = await storeReels(creator, rawReels);
-        await updateCreatorAvgViews(creator.id);
-        await computeOutlierScores(creator.id);
-        await supabase
-          .from('creators')
-          .update({ last_fetched_at: new Date().toISOString() })
-          .eq('id', creator.id);
-        reelsCount += stored;
+        const result = await fetchCreatorReels(creator.username, 30);
+
+        // Build creator update payload
+        const updates = {
+          last_fetched_at: new Date().toISOString(),
+          status: result.status,
+          status_checked_at: new Date().toISOString(),
+          status_error: result.error || null,
+        };
+        if (result.profilePic) updates.profile_pic_url = result.profilePic;
+
+        await supabase.from('creators').update(updates).eq('id', creator.id);
+
+        // Only store reels if scrape succeeded
+        if (result.items.length > 0) {
+          const stored = await storeReels(creator, result.items);
+          await updateCreatorAvgViews(creator.id);
+          await computeOutlierScores(creator.id);
+          reelsCount += stored;
+        }
         creatorsCount++;
       } catch (err) {
         console.error(`[FetchService] Error for @${creator.username}:`, err.message);
+        await supabase
+          .from('creators')
+          .update({
+            status: 'error',
+            status_checked_at: new Date().toISOString(),
+            status_error: err.message,
+          })
+          .eq('id', creator.id);
       }
     };
 
