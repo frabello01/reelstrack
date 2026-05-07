@@ -2,9 +2,50 @@ const supabase = require('../lib/supabase');
 
 const HIKERAPI_BASE = 'https://api.hikerapi.com';
 const HIKERAPI_TOKEN = process.env.HIKERAPI_TOKEN;
+const PROFILE_PIC_BUCKET = 'profile-pics';
 
 if (!HIKERAPI_TOKEN) {
   console.warn('[fetchService] WARNING: HIKERAPI_TOKEN env var is not set. Fetches will fail.');
+}
+
+// ---------- Profile pic storage ----------
+
+/**
+ * Downloads an image from a URL and uploads it to Supabase Storage.
+ * Returns the permanent public URL, or null on failure (caller should fallback to original URL).
+ */
+async function persistProfilePic(creatorId, sourceUrl) {
+  if (!sourceUrl || !creatorId) return null;
+  try {
+    const res = await fetch(sourceUrl);
+    if (!res.ok) {
+      console.warn(`[persistProfilePic] download failed (${res.status}) for ${creatorId}`);
+      return null;
+    }
+    const buf = Buffer.from(await res.arrayBuffer());
+    const contentType = res.headers.get('content-type') || 'image/jpeg';
+    const ext = contentType.includes('png') ? 'png' : 'jpg';
+    const path = `${creatorId}.${ext}`;
+
+    const { error: upErr } = await supabase.storage
+      .from(PROFILE_PIC_BUCKET)
+      .upload(path, buf, {
+        contentType,
+        upsert: true,
+        cacheControl: '604800', // 7 days
+      });
+
+    if (upErr) {
+      console.warn(`[persistProfilePic] upload failed for ${creatorId}:`, upErr.message);
+      return null;
+    }
+
+    const { data: pub } = supabase.storage.from(PROFILE_PIC_BUCKET).getPublicUrl(path);
+    return pub?.publicUrl || null;
+  } catch (err) {
+    console.warn(`[persistProfilePic] exception for ${creatorId}:`, err.message);
+    return null;
+  }
 }
 
 // ---------- Low-level HikerAPI helpers ----------
@@ -162,7 +203,14 @@ async function runDailyFetch(creatorIds = null) {
           status_checked_at: new Date().toISOString(),
           status_error: result.error || null,
         };
-        if (result.profilePic) updates.profile_pic_url = result.profilePic;
+
+        // If HikerAPI gave us a fresh profile pic, persist it to Supabase Storage
+        // so we don't depend on Instagram's CDN URLs (which expire).
+        if (result.profilePic) {
+          const persisted = await persistProfilePic(creator.id, result.profilePic);
+          updates.profile_pic_url = persisted || result.profilePic; // fallback to IG URL if upload failed
+        }
+
         if (result.instagramPk && result.instagramPk !== creator.instagram_pk) updates.instagram_pk = result.instagramPk;
         if (result.fullName && !creator.display_name) updates.display_name = result.fullName;
         if (result.followerCount != null) updates.follower_count = result.followerCount;
