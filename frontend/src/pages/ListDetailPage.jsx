@@ -106,6 +106,7 @@ export default function ListDetailPage() {
         <div className="creators-table">
           <div className="table-header">
             <span>Creator</span>
+            <span>Status</span>
             <span>Avg Views (30d)</span>
             <span>Last Fetched</span>
             <span></span>
@@ -123,6 +124,20 @@ export default function ListDetailPage() {
                   <div className="creator-username">@{creator.username}</div>
                   {creator.display_name && <div className="creator-display">{creator.display_name}</div>}
                 </div>
+              </div>
+              <div className="table-cell">
+                {creator.status === 'active' && (
+                  <span className="status-badge status-active">● Active</span>
+                )}
+                {creator.status === 'inactive' && (
+                  <span className="status-badge status-inactive" title={creator.status_error || ''}>● Inactive</span>
+                )}
+                {creator.status === 'error' && (
+                  <span className="status-badge status-error" title={creator.status_error || ''}>● Error</span>
+                )}
+                {(!creator.status || creator.status === 'unknown') && (
+                  <span className="status-badge status-unknown">● Unknown</span>
+                )}
               </div>
               <div className="table-cell">
                 {creator.avg_views_30d
