@@ -59,6 +59,7 @@ export default function ListDetailPage() {
   const handleRemove = async (creatorId) => {
     if (!confirm('Remove creator from this list?')) return;
     await api.removeCreatorFromList(id, creatorId);
+    await api.deleteCreator(creatorId);
     load();
   };
 
