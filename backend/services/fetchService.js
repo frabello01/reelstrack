@@ -16,7 +16,7 @@ async function fetchCreatorReels(username, daysBack = 30) {
     username: username,           // single username (not array)
     resultsLimit: 50,
     onlyPostsNewerThan: getDateDaysAgo(daysBack), // correct field name
-  }, { timeoutSecs: 300 });
+  });
 
   const { items } = await apify.dataset(run.defaultDatasetId).listItems();
   console.log(`[Apify] Got ${items.length} items for @${username}`);
