@@ -1,4 +1,5 @@
 import { Eye, Heart, MessageCircle, ExternalLink } from 'lucide-react';
+import SaveToTodo from './SaveToTodo';
 import './ReelCard.css';
 
 function getScoreClass(score) {
@@ -72,6 +73,7 @@ export default function ReelCard({ reel, rank, formatViews }) {
         <div className="reel-footer">
           <span className={`score-pill ${getScoreClass(score)}`}>{getScoreLabel(score)}</span>
           <span className="reel-time">{timeAgo(reel.posted_at)}</span>
+          <SaveToTodo reelId={reel.id} />
         </div>
       </div>
     </div>
