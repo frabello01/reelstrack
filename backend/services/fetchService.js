@@ -90,13 +90,12 @@ async function runDailyFetch(creatorIds = null) {
 async function storeReels(creator, rawReels) {
   if (!rawReels || rawReels.length === 0) return 0;
 
+  // Debug: log the first item so we can see the actual field names
+  console.log('[storeReels] Sample keys:', Object.keys(rawReels[0] || {}).join(', '));
+  console.log('[storeReels] Sample:', JSON.stringify(rawReels[0]).substring(0, 600));
+
   const reels = rawReels
-    .filter((r) => {
-      // Accept anything that looks like a video/reel
-      const hasViews = r.videoPlayCount != null || r.videoViewCount != null || r.playsCount != null || r.viewsCount != null;
-      const isVideo = r.type === 'Video' || r.mediaType === 'VIDEO' || r.isVideo || hasViews;
-      return isVideo;
-    })
+    .filter((r) => true) // accept all items
     .map((r) => {
       // Handle timestamp: could be unix seconds, unix ms, or ISO string
       let postedAt;
