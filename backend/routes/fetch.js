@@ -1,0 +1,44 @@
+const express = require('express');
+const router = express.Router();
+const { runDailyFetch } = require('../services/fetchService');
+const supabase = require('../lib/supabase');
+
+// POST /api/fetch/run - trigger a manual fetch (all creators or specific list)
+router.post('/run', async (req, res) => {
+  const { list_id } = req.body;
+
+  let creatorIds = null;
+  if (list_id) {
+    const { data: lc } = await supabase
+      .from('list_creators')
+      .select('creator_id')
+      .eq('list_id', list_id);
+    creatorIds = (lc || []).map((r) => r.creator_id);
+    if (creatorIds.length === 0) {
+      return res.status(400).json({ error: 'No creators in this list' });
+    }
+  }
+
+  // Run async — don't block the response
+  res.json({ message: 'Fetch job started', list_id: list_id || 'all' });
+
+  try {
+    await runDailyFetch(creatorIds);
+    console.log('[FetchRoute] Manual fetch complete.');
+  } catch (err) {
+    console.error('[FetchRoute] Manual fetch failed:', err.message);
+  }
+});
+
+// GET /api/fetch/jobs - get recent fetch job history
+router.get('/jobs', async (req, res) => {
+  const { data, error } = await supabase
+    .from('fetch_jobs')
+    .select('*')
+    .order('started_at', { ascending: false })
+    .limit(20);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+module.exports = router;
