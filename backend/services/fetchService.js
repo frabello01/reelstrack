@@ -7,19 +7,25 @@ const ACTOR_ID = 'hpix/ig-reels-scraper';
 
 async function fetchCreatorReels(username, daysBack = 30) {
   console.log(`[Apify] Fetching reels for @${username}, last ${daysBack} days`);
-  const run = await apify.actor(ACTOR_ID).call({
-    profiles: [username],
-    reels_count: 100,
-  });
+  const run = await apify.actor(ACTOR_ID).call(
+    {
+      profiles: [username],
+      reels_count: 200, // higher limit; we'll trim by date below
+    },
+    {
+      memory: 4096, // 4GB instead of default 512MB → much faster
+      timeout: 300, // 5 min max per creator
+    }
+  );
   const { items } = await apify.dataset(run.defaultDatasetId).listItems();
 
   // Filter out error/empty items and reels older than daysBack
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - daysBack);
   const filtered = items.filter(r => {
-    if (!r.code && !r.shortCode && !r.id) return false; // no id = error item
+    if (!r.code && !r.shortCode && !r.id) return false;
     const ts = r.taken_at_formatted || r.timestamp || r.taken_at;
-    if (!ts) return true; // keep if no date
+    if (!ts) return true;
     return new Date(ts) >= cutoff;
   });
 
@@ -43,21 +49,31 @@ async function runDailyFetch(creatorIds = null) {
     const { data: creators, error } = await query;
     if (error) throw error;
 
-    for (const creator of creators) {
-      try {
-        const rawReels = await fetchCreatorReels(creator.username, 30);
-        const stored = await storeReels(creator, rawReels);
-        await updateCreatorAvgViews(creator.id);
-        await computeOutlierScores(creator.id);
-        reelsCount += stored;
-        creatorsCount++;
-        await supabase
-          .from('creators')
-          .update({ last_fetched_at: new Date().toISOString() })
-          .eq('id', creator.id);
-      } catch (err) {
-        console.error(`[FetchService] Error for @${creator.username}:`, err.message);
-      }
+    // Process creators in parallel batches of 3 (fast but doesn't overload Apify)
+    const BATCH_SIZE = 3;
+    for (let i = 0; i < creators.length; i += BATCH_SIZE) {
+      const batch = creators.slice(i, i + BATCH_SIZE);
+      const results = await Promise.allSettled(
+        batch.map(async (creator) => {
+          const rawReels = await fetchCreatorReels(creator.username, 30);
+          const stored = await storeReels(creator, rawReels);
+          await updateCreatorAvgViews(creator.id);
+          await computeOutlierScores(creator.id);
+          await supabase
+            .from('creators')
+            .update({ last_fetched_at: new Date().toISOString() })
+            .eq('id', creator.id);
+          return stored;
+        })
+      );
+      results.forEach((r, idx) => {
+        if (r.status === 'fulfilled') {
+          reelsCount += r.value;
+          creatorsCount++;
+        } else {
+          console.error(`[FetchService] Error for @${batch[idx].username}:`, r.reason?.message);
+        }
+      });
     }
 
     await supabase
@@ -137,13 +153,15 @@ async function updateCreatorAvgViews(creatorId) {
 }
 
 async function computeOutlierScores(creatorId) {
+  // Re-read avg_views_30d (might have just been updated)
   const { data: creator } = await supabase
     .from('creators')
     .select('avg_views_30d')
     .eq('id', creatorId)
     .single();
 
-  if (!creator || creator.avg_views_30d === 0) return;
+  if (!creator) return;
+  const avg = creator.avg_views_30d || 0;
 
   const { data: reels } = await supabase
     .from('reels')
@@ -155,15 +173,17 @@ async function computeOutlierScores(creatorId) {
   const scores = reels.map((r) => ({
     reel_id: r.id,
     creator_id: creatorId,
-    outlier_score: parseFloat(((r.views || 0) / creator.avg_views_30d).toFixed(4)),
+    outlier_score: avg > 0 ? parseFloat(((r.views || 0) / avg).toFixed(4)) : 0,
     views_at_score: r.views || 0,
-    creator_avg_views: creator.avg_views_30d,
+    creator_avg_views: avg,
     computed_at: new Date().toISOString(),
   }));
 
-  await supabase
+  const { error } = await supabase
     .from('reel_scores')
     .upsert(scores, { onConflict: 'reel_id', ignoreDuplicates: false });
+  if (error) console.error(`[computeOutlierScores] Upsert error:`, error.message);
+  else console.log(`[computeOutlierScores] Wrote ${scores.length} scores for creator ${creatorId} (avg=${avg})`);
 }
 
 module.exports = { runDailyFetch, fetchCreatorReels, computeOutlierScores };
