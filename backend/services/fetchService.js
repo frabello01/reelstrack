@@ -49,32 +49,45 @@ async function runDailyFetch(creatorIds = null) {
     const { data: creators, error } = await query;
     if (error) throw error;
 
-    // Process creators in parallel batches of 3 (fast but doesn't overload Apify)
-    const BATCH_SIZE = 3;
-    for (let i = 0; i < creators.length; i += BATCH_SIZE) {
-      const batch = creators.slice(i, i + BATCH_SIZE);
-      const results = await Promise.allSettled(
-        batch.map(async (creator) => {
-          const rawReels = await fetchCreatorReels(creator.username, 30);
-          const stored = await storeReels(creator, rawReels);
-          await updateCreatorAvgViews(creator.id);
-          await computeOutlierScores(creator.id);
-          await supabase
-            .from('creators')
-            .update({ last_fetched_at: new Date().toISOString() })
-            .eq('id', creator.id);
-          return stored;
-        })
-      );
-      results.forEach((r, idx) => {
-        if (r.status === 'fulfilled') {
-          reelsCount += r.value;
-          creatorsCount++;
-        } else {
-          console.error(`[FetchService] Error for @${batch[idx].username}:`, r.reason?.message);
+    // Rolling concurrency pool: always keep MAX_CONCURRENT running until queue is empty
+    const MAX_CONCURRENT = 6;
+    const queue = [...creators];
+    const inFlight = new Set();
+
+    const runOne = async (creator) => {
+      try {
+        const rawReels = await fetchCreatorReels(creator.username, 30);
+        const stored = await storeReels(creator, rawReels);
+        await updateCreatorAvgViews(creator.id);
+        await computeOutlierScores(creator.id);
+        await supabase
+          .from('creators')
+          .update({ last_fetched_at: new Date().toISOString() })
+          .eq('id', creator.id);
+        reelsCount += stored;
+        creatorsCount++;
+      } catch (err) {
+        console.error(`[FetchService] Error for @${creator.username}:`, err.message);
+      }
+    };
+
+    await new Promise((resolve) => {
+      const launchNext = () => {
+        // Fill any open slots
+        while (inFlight.size < MAX_CONCURRENT && queue.length > 0) {
+          const creator = queue.shift();
+          const p = runOne(creator).then(() => {
+            inFlight.delete(p);
+            if (queue.length === 0 && inFlight.size === 0) resolve();
+            else launchNext();
+          });
+          inFlight.add(p);
         }
-      });
-    }
+        // Edge case: empty queue and nothing in flight
+        if (queue.length === 0 && inFlight.size === 0) resolve();
+      };
+      launchNext();
+    });
 
     await supabase
       .from('fetch_jobs')
