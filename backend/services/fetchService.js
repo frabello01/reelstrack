@@ -13,9 +13,8 @@ async function fetchCreatorReels(username, daysBack = 30) {
   console.log(`[Apify] Fetching reels for @${username}, last ${daysBack} days`);
 
   const run = await apify.actor(ACTOR_ID).call({
-    username: [username],
+    directUrls: [`https://www.instagram.com/${username}/`],
     resultsLimit: 50,
-    onlyPostsNewerThan: getDateDaysAgo(daysBack),
     proxy: {
       useApifyProxy: true,
       apifyProxyGroups: ['RESIDENTIAL'],
