@@ -1,20 +1,26 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Bookmark, Plus, Check } from 'lucide-react';
 import { api } from '../lib/api';
 import './SaveToTodo.css';
 
 export default function SaveToTodo({ reelId }) {
   const [open, setOpen] = useState(false);
+  const [coords, setCoords] = useState({ top: 0, left: 0 });
   const [todos, setTodos] = useState([]);
   const [savedIn, setSavedIn] = useState(new Set());
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
+  const btnRef = useRef();
   const dropdownRef = useRef();
 
   useEffect(() => {
     const handler = (e) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) setOpen(false);
+      if (
+        dropdownRef.current && !dropdownRef.current.contains(e.target) &&
+        btnRef.current && !btnRef.current.contains(e.target)
+      ) setOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -25,7 +31,6 @@ export default function SaveToTodo({ reelId }) {
     try {
       const lists = await api.getTodos();
       setTodos(lists);
-      // Check which lists already contain this reel
       const containing = new Set();
       for (const l of lists) {
         const detail = await api.getTodo(l.id);
@@ -38,7 +43,18 @@ export default function SaveToTodo({ reelId }) {
   };
 
   const handleOpen = () => {
-    if (!open) loadTodos();
+    if (!open && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      // Position above & to the right; flip if near bottom of viewport
+      const dropdownH = 280;
+      const dropdownW = 220;
+      const top = rect.bottom + dropdownH > window.innerHeight
+        ? rect.top - dropdownH - 6
+        : rect.bottom + 6;
+      const left = Math.min(rect.right - dropdownW, window.innerWidth - dropdownW - 8);
+      setCoords({ top: Math.max(8, top), left: Math.max(8, left) });
+      loadTodos();
+    }
     setOpen(!open);
   };
 
@@ -64,8 +80,9 @@ export default function SaveToTodo({ reelId }) {
   };
 
   return (
-    <div className="save-todo" ref={dropdownRef}>
+    <>
       <button
+        ref={btnRef}
         className={`save-btn ${savedIn.size > 0 ? 'saved' : ''}`}
         onClick={handleOpen}
         title="Save to to-do list"
@@ -73,12 +90,15 @@ export default function SaveToTodo({ reelId }) {
         <Bookmark size={14} fill={savedIn.size > 0 ? 'currentColor' : 'none'} />
       </button>
 
-      {open && (
-        <div className="save-dropdown">
+      {open && createPortal(
+        <div
+          ref={dropdownRef}
+          className="save-dropdown"
+          style={{ top: coords.top, left: coords.left }}
+        >
           <div className="save-dropdown-header">Save to…</div>
 
           {loading && <div className="save-loading">Loading…</div>}
-
           {!loading && todos.length === 0 && !creating && (
             <div className="save-empty">No lists yet</div>
           )}
@@ -110,8 +130,9 @@ export default function SaveToTodo({ reelId }) {
               <Plus size={14} /> New list
             </button>
           )}
-        </div>
+        </div>,
+        document.body
       )}
-    </div>
+    </>
   );
 }
