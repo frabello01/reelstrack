@@ -183,7 +183,17 @@ async function computeOutlierScores(creatorId) {
     .from('reel_scores')
     .upsert(scores, { onConflict: 'reel_id', ignoreDuplicates: false });
   if (error) console.error(`[computeOutlierScores] Upsert error:`, error.message);
-  else console.log(`[computeOutlierScores] Wrote ${scores.length} scores for creator ${creatorId} (avg=${avg})`);
+
+  // ALSO write denormalized score onto reels table for fast sorting
+  await Promise.all(
+    scores.map((s) =>
+      supabase
+        .from('reels')
+        .update({ outlier_score: s.outlier_score, creator_avg_views: s.creator_avg_views })
+        .eq('id', s.reel_id)
+    )
+  );
+  console.log(`[computeOutlierScores] Wrote ${scores.length} scores for creator ${creatorId} (avg=${avg})`);
 }
 
 module.exports = { runDailyFetch, fetchCreatorReels, computeOutlierScores };
