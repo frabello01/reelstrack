@@ -43,4 +43,17 @@ export const api = {
   triggerFetch: (list_id) =>
     request('/api/fetch/run', { method: 'POST', body: JSON.stringify({ list_id }) }),
   getFetchJobs: () => request('/api/fetch/jobs'),
+
+  // To-Do Lists
+  getTodos: () => request('/api/todos'),
+  getTodo: (id) => request(`/api/todos/${id}`),
+  createTodo: (name) => request('/api/todos', { method: 'POST', body: JSON.stringify({ name }) }),
+  renameTodo: (id, name) => request(`/api/todos/${id}`, { method: 'PATCH', body: JSON.stringify({ name }) }),
+  deleteTodo: (id) => request(`/api/todos/${id}`, { method: 'DELETE' }),
+  addReelToTodo: (todoId, reel_id) =>
+    request(`/api/todos/${todoId}/reels`, { method: 'POST', body: JSON.stringify({ reel_id }) }),
+  removeReelFromTodo: (todoId, reelId) =>
+    request(`/api/todos/${todoId}/reels/${reelId}`, { method: 'DELETE' }),
+  toggleReelDone: (todoId, reelId, is_done) =>
+    request(`/api/todos/${todoId}/reels/${reelId}`, { method: 'PATCH', body: JSON.stringify({ is_done }) }),
 };
