@@ -9,11 +9,22 @@ async function fetchCreatorReels(username, daysBack = 30) {
   console.log(`[Apify] Fetching reels for @${username}, last ${daysBack} days`);
   const run = await apify.actor(ACTOR_ID).call({
     profiles: [username],
-    reels_count: 50,
+    reels_count: 100,
   });
   const { items } = await apify.dataset(run.defaultDatasetId).listItems();
-  console.log(`[Apify] Got ${items.length} items for @${username}`);
-  return items;
+
+  // Filter out error/empty items and reels older than daysBack
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - daysBack);
+  const filtered = items.filter(r => {
+    if (!r.code && !r.shortCode && !r.id) return false; // no id = error item
+    const ts = r.taken_at_formatted || r.timestamp || r.taken_at;
+    if (!ts) return true; // keep if no date
+    return new Date(ts) >= cutoff;
+  });
+
+  console.log(`[Apify] Got ${items.length} items, ${filtered.length} within last ${daysBack} days for @${username}`);
+  return filtered;
 }
 
 async function runDailyFetch(creatorIds = null) {
@@ -93,7 +104,7 @@ async function storeReels(creator, rawReels) {
       views: r.play_count || r.videoPlayCount || r.videoViewCount || 0,
       likes: r.like_count || r.likesCount || r.likes || 0,
       comments: r.comment_count || r.commentsCount || r.comments || 0,
-      duration_seconds: r.duration || r.videoDuration || null,
+      duration_seconds: r.duration ? Math.round(r.duration) : null,
       posted_at: postedAt,
     };
   });
