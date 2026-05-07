@@ -15,7 +15,11 @@ async function fetchCreatorReels(username, daysBack = 30) {
   const run = await apify.actor(ACTOR_ID).call({
     username: [username],
     resultsLimit: 50,
-    onlyPostsNewerThan: getDateDaysAgo(daysBack), // correct field name
+    onlyPostsNewerThan: getDateDaysAgo(daysBack),
+    proxy: {
+      useApifyProxy: true,
+      apifyProxyGroups: ['RESIDENTIAL'],
+    },
   });
 
   const { items } = await apify.dataset(run.defaultDatasetId).listItems();
