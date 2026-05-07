@@ -17,14 +17,17 @@
 .sidebar-logo {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-family: var(--font-display);
-  font-size: 16px;
-  font-weight: 800;
-  color: var(--accent2);
-  padding: 4px 12px 20px;
+  justify-content: center;
+  padding: 8px 12px 20px;
   border-bottom: 1px solid var(--border);
   margin-bottom: 16px;
+}
+
+.sidebar-logo img {
+  max-width: 100%;
+  height: auto;
+  max-height: 48px;
+  object-fit: contain;
 }
 
 .sidebar-nav {
