@@ -1,6 +1,6 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { LayoutDashboard, ListVideo, LogOut, Play, CheckSquare } from 'lucide-react';
+import { LayoutDashboard, ListVideo, LogOut, CheckSquare } from 'lucide-react';
 import './Layout.css';
 
 export default function Layout() {
@@ -16,8 +16,7 @@ export default function Layout() {
     <div className="layout">
       <aside className="sidebar">
         <div className="sidebar-logo">
-          <Play size={20} fill="currentColor" />
-          <span>ReelsTracker</span>
+          <img src="/logo.png" alt="Creator Advisor" />
         </div>
 
         <nav className="sidebar-nav">
