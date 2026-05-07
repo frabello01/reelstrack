@@ -13,12 +13,13 @@ async function fetchCreatorReels(username, daysBack = 30) {
   console.log(`[Apify] Fetching reels for @${username}, last ${daysBack} days`);
 
   const run = await apify.actor(ACTOR_ID).call({
-    usernames: [username],
+    username: username,           // single username (not array)
     resultsLimit: 50,
-    scrapePostsUntilDate: getDateDaysAgo(daysBack),
-  });
+    onlyPostsNewerThan: getDateDaysAgo(daysBack), // correct field name
+  }, { timeoutSecs: 300 });
 
   const { items } = await apify.dataset(run.defaultDatasetId).listItems();
+  console.log(`[Apify] Got ${items.length} items for @${username}`);
   return items;
 }
 
@@ -90,21 +91,42 @@ async function storeReels(creator, rawReels) {
   if (!rawReels || rawReels.length === 0) return 0;
 
   const reels = rawReels
-    .filter((r) => r.type === 'Video' || r.videoPlayCount != null)
-    .map((r) => ({
-      creator_id: creator.id,
-      instagram_id: r.id || r.shortCode,
-      url: r.url || `https://www.instagram.com/reel/${r.shortCode}/`,
-      thumbnail_url: r.displayUrl || r.thumbnailUrl || null,
-      caption: r.caption ? r.caption.substring(0, 500) : null,
-      views: r.videoPlayCount || r.videoViewCount || 0,
-      likes: r.likesCount || 0,
-      comments: r.commentsCount || 0,
-      duration_seconds: r.videoDuration || null,
-      posted_at: r.timestamp || r.takenAtTimestamp
-        ? new Date((r.timestamp || r.takenAtTimestamp) * 1000).toISOString()
-        : new Date().toISOString(),
-    }));
+    .filter((r) => {
+      // Accept anything that looks like a video/reel
+      const hasViews = r.videoPlayCount != null || r.videoViewCount != null || r.playsCount != null || r.viewsCount != null;
+      const isVideo = r.type === 'Video' || r.mediaType === 'VIDEO' || r.isVideo || hasViews;
+      return isVideo;
+    })
+    .map((r) => {
+      // Handle timestamp: could be unix seconds, unix ms, or ISO string
+      let postedAt;
+      const ts = r.timestamp || r.takenAtTimestamp || r.postedAt || r.taken_at;
+      if (ts) {
+        if (typeof ts === 'string') {
+          postedAt = new Date(ts).toISOString();
+        } else if (ts > 1e12) {
+          postedAt = new Date(ts).toISOString(); // milliseconds
+        } else {
+          postedAt = new Date(ts * 1000).toISOString(); // seconds
+        }
+      } else {
+        postedAt = new Date().toISOString();
+      }
+
+      const shortCode = r.shortCode || r.shortcode || r.code || r.id;
+      return {
+        creator_id: creator.id,
+        instagram_id: r.id || shortCode,
+        url: r.url || r.link || `https://www.instagram.com/reel/${shortCode}/`,
+        thumbnail_url: r.displayUrl || r.thumbnailUrl || r.thumbnail || r.previewUrl || null,
+        caption: (r.caption || r.text || r.description || '').substring(0, 500) || null,
+        views: r.videoPlayCount || r.videoViewCount || r.playsCount || r.viewsCount || r.plays || r.views || 0,
+        likes: r.likesCount || r.likes || r.likeCount || 0,
+        comments: r.commentsCount || r.comments || r.commentCount || 0,
+        duration_seconds: r.videoDuration || r.duration || null,
+        posted_at: postedAt,
+      };
+    });
 
   if (reels.length === 0) return 0;
 
