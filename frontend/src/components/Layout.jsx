@@ -1,6 +1,6 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { LayoutDashboard, ListVideo, LogOut, Play } from 'lucide-react';
+import { LayoutDashboard, ListVideo, LogOut, Play, CheckSquare } from 'lucide-react';
 import './Layout.css';
 
 export default function Layout() {
@@ -28,6 +28,10 @@ export default function Layout() {
           <NavLink to="/lists" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
             <ListVideo size={18} />
             Creator Lists
+          </NavLink>
+          <NavLink to="/todos" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+            <CheckSquare size={18} />
+            To-Do Lists
           </NavLink>
         </nav>
 
