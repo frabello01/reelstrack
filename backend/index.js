@@ -20,7 +20,17 @@ const PORT = process.env.PORT || 3001;
 // Middleware
 app.use(cors({ origin: process.env.FRONTEND_URL || '*' }));
 app.use(express.json());
-app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 200 }));
+
+// Health check endpoint — exempt from rate limiting (used by UptimeRobot to keep the dyno awake)
+app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date() }));
+
+// Rate limiter — applies to all OTHER routes.
+// Skip the high-frequency polling endpoint so the FetchProgress bar doesn't burn the limit.
+app.use(rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 1000, // raised from 200 to 1000 to accommodate normal in-app usage
+  skip: (req) => req.path === '/api/fetch/active',
+}));
 
 // Routes
 app.use('/api/lists', listsRouter);
@@ -29,8 +39,6 @@ app.use('/api/reels', reelsRouter);
 app.use('/api/fetch', fetchRouter);
 app.use('/api/todos', todosRouter);
 app.use('/api/my-accounts', myAccountsRouter);
-
-app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date() }));
 
 // Daily cron: runs every day at 6:00 AM UTC
 cron.schedule('0 6 * * *', async () => {
