@@ -173,7 +173,9 @@ async function fetchCreatorReels(creator, daysBack = 30) {
 
 // ---------- Main job runner ----------
 
-async function runDailyFetch(creatorIds = null) {
+async function runDailyFetch(creatorIds = null, options = {}) {
+  // options.force = true skips the 24-hour cap (used for manual triggers, optional)
+  const { force = false } = options;
   const { data: job } = await supabase
     .from('fetch_jobs')
     .insert({ status: 'running' })
@@ -182,12 +184,28 @@ async function runDailyFetch(creatorIds = null) {
 
   let creatorsCount = 0;
   let reelsCount = 0;
+  let skippedCount = 0;
 
   try {
     let query = supabase.from('creators').select('*');
     if (creatorIds) query = query.in('id', creatorIds);
-    const { data: creators, error } = await query;
+    const { data: allCreators, error } = await query;
     if (error) throw error;
+
+    // Daily fetch cap: skip any creator already fetched within the last 24 hours.
+    // BUT new creators (last_fetched_at IS NULL) are ALWAYS fetched, regardless of cap.
+    // Manual force=true override skips the cap entirely.
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+    const creators = force
+      ? allCreators
+      : allCreators.filter((c) => {
+          if (!c.last_fetched_at) return true; // never fetched → always include
+          return new Date(c.last_fetched_at).getTime() < cutoff;
+        });
+    skippedCount = allCreators.length - creators.length;
+    if (skippedCount > 0) {
+      console.log(`[FetchService] Skipping ${skippedCount} creator(s) fetched within last 24h`);
+    }
 
     const MAX_CONCURRENT = 6;
     const queue = [...creators];
@@ -263,7 +281,7 @@ async function runDailyFetch(creatorIds = null) {
       })
       .eq('id', job.id);
 
-    return { creatorsCount, reelsCount };
+    return { creatorsCount, reelsCount, skippedCount };
   } catch (err) {
     await supabase
       .from('fetch_jobs')
