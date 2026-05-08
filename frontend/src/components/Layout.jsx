@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { LayoutDashboard, ListVideo, LogOut, CheckSquare, Menu, X } from 'lucide-react';
+import FetchProgress from './FetchProgress';
 import './Layout.css';
 
 export default function Layout() {
@@ -87,6 +88,9 @@ export default function Layout() {
       <main className="main-content">
         <Outlet />
       </main>
+
+      {/* Floating progress bar — shows whenever a fetch job is running */}
+      <FetchProgress />
     </div>
   );
 }

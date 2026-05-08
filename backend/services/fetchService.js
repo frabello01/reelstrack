@@ -207,9 +207,16 @@ async function runDailyFetch(creatorIds = null, options = {}) {
       console.log(`[FetchService] Skipping ${skippedCount} creator(s) fetched within last 24h`);
     }
 
+    // Record the total upfront so the frontend can compute progress %
+    await supabase
+      .from('fetch_jobs')
+      .update({ total_creators: creators.length, creators_processed: 0 })
+      .eq('id', job.id);
+
     const MAX_CONCURRENT = 6;
     const queue = [...creators];
     const inFlight = new Set();
+    let processedSoFar = 0;
 
     const runOne = async (creator) => {
       try {
@@ -252,6 +259,15 @@ async function runDailyFetch(creatorIds = null, options = {}) {
             status_error: err.message,
           })
           .eq('id', creator.id);
+      } finally {
+        // Always increment progress, even on error, so the bar reaches 100%
+        processedSoFar++;
+        // Fire-and-forget update; don't await — keeps the loop fast
+        supabase
+          .from('fetch_jobs')
+          .update({ creators_processed: processedSoFar })
+          .eq('id', job.id)
+          .then(() => {}, () => {});
       }
     };
 

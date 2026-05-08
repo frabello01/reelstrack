@@ -43,6 +43,7 @@ export const api = {
   triggerFetch: (list_id) =>
     request('/api/fetch/run', { method: 'POST', body: JSON.stringify({ list_id }) }),
   getFetchJobs: () => request('/api/fetch/jobs'),
+  getActiveFetch: () => request('/api/fetch/active'),
 
   // To-Do Lists
   getTodos: () => request('/api/todos'),
