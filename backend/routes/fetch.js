@@ -4,8 +4,10 @@ const { runDailyFetch } = require('../services/fetchService');
 const supabase = require('../lib/supabase');
 
 // POST /api/fetch/run - trigger a manual fetch (all creators or specific list)
+// Body: { list_id?: string, force?: boolean }
+//   force=true bypasses the 24-hour-per-creator cap (use sparingly)
 router.post('/run', async (req, res) => {
-  const { list_id } = req.body;
+  const { list_id, force = false } = req.body;
 
   let creatorIds = null;
   if (list_id) {
@@ -20,10 +22,10 @@ router.post('/run', async (req, res) => {
   }
 
   // Run async — don't block the response
-  res.json({ message: 'Fetch job started', list_id: list_id || 'all' });
+  res.json({ message: 'Fetch job started', list_id: list_id || 'all', force });
 
   try {
-    await runDailyFetch(creatorIds);
+    await runDailyFetch(creatorIds, { force });
     console.log('[FetchRoute] Manual fetch complete.');
   } catch (err) {
     console.error('[FetchRoute] Manual fetch failed:', err.message);
