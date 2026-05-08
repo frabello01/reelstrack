@@ -43,4 +43,18 @@ router.get('/jobs', async (req, res) => {
   res.json(data);
 });
 
+// GET /api/fetch/active - get the currently-running job (if any)
+// Returns null when nothing is running. Frontend polls this every ~1s.
+router.get('/active', async (req, res) => {
+  const { data, error } = await supabase
+    .from('fetch_jobs')
+    .select('id, status, total_creators, creators_processed, started_at')
+    .eq('status', 'running')
+    .order('started_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data || null);
+});
+
 module.exports = router;
