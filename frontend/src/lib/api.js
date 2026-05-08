@@ -1,15 +1,30 @@
 const BASE = import.meta.env.VITE_API_URL || '';
 
 async function request(path, options = {}) {
-  const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  });
+  const t0 = Date.now();
+  let res;
+  try {
+    res = await fetch(`${BASE}${path}`, {
+      headers: { 'Content-Type': 'application/json' },
+      ...options,
+    });
+  } catch (err) {
+    // Network failure (CORS, offline, server down)
+    console.error(`[api] NETWORK FAIL ${path}:`, err.message);
+    throw err;
+  }
+  const elapsed = Date.now() - t0;
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: 'Unknown error' }));
+    console.error(`[api] HTTP ${res.status} ${path} (${elapsed}ms):`, err.error);
     throw new Error(err.error || `Request failed: ${res.status}`);
   }
-  return res.json();
+  const data = await res.json();
+  // Debug: log empty responses so we can spot when the backend returns [] mysteriously
+  if (Array.isArray(data) && data.length === 0 && !path.includes('/active') && !path.includes('/jobs')) {
+    console.warn(`[api] EMPTY ARRAY from ${path} (${elapsed}ms)`);
+  }
+  return data;
 }
 
 export const api = {

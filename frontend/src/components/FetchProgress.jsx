@@ -65,7 +65,12 @@ export default function FetchProgress() {
 
   const total = job.total_creators ?? 0;
   const done = job.creators_processed ?? 0;
-  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+
+  // If total_creators is missing/zero, the job is malformed (zombie) — hide the bar.
+  // The backend should auto-fail these, but this is a safety net.
+  if (!total || total <= 0) return null;
+
+  const pct = Math.round((done / total) * 100);
 
   return (
     <div className="fetch-progress">

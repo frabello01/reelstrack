@@ -46,10 +46,27 @@ router.get('/jobs', async (req, res) => {
 // GET /api/fetch/active - get the currently-running job (if any)
 // Returns null when nothing is running. Frontend polls this every ~1s.
 router.get('/active', async (req, res) => {
+  // First, auto-fail any zombie jobs (stuck running for >30 min — server probably crashed)
+  const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+  await supabase
+    .from('fetch_jobs')
+    .update({
+      status: 'failed',
+      finished_at: new Date().toISOString(),
+      error: 'Auto-failed: stuck in running state',
+    })
+    .eq('status', 'running')
+    .lt('started_at', thirtyMinAgo);
+
+  // Then return the most recent genuinely-running job (started in the last 30 min).
+  // We also require total_creators to be set, so malformed/old jobs without progress
+  // tracking don't show up as zombies in the UI.
   const { data, error } = await supabase
     .from('fetch_jobs')
     .select('id, status, total_creators, creators_processed, started_at')
     .eq('status', 'running')
+    .gte('started_at', thirtyMinAgo)
+    .not('total_creators', 'is', null)
     .order('started_at', { ascending: false })
     .limit(1)
     .maybeSingle();
