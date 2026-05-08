@@ -56,4 +56,13 @@ export const api = {
     request(`/api/todos/${todoId}/reels/${reelId}`, { method: 'DELETE' }),
   toggleReelDone: (todoId, reelId, is_done) =>
     request(`/api/todos/${todoId}/reels/${reelId}`, { method: 'PATCH', body: JSON.stringify({ is_done }) }),
+  updateReelNote: (todoId, reelId, note) =>
+    request(`/api/todos/${todoId}/reels/${reelId}/note`, { method: 'PATCH', body: JSON.stringify({ note }) }),
+  addReelToTodoByLink: (todoId, url) =>
+    request(`/api/todos/${todoId}/reels/by-link`, { method: 'POST', body: JSON.stringify({ url }) }),
+
+  // Public to-do list (no auth)
+  getPublicTodo: (token) => request(`/api/todos/public/${token}`),
+  togglePublicReelDone: (token, reelId, is_done) =>
+    request(`/api/todos/public/${token}/reels/${reelId}`, { method: 'PATCH', body: JSON.stringify({ is_done }) }),
 };

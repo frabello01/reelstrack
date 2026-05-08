@@ -8,6 +8,7 @@ import ListsPage from './pages/ListsPage';
 import ListDetailPage from './pages/ListDetailPage';
 import TodosPage from './pages/TodosPage';
 import TodoDetailPage from './pages/TodoDetailPage';
+import PublicTodoPage from './pages/PublicTodoPage';
 import Layout from './components/Layout';
 import './index.css';
 
@@ -24,6 +25,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/share/:token" element={<PublicTodoPage />} />
           <Route
             path="/"
             element={
