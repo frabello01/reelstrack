@@ -1,0 +1,149 @@
+.account-detail { padding: 24px; max-width: 1400px; margin: 0 auto; }
+
+.back-btn {
+  background: none; border: none; color: rgba(255,255,255,0.6);
+  display: inline-flex; align-items: center; gap: 6px;
+  cursor: pointer; font-size: 13px; margin-bottom: 16px;
+}
+.back-btn:hover { color: white; }
+
+.account-detail-header {
+  display: flex; gap: 16px; align-items: center; margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+.account-avatar-lg {
+  width: 72px; height: 72px; border-radius: 50%; overflow: hidden;
+  background: rgba(255,255,255,0.05); flex-shrink: 0;
+}
+.account-avatar-lg img { width: 100%; height: 100%; object-fit: cover; }
+.account-avatar-placeholder-lg {
+  width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #a78bfa, #60a5fa);
+  color: white; font-size: 26px; font-weight: 700;
+}
+
+.account-detail-info { flex: 1; min-width: 0; }
+.account-detail-info h1 {
+  margin: 0; color: white; font-family: 'Syne', sans-serif;
+}
+.account-detail-name {
+  color: rgba(255,255,255,0.55); font-size: 14px; margin-top: 2px;
+}
+.account-detail-followers {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 14px; color: rgba(255,255,255,0.7); margin-top: 6px;
+}
+
+.period-tabs {
+  display: flex; gap: 4px; padding: 4px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px; width: fit-content;
+  margin-bottom: 20px;
+}
+.period-tab {
+  background: none; border: none;
+  color: rgba(255,255,255,0.6);
+  padding: 8px 16px; border-radius: 6px;
+  cursor: pointer; font-size: 13px; font-weight: 500;
+  transition: all 0.15s;
+}
+.period-tab:hover { color: white; background: rgba(255,255,255,0.05); }
+.period-tab.active {
+  background: rgba(167,139,250,0.15);
+  color: #c4b5fd;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.metric-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  padding: 14px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.metric-card-label {
+  font-size: 12px; color: rgba(255,255,255,0.55);
+  display: inline-flex; align-items: center; gap: 6px;
+  font-weight: 500;
+}
+.metric-card-value {
+  font-size: 28px; font-weight: 700; color: white;
+  font-variant-numeric: tabular-nums; line-height: 1.1;
+}
+.delta-text {
+  font-size: 12px;
+  display: inline-flex; align-items: center; gap: 3px;
+}
+.delta-up { color: #4ade80; }
+.delta-down { color: #f87171; }
+.delta-neutral { color: rgba(255,255,255,0.4); }
+
+.charts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.chart-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  padding: 16px;
+}
+.chart-card-title {
+  font-size: 13px; color: rgba(255,255,255,0.7);
+  font-weight: 500; margin-bottom: 12px;
+}
+
+.chart-empty {
+  height: 180px;
+  display: flex; align-items: center; justify-content: center;
+  color: rgba(255,255,255,0.4); font-size: 13px; text-align: center;
+  padding: 0 20px;
+}
+
+.top-reels-section h2 {
+  font-family: 'Syne', sans-serif;
+  color: white; margin: 0 0 16px;
+  font-size: 20px;
+}
+
+.top-reels-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+}
+
+.top-reel {
+  position: relative; aspect-ratio: 9/16;
+  border-radius: 8px; overflow: hidden;
+  background: rgba(0,0,0,0.4);
+  text-decoration: none;
+}
+.top-reel img { width: 100%; height: 100%; object-fit: cover; }
+.top-reel-overlay {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  background: linear-gradient(transparent, rgba(0,0,0,0.85));
+  padding: 16px 8px 6px;
+  color: white; font-size: 11px;
+  display: flex; gap: 8px;
+}
+.top-reel-views, .top-reel-likes {
+  display: inline-flex; align-items: center; gap: 3px;
+}
+
+@media (max-width: 600px) {
+  .account-detail { padding: 16px; }
+  .account-detail-info h1 { font-size: 22px; }
+  .charts-grid { grid-template-columns: 1fr; }
+  .metric-grid { grid-template-columns: repeat(2, 1fr); }
+}

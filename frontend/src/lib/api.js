@@ -81,4 +81,12 @@ export const api = {
   getPublicTodo: (token) => request(`/api/todos/public/${token}`),
   togglePublicReelDone: (token, reelId, is_done) =>
     request(`/api/todos/public/${token}/reels/${reelId}`, { method: 'PATCH', body: JSON.stringify({ is_done }) }),
+
+  // My Accounts (accounts I manage)
+  getMyAccounts: () => request('/api/my-accounts'),
+  getMyAccount: (id) => request(`/api/my-accounts/${id}`),
+  addMyAccount: (body) => request('/api/my-accounts', { method: 'POST', body: JSON.stringify(body) }),
+  deleteMyAccount: (id) => request(`/api/my-accounts/${id}`, { method: 'DELETE' }),
+  triggerMyAccountsFetch: (account_id) =>
+    request('/api/my-accounts/fetch/run', { method: 'POST', body: JSON.stringify({ account_id }) }),
 };

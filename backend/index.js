@@ -9,7 +9,9 @@ const creatorsRouter = require('./routes/creators');
 const reelsRouter = require('./routes/reels');
 const fetchRouter = require('./routes/fetch');
 const todosRouter = require('./routes/todos');
+const myAccountsRouter = require('./routes/myAccounts');
 const { runDailyFetch } = require('./services/fetchService');
+const { runMyAccountsFetch } = require('./services/myAccountsService');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -26,6 +28,7 @@ app.use('/api/creators', creatorsRouter);
 app.use('/api/reels', reelsRouter);
 app.use('/api/fetch', fetchRouter);
 app.use('/api/todos', todosRouter);
+app.use('/api/my-accounts', myAccountsRouter);
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date() }));
 
@@ -37,6 +40,18 @@ cron.schedule('0 6 * * *', async () => {
     console.log('[CRON] Daily fetch complete.');
   } catch (err) {
     console.error('[CRON] Daily fetch failed:', err.message);
+  }
+});
+
+// My-accounts cron: runs every day at 5:00 AM UTC (1 hour before competitor fetch)
+// Snapshots followers + reels for each account. Idempotent — safe to run multiple times per day.
+cron.schedule('0 5 * * *', async () => {
+  console.log('[CRON] Starting my-accounts daily snapshot...');
+  try {
+    const r = await runMyAccountsFetch();
+    console.log(`[CRON] My-accounts snapshot complete: ${r.fetched} account(s).`);
+  } catch (err) {
+    console.error('[CRON] My-accounts snapshot failed:', err.message);
   }
 });
 

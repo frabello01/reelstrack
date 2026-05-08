@@ -1,0 +1,108 @@
+.my-accounts-page { padding: 24px; max-width: 1400px; margin: 0 auto; }
+
+.my-accounts-header {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 16px; margin-bottom: 8px; flex-wrap: wrap;
+}
+.my-accounts-header h1 { margin: 0; color: white; font-family: 'Syne', sans-serif; }
+.my-accounts-header .subtitle {
+  color: rgba(255,255,255,0.55); margin: 4px 0 0; font-size: 14px;
+}
+
+.add-account-form {
+  display: flex; gap: 8px; margin: 24px 0 8px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px; padding: 8px;
+}
+.add-account-form input {
+  flex: 1; background: transparent; border: none; outline: none;
+  color: white; padding: 8px 12px; font-size: 14px; min-width: 0;
+}
+.add-account-form input::placeholder { color: rgba(255,255,255,0.35); }
+.add-error { color: #f87171; font-size: 12px; padding: 4px 8px; }
+
+.empty-state {
+  padding: 48px; text-align: center; color: rgba(255,255,255,0.5);
+}
+
+.account-cards {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 16px; margin-top: 24px;
+}
+
+.account-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  padding: 16px;
+  text-decoration: none;
+  display: flex; flex-direction: column;
+  transition: all 0.2s;
+}
+.account-card:hover {
+  background: rgba(255,255,255,0.06);
+  border-color: rgba(167,139,250,0.4);
+  transform: translateY(-2px);
+}
+
+.account-card-header {
+  display: flex; gap: 12px; align-items: center; margin-bottom: 16px;
+}
+.account-avatar {
+  width: 48px; height: 48px; border-radius: 50%; overflow: hidden;
+  background: rgba(255,255,255,0.05); flex-shrink: 0;
+}
+.account-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.account-avatar-placeholder {
+  width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #a78bfa, #60a5fa);
+  color: white; font-size: 18px; font-weight: 700;
+}
+
+.account-info { flex: 1; min-width: 0; }
+.account-username { color: white; font-weight: 600; font-size: 15px; }
+.account-display-name {
+  color: rgba(255,255,255,0.55); font-size: 12px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.account-followers {
+  font-size: 12px; color: rgba(255,255,255,0.5);
+  display: inline-flex; align-items: center; gap: 4px; margin-top: 2px;
+}
+
+.account-delete-btn {
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.5); width: 30px; height: 30px;
+  border-radius: 6px; display: flex; align-items: center; justify-content: center;
+  cursor: pointer; flex-shrink: 0;
+}
+.account-delete-btn:hover { color: #f87171; border-color: rgba(248,113,113,0.4); }
+
+.account-card-body { display: flex; flex-direction: column; gap: 12px; }
+
+.metric-row {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+}
+.metric { display: flex; flex-direction: column; gap: 2px; }
+.metric-label {
+  font-size: 11px; color: rgba(255,255,255,0.5);
+  display: inline-flex; align-items: center; gap: 4px;
+}
+.metric-value { font-size: 18px; font-weight: 700; color: white; }
+
+.delta {
+  display: inline-flex; align-items: center; gap: 2px;
+  font-size: 11px; font-weight: 500;
+}
+.delta-up { color: #4ade80; }
+.delta-down { color: #f87171; }
+.delta-neutral { color: rgba(255,255,255,0.4); }
+
+.sparkline { height: 40px; margin-top: 4px; }
+
+@media (max-width: 600px) {
+  .my-accounts-page { padding: 16px; }
+  .account-cards { grid-template-columns: 1fr; }
+}
