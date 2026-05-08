@@ -2,6 +2,42 @@ const express = require('express');
 const router = express.Router();
 const supabase = require('../lib/supabase');
 
+const HIKERAPI_BASE = 'https://api.hikerapi.com';
+const HIKERAPI_TOKEN = process.env.HIKERAPI_TOKEN;
+
+// ----- Helpers ------------------------------------------------
+
+function extractInstagramShortcode(input) {
+  // Accepts a full IG URL or a bare shortcode
+  if (!input) return null;
+  const trimmed = input.trim();
+  // Bare shortcode (no slash, no http)
+  if (!/[\/:]/.test(trimmed)) return trimmed;
+  // Full URL: pull out /reel/CODE/ or /p/CODE/ or /tv/CODE/
+  const match = trimmed.match(/instagram\.com\/(?:reel|reels|p|tv)\/([A-Za-z0-9_-]+)/i);
+  return match ? match[1] : null;
+}
+
+async function hikerGet(path, params = {}) {
+  if (!HIKERAPI_TOKEN) throw new Error('HIKERAPI_TOKEN not configured on server');
+  const url = new URL(`${HIKERAPI_BASE}${path}`);
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, v);
+  }
+  const res = await fetch(url.toString(), {
+    headers: { 'x-access-key': HIKERAPI_TOKEN, accept: 'application/json' },
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    const err = new Error(`HikerAPI ${res.status}: ${body.slice(0, 200)}`);
+    err.status = res.status;
+    throw err;
+  }
+  return res.json();
+}
+
+// ----- OWNER ENDPOINTS (existing app, requires being signed in via frontend) -----
+
 // GET all to-do lists with first reel thumbnail + counts
 router.get('/', async (req, res) => {
   const { data: lists, error } = await supabase
@@ -12,7 +48,6 @@ router.get('/', async (req, res) => {
   if (error) return res.status(500).json({ error: error.message });
   if (!lists || lists.length === 0) return res.json([]);
 
-  // For each list, fetch first reel's thumbnail + counts
   const enriched = await Promise.all(
     lists.map(async (l) => {
       const { data: items } = await supabase
@@ -44,9 +79,9 @@ router.get('/:id', async (req, res) => {
   const { data: items } = await supabase
     .from('todo_list_reels')
     .select(`
-      id, is_done, added_at, done_at,
+      id, is_done, added_at, done_at, note,
       reels (
-        id, instagram_id, url, thumbnail_url, caption,
+        id, instagram_id, url, thumbnail_url, caption, is_manual,
         views, likes, comments, posted_at,
         creators ( id, username, display_name )
       )
@@ -90,17 +125,111 @@ router.delete('/:id', async (req, res) => {
   res.json({ success: true });
 });
 
-// POST add reel to list
+// POST add reel to list (existing: from already-tracked reels)
 router.post('/:id/reels', async (req, res) => {
   const { reel_id } = req.body;
   if (!reel_id) return res.status(400).json({ error: 'reel_id is required' });
+
+  // Check duplicate explicitly so we can return a friendly message.
+  const { data: existing } = await supabase
+    .from('todo_list_reels')
+    .select('id')
+    .eq('todo_list_id', req.params.id)
+    .eq('reel_id', reel_id)
+    .maybeSingle();
+  if (existing) {
+    return res.status(409).json({ error: 'This reel is already in this list' });
+  }
+
   const { data, error } = await supabase
     .from('todo_list_reels')
-    .upsert({ todo_list_id: req.params.id, reel_id }, { onConflict: 'todo_list_id,reel_id' })
+    .insert({ todo_list_id: req.params.id, reel_id })
     .select()
     .single();
   if (error) return res.status(500).json({ error: error.message });
   res.json(data);
+});
+
+// POST add reel BY INSTAGRAM LINK (new feature 4)
+router.post('/:id/reels/by-link', async (req, res) => {
+  const { url } = req.body;
+  if (!url) return res.status(400).json({ error: 'url is required' });
+
+  const shortcode = extractInstagramShortcode(url);
+  if (!shortcode) {
+    return res.status(400).json({ error: 'Could not parse Instagram URL. Expected something like instagram.com/reel/ABC123/' });
+  }
+
+  try {
+    // Step 1: see if we already have this reel locally
+    const { data: existingReel } = await supabase
+      .from('reels')
+      .select('id')
+      .eq('instagram_id', shortcode) // we use shortcode as instagram_id when manually added
+      .maybeSingle();
+
+    let reelId = existingReel?.id;
+
+    // Step 2: if not, fetch metadata from HikerAPI and store it
+    if (!reelId) {
+      // HikerAPI has /v1/media/by/code which returns the full media object by shortcode
+      let media;
+      try {
+        media = await hikerGet('/v1/media/by/code', { code: shortcode });
+      } catch (err) {
+        return res.status(404).json({ error: `Could not fetch reel metadata: ${err.message}` });
+      }
+
+      const postedAt = media.taken_at_ts
+        ? new Date(media.taken_at_ts * 1000).toISOString()
+        : (media.taken_at ? new Date(media.taken_at).toISOString() : new Date().toISOString());
+
+      const newReel = {
+        creator_id: null, // manual add — not tied to a tracked creator
+        instagram_id: shortcode,
+        url: `https://www.instagram.com/reel/${shortcode}/`,
+        thumbnail_url: media.thumbnail_url || null,
+        caption: (media.caption_text || '').substring(0, 500) || null,
+        views: media.play_count || 0,
+        likes: media.like_count || 0,
+        comments: media.comment_count || 0,
+        duration_seconds: media.video_duration ? Math.round(media.video_duration) : null,
+        posted_at: postedAt,
+        is_manual: true,
+      };
+
+      const { data: inserted, error: insertErr } = await supabase
+        .from('reels')
+        .insert(newReel)
+        .select()
+        .single();
+      if (insertErr) return res.status(500).json({ error: `Failed to save reel: ${insertErr.message}` });
+      reelId = inserted.id;
+    }
+
+    // Step 3: link to the to-do list (check duplicate first)
+    const { data: existingPair } = await supabase
+      .from('todo_list_reels')
+      .select('id')
+      .eq('todo_list_id', req.params.id)
+      .eq('reel_id', reelId)
+      .maybeSingle();
+    if (existingPair) {
+      return res.status(409).json({ error: 'This reel is already in this list' });
+    }
+
+    const { data: linked, error: linkErr } = await supabase
+      .from('todo_list_reels')
+      .insert({ todo_list_id: req.params.id, reel_id: reelId })
+      .select()
+      .single();
+    if (linkErr) return res.status(500).json({ error: linkErr.message });
+
+    res.json({ success: true, reel_id: reelId, link: linked });
+  } catch (err) {
+    console.error('[POST /by-link] Unexpected error:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // DELETE reel from list
@@ -121,6 +250,76 @@ router.patch('/:id/reels/:reelId', async (req, res) => {
     .from('todo_list_reels')
     .update({ is_done, done_at: is_done ? new Date().toISOString() : null })
     .eq('todo_list_id', req.params.id)
+    .eq('reel_id', req.params.reelId)
+    .select()
+    .single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+// PATCH update note on a reel within a list (new feature 2)
+router.patch('/:id/reels/:reelId/note', async (req, res) => {
+  const { note } = req.body;
+  const { data, error } = await supabase
+    .from('todo_list_reels')
+    .update({ note: note ?? null })
+    .eq('todo_list_id', req.params.id)
+    .eq('reel_id', req.params.reelId)
+    .select()
+    .single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+// ----- PUBLIC ENDPOINTS (no auth — accessed by token) ----------
+
+// GET public list by token
+router.get('/public/:token', async (req, res) => {
+  const { data: list, error } = await supabase
+    .from('todo_lists')
+    .select('*')
+    .eq('public_token', req.params.token)
+    .maybeSingle();
+  if (error) return res.status(500).json({ error: error.message });
+  if (!list) return res.status(404).json({ error: 'List not found' });
+
+  const { data: items } = await supabase
+    .from('todo_list_reels')
+    .select(`
+      id, is_done, added_at, done_at, note,
+      reels (
+        id, url, thumbnail_url, caption, is_manual,
+        views, likes, comments, posted_at,
+        creators ( username, display_name )
+      )
+    `)
+    .eq('todo_list_id', list.id)
+    .order('added_at', { ascending: false });
+
+  res.json({
+    id: list.id,
+    name: list.name,
+    public_token: list.public_token,
+    items: items || [],
+  });
+});
+
+// PATCH (public): toggle done by token — anyone with the link can mark reels done
+router.patch('/public/:token/reels/:reelId', async (req, res) => {
+  const { is_done } = req.body;
+
+  // First verify the token maps to a list
+  const { data: list } = await supabase
+    .from('todo_lists')
+    .select('id')
+    .eq('public_token', req.params.token)
+    .maybeSingle();
+  if (!list) return res.status(404).json({ error: 'List not found' });
+
+  const { data, error } = await supabase
+    .from('todo_list_reels')
+    .update({ is_done, done_at: is_done ? new Date().toISOString() : null })
+    .eq('todo_list_id', list.id)
     .eq('reel_id', req.params.reelId)
     .select()
     .single();
