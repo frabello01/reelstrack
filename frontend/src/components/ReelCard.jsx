@@ -1,4 +1,4 @@
-import { Eye, Heart, MessageCircle, ExternalLink } from 'lucide-react';
+import { Eye, EyeOff, Heart, MessageCircle, ExternalLink, Check } from 'lucide-react';
 import SaveToTodo from './SaveToTodo';
 import './ReelCard.css';
 
@@ -24,12 +24,31 @@ function timeAgo(dateStr) {
   return 'Just now';
 }
 
-export default function ReelCard({ reel, rank, formatViews }) {
+export default function ReelCard({ reel, rank, formatViews, onToggleSeen }) {
   const score = reel.outlier_score ?? 0;
+  const isSeen = !!reel.seen_at;
+
+  const handleSeenClick = (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (onToggleSeen) onToggleSeen(reel.id, isSeen);
+  };
 
   return (
-    <div className="reel-card">
+    <div className={`reel-card ${isSeen ? 'reel-card-seen' : ''}`}>
       <div className="reel-rank">#{rank}</div>
+
+      {/* Mark-seen button — top-right corner over thumbnail */}
+      {onToggleSeen && (
+        <button
+          className={`reel-seen-btn ${isSeen ? 'active' : ''}`}
+          onClick={handleSeenClick}
+          title={isSeen ? 'Mark as unseen' : 'Mark as seen'}
+          aria-label={isSeen ? 'Mark as unseen' : 'Mark as seen'}
+        >
+          {isSeen ? <Check size={14} /> : <EyeOff size={14} />}
+        </button>
+      )}
 
       <div className="reel-thumbnail">
         {reel.thumbnail_url ? (

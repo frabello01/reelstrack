@@ -53,6 +53,10 @@ export const api = {
     const qs = new URLSearchParams(params).toString();
     return request(`/api/reels/stats?${qs}`);
   },
+  setReelSeen: (reelId, seen) =>
+    request(`/api/reels/${reelId}/seen`, { method: 'PATCH', body: JSON.stringify({ seen }) }),
+  bulkMarkSeen: (reelIds) =>
+    request('/api/reels/mark-seen', { method: 'POST', body: JSON.stringify({ reel_ids: reelIds }) }),
 
   // Fetch
   triggerFetch: (list_id) =>

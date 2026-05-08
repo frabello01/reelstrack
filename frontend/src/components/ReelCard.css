@@ -118,3 +118,49 @@
   justify-content: space-between;
 }
 .reel-time { font-size: 12px; color: var(--text2); }
+
+/* ===== Seen state ===== */
+.reel-seen-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 5;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: rgba(255, 255, 255, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+.reel-seen-btn:hover {
+  background: rgba(0, 0, 0, 0.85);
+  color: white;
+  transform: scale(1.08);
+}
+.reel-seen-btn.active {
+  background: #4ade80;
+  color: #052e16;
+}
+.reel-seen-btn.active:hover {
+  background: #22c55e;
+}
+
+/* Faded look for already-seen cards (only shown when filter = 'all' or 'seen') */
+.reel-card-seen {
+  opacity: 0.55;
+  transition: opacity 0.2s;
+}
+.reel-card-seen:hover {
+  opacity: 1;
+}
+
+/* The reel-card needs position:relative for the absolutely-positioned seen button */
+.reel-card { position: relative; }

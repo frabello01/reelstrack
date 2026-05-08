@@ -109,3 +109,26 @@
 .spin {
   animation: spin 0.8s linear infinite;
 }
+
+/* ===== Bulk actions bar ===== */
+.bulk-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 12px 0 16px;
+  padding: 10px 14px;
+  background: rgba(167, 139, 250, 0.08);
+  border: 1px solid rgba(167, 139, 250, 0.2);
+  border-radius: 8px;
+}
+.bulk-count {
+  font-size: 13px;
+  color: rgba(255,255,255,0.75);
+  font-weight: 500;
+}
+.bulk-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
