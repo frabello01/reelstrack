@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const supabase = require('../lib/supabase');
+const { backupReelInBackground } = require('../services/backupService');
 
 const HIKERAPI_BASE = 'https://api.hikerapi.com';
 const HIKERAPI_TOKEN = process.env.HIKERAPI_TOKEN;
@@ -83,6 +84,7 @@ router.get('/:id', async (req, res) => {
       reels (
         id, instagram_id, url, thumbnail_url, caption, is_manual,
         views, likes, comments, posted_at,
+        backup_status, backup_video_url, backup_thumbnail_url, backup_error,
         creators ( id, username, display_name )
       )
     `)
@@ -147,6 +149,10 @@ router.post('/:id/reels', async (req, res) => {
     .select()
     .single();
   if (error) return res.status(500).json({ error: error.message });
+
+  // Trigger backup in the background — return immediately, don't make the user wait
+  backupReelInBackground(reel_id);
+
   res.json(data);
 });
 
@@ -225,6 +231,9 @@ router.post('/:id/reels/by-link', async (req, res) => {
       .single();
     if (linkErr) return res.status(500).json({ error: linkErr.message });
 
+    // Trigger backup in the background
+    backupReelInBackground(reelId);
+
     res.json({ success: true, reel_id: reelId, link: linked });
   } catch (err) {
     console.error('[POST /by-link] Unexpected error:', err);
@@ -271,6 +280,21 @@ router.patch('/:id/reels/:reelId/note', async (req, res) => {
   res.json(data);
 });
 
+// POST manually retry a backup that failed (or trigger one for a reel that doesn't have one)
+router.post('/:id/reels/:reelId/backup', async (req, res) => {
+  // Verify the reel is in the list (defensive)
+  const { data: link } = await supabase
+    .from('todo_list_reels')
+    .select('id')
+    .eq('todo_list_id', req.params.id)
+    .eq('reel_id', req.params.reelId)
+    .maybeSingle();
+  if (!link) return res.status(404).json({ error: 'Reel not in this list' });
+
+  backupReelInBackground(req.params.reelId);
+  res.json({ success: true, message: 'Backup started' });
+});
+
 // ----- PUBLIC ENDPOINTS (no auth — accessed by token) ----------
 
 // GET public list by token
@@ -290,6 +314,7 @@ router.get('/public/:token', async (req, res) => {
       reels (
         id, url, thumbnail_url, caption, is_manual,
         views, likes, comments, posted_at,
+        backup_status, backup_video_url, backup_thumbnail_url,
         creators ( username, display_name )
       )
     `)

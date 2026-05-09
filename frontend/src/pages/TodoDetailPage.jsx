@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ExternalLink, Trash2, Eye, Heart, Share2, Link2, StickyNote, Check, X, Plus } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Trash2, Eye, Heart, Share2, Link2, StickyNote, Check, X, Plus, Save, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 import { api } from '../lib/api';
 import './TodoDetailPage.css';
 
@@ -32,7 +32,44 @@ export default function TodoDetailPage() {
     }
   };
 
+  // Silent reload (no loading spinner) — for polling backup progress
+  const silentReload = async () => {
+    try {
+      setList(await api.getTodo(id));
+    } catch (err) {
+      // Ignore — will retry on next poll
+    }
+  };
+
   useEffect(() => { load(); }, [id]);
+
+  // Auto-poll while any backup is in progress
+  useEffect(() => {
+    if (!list?.items) return;
+    const anyInProgress = list.items.some(
+      (i) => i.reels?.backup_status === 'pending' || i.reels?.backup_status === 'downloading'
+    );
+    if (!anyInProgress) return;
+
+    const interval = setInterval(silentReload, 4000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [list?.items?.map((i) => i.reels?.backup_status).join(',')]);
+
+  const handleRetryBackup = async (reelId) => {
+    try {
+      await api.retryReelBackup(id, reelId);
+      // Optimistic: mark as pending so the UI shows immediately
+      setList((l) => ({
+        ...l,
+        items: l.items.map((it) =>
+          it.reels?.id === reelId ? { ...it, reels: { ...it.reels, backup_status: 'pending', backup_error: null } } : it
+        ),
+      }));
+    } catch (err) {
+      alert(`Retry failed: ${err.message}`);
+    }
+  };
 
   const toggleDone = async (item) => {
     await api.toggleReelDone(id, item.reels.id, !item.is_done);
@@ -154,6 +191,10 @@ export default function TodoDetailPage() {
                     <span><Eye size={12} /> {formatViews(item.reels?.views)}</span>
                     <span><Heart size={12} /> {formatViews(item.reels?.likes)}</span>
                   </div>
+                  <BackupBadge
+                    reel={item.reels}
+                    onRetry={() => handleRetryBackup(item.reels.id)}
+                  />
                 </div>
                 <a href={item.reels?.url} target="_blank" rel="noopener noreferrer" className="todo-item-link">
                   <ExternalLink size={14} />
@@ -198,6 +239,50 @@ export default function TodoDetailPage() {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ----- BackupBadge: small UI element showing video backup status -----
+function BackupBadge({ reel, onRetry }) {
+  if (!reel) return null;
+  const status = reel.backup_status;
+
+  if (status === 'done') {
+    const sizeMB = reel.backup_size_bytes ? (reel.backup_size_bytes / 1024 / 1024).toFixed(1) : null;
+    return (
+      <div className="backup-badge backup-done" title="Video backed up to your server — safe even if reel gets deleted">
+        <Save size={11} />
+        <span>Video backed up{sizeMB ? ` (${sizeMB} MB)` : ''}</span>
+      </div>
+    );
+  }
+  if (status === 'pending' || status === 'downloading') {
+    return (
+      <div className="backup-badge backup-progress">
+        <Loader2 size={11} className="spin" />
+        <span>{status === 'pending' ? 'Backup queued…' : 'Downloading video…'}</span>
+      </div>
+    );
+  }
+  if (status === 'failed') {
+    return (
+      <div className="backup-badge backup-failed" title={reel.backup_error || 'Backup failed'}>
+        <AlertCircle size={11} />
+        <span>Backup failed</span>
+        <button className="backup-retry-btn" onClick={onRetry} title="Retry backup">
+          <RefreshCw size={11} />
+        </button>
+      </div>
+    );
+  }
+  // No backup yet — usually means an old reel added before this feature existed
+  return (
+    <div className="backup-badge backup-none">
+      <span>No backup</span>
+      <button className="backup-retry-btn" onClick={onRetry} title="Create backup">
+        <Save size={11} />
+      </button>
     </div>
   );
 }

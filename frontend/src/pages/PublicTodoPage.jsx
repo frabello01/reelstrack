@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { ExternalLink, Eye, Heart, StickyNote, CheckCircle2 } from 'lucide-react';
+import { ExternalLink, Eye, Heart, StickyNote, CheckCircle2, Play } from 'lucide-react';
 import { api } from '../lib/api';
 import './PublicTodoPage.css';
 
@@ -16,6 +16,7 @@ export default function PublicTodoPage() {
   const [list, setList] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [playingVideoUrl, setPlayingVideoUrl] = useState(null);
 
   const load = async () => {
     setLoading(true);
@@ -81,51 +82,76 @@ export default function PublicTodoPage() {
           </div>
         ) : (
           <div className="public-items">
-            {list.items.map((item) => (
-              <div key={item.id} className={`public-item ${item.is_done ? 'done' : ''}`}>
-                <button
-                  className="public-checkbox"
-                  onClick={() => toggleDone(item)}
-                  aria-label={item.is_done ? 'Mark as not done' : 'Mark as done'}
-                >
-                  {item.is_done ? <CheckCircle2 size={22} /> : <div className="public-checkbox-empty" />}
-                </button>
-                <div className="public-item-thumb">
-                  {item.reels?.thumbnail_url && <img src={item.reels.thumbnail_url} alt="" />}
-                </div>
-                <div className="public-item-info">
-                  <div className="public-item-creator">
-                    {item.reels?.creators?.username
-                      ? `@${item.reels.creators.username}`
-                      : 'Reel'}
+            {list.items.map((item) => {
+              const reel = item.reels;
+              const hasBackup = reel?.backup_status === 'done' && reel?.backup_video_url;
+              const thumbSrc = reel?.backup_thumbnail_url || reel?.thumbnail_url;
+              return (
+                <div key={item.id} className={`public-item ${item.is_done ? 'done' : ''}`}>
+                  <button
+                    className="public-checkbox"
+                    onClick={() => toggleDone(item)}
+                    aria-label={item.is_done ? 'Mark as not done' : 'Mark as done'}
+                  >
+                    {item.is_done ? <CheckCircle2 size={22} /> : <div className="public-checkbox-empty" />}
+                  </button>
+                  <div className="public-item-thumb">
+                    {thumbSrc && <img src={thumbSrc} alt="" />}
                   </div>
-                  {item.reels?.caption && (
-                    <div className="public-item-caption">
-                      {item.reels.caption.substring(0, 100)}
+                  <div className="public-item-info">
+                    <div className="public-item-creator">
+                      {reel?.creators?.username ? `@${reel.creators.username}` : 'Reel'}
                     </div>
-                  )}
-                  <div className="public-item-stats">
-                    <span><Eye size={12} /> {formatViews(item.reels?.views)}</span>
-                    <span><Heart size={12} /> {formatViews(item.reels?.likes)}</span>
+                    {reel?.caption && (
+                      <div className="public-item-caption">
+                        {reel.caption.substring(0, 100)}
+                      </div>
+                    )}
+                    <div className="public-item-stats">
+                      <span><Eye size={12} /> {formatViews(reel?.views)}</span>
+                      <span><Heart size={12} /> {formatViews(reel?.likes)}</span>
+                    </div>
+                    {item.note && (
+                      <div className="public-note">
+                        <StickyNote size={12} />
+                        <span>{item.note}</span>
+                      </div>
+                    )}
                   </div>
-                  {item.note && (
-                    <div className="public-note">
-                      <StickyNote size={12} />
-                      <span>{item.note}</span>
-                    </div>
-                  )}
+                  <div className="public-item-actions">
+                    <a
+                      href={reel?.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="public-item-link"
+                      aria-label="Open reel on Instagram"
+                      title="Open on Instagram"
+                    >
+                      <ExternalLink size={16} />
+                    </a>
+                    {hasBackup && (
+                      <button
+                        className="public-item-link public-play-btn"
+                        onClick={() => setPlayingVideoUrl(reel.backup_video_url)}
+                        aria-label="Play backup video"
+                        title="Play backup video (works even if reel is removed from IG)"
+                      >
+                        <Play size={16} />
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <a
-                  href={item.reels?.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="public-item-link"
-                  aria-label="Open reel on Instagram"
-                >
-                  <ExternalLink size={16} />
-                </a>
-              </div>
-            ))}
+              );
+            })}
+          </div>
+        )}
+
+        {playingVideoUrl && (
+          <div className="video-modal" onClick={() => setPlayingVideoUrl(null)}>
+            <div className="video-modal-content" onClick={(e) => e.stopPropagation()}>
+              <button className="video-modal-close" onClick={() => setPlayingVideoUrl(null)}>×</button>
+              <video src={playingVideoUrl} controls autoPlay playsInline />
+            </div>
           </div>
         )}
 

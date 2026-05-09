@@ -80,6 +80,8 @@ export const api = {
     request(`/api/todos/${todoId}/reels/${reelId}/note`, { method: 'PATCH', body: JSON.stringify({ note }) }),
   addReelToTodoByLink: (todoId, url) =>
     request(`/api/todos/${todoId}/reels/by-link`, { method: 'POST', body: JSON.stringify({ url }) }),
+  retryReelBackup: (todoId, reelId) =>
+    request(`/api/todos/${todoId}/reels/${reelId}/backup`, { method: 'POST' }),
 
   // Public to-do list (no auth)
   getPublicTodo: (token) => request(`/api/todos/public/${token}`),

@@ -127,3 +127,63 @@
   .public-header h1 { font-size: 22px; }
   .public-item-link { width: 32px; height: 32px; }
 }
+
+/* ===== Action buttons stacked on the right ===== */
+.public-item-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+}
+
+.public-play-btn {
+  background: rgba(167, 139, 250, 0.15);
+  border-color: rgba(167, 139, 250, 0.3);
+  color: #c4b5fd;
+}
+.public-play-btn:hover {
+  background: rgba(167, 139, 250, 0.25);
+  color: white;
+}
+
+/* ===== Video modal ===== */
+.video-modal {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.85);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: fadeIn 0.2s;
+}
+.video-modal-content {
+  position: relative;
+  max-width: 480px;
+  width: 100%;
+  max-height: 90vh;
+  background: black;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.video-modal-content video {
+  width: 100%;
+  max-height: 90vh;
+  display: block;
+}
+.video-modal-close {
+  position: absolute;
+  top: 8px; right: 12px;
+  z-index: 1;
+  width: 36px; height: 36px;
+  background: rgba(0,0,0,0.6);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
