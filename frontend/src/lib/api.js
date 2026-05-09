@@ -120,4 +120,8 @@ export const api = {
     request(`/api/todos/${todoId}/cover-image`, { method: 'POST', body: JSON.stringify({ image_data_url }) }),
   removeTodoCover: (todoId) =>
     request(`/api/todos/${todoId}/cover-image`, { method: 'DELETE' }),
+
+  // Reel converter — paste IG link, get fresh video URL + metadata
+  fetchReelForConverter: (url) =>
+    request('/api/converter/fetch-reel', { method: 'POST', body: JSON.stringify({ url }) }),
 };
