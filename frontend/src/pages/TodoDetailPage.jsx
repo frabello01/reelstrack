@@ -363,11 +363,23 @@ export default function TodoDetailPage() {
         </div>
       ) : (
         <div className="todo-items">
-          {list.items.map((item, idx) => {
+          {(() => {
+            // Build a stable rank: based on the order reels were ADDED (newest = #1).
+            // The visible list order may shuffle when priority changes, but the rank
+            // shown next to each reel stays tied to insertion order.
+            const byAddedDesc = [...list.items].sort((a, b) =>
+              new Date(b.added_at) - new Date(a.added_at)
+            );
+            const rankByReelId = new Map();
+            byAddedDesc.forEach((it, i) => {
+              if (it.reels?.id) rankByReelId.set(it.reels.id, i + 1);
+            });
+            return list.items.map((item) => {
             const reel = item.reels;
             const hasBackup = reel?.backup_status === 'done' && reel?.backup_video_url;
             const isEditingPublic = editingNote?.reelId === reel?.id && editingNote?.kind === 'public';
             const isEditingPrivate = editingNote?.reelId === reel?.id && editingNote?.kind === 'private';
+            const stableRank = rankByReelId.get(reel?.id) ?? '?';
             return (
               <div key={item.id} className={`todo-item ${item.is_done ? 'done' : ''}`}>
                 <div className="todo-item-main">
@@ -377,7 +389,7 @@ export default function TodoDetailPage() {
                     onChange={() => toggleDone(item)}
                   />
                   <div className="todo-item-rank-col">
-                    <div className="todo-item-rank">#{idx + 1}</div>
+                    <div className="todo-item-rank">#{stableRank}</div>
                     <PriorityPill
                       priority={item.priority}
                       onChange={(p) => handleSetPriority(reel.id, p)}
@@ -541,7 +553,8 @@ export default function TodoDetailPage() {
                 </div>
               </div>
             );
-          })}
+            });
+          })()}
         </div>
       )}
 

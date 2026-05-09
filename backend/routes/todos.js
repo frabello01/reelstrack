@@ -461,7 +461,7 @@ router.post('/:id/reels/upload/init', async (req, res) => {
 
 // POST finalize an upload: create the reel record + link to the list
 router.post('/:id/reels/upload/finalize', async (req, res) => {
-  const { reel_id, storage_path, filename } = req.body;
+  const { reel_id, storage_path, filename, thumbnail_data_url } = req.body;
   if (!reel_id || !storage_path) {
     return res.status(400).json({ error: 'reel_id and storage_path are required' });
   }
@@ -485,6 +485,36 @@ router.post('/:id/reels/upload/finalize', async (req, res) => {
     // Best-effort check; don't block the finalize call
   }
 
+  // If the frontend generated a thumbnail, upload it to Storage now.
+  // The thumbnail is small (~30-100 KB) so base64-as-JSON is fine here.
+  let thumbnailUrl = null;
+  if (thumbnail_data_url) {
+    try {
+      const match = String(thumbnail_data_url).match(/^data:([^;]+);base64,(.+)$/);
+      if (match) {
+        const [, mimeType, b64] = match;
+        const buf = Buffer.from(b64, 'base64');
+        const thumbPath = `thumbnails/upload-${reel_id}.jpg`;
+        const { error: thumbErr } = await supabase.storage
+          .from('reel-backups')
+          .upload(thumbPath, buf, {
+            contentType: mimeType || 'image/jpeg',
+            upsert: true,
+            cacheControl: '604800',
+          });
+        if (!thumbErr) {
+          const { data: thumbPub } = supabase.storage.from('reel-backups').getPublicUrl(thumbPath);
+          thumbnailUrl = thumbPub?.publicUrl || null;
+        } else {
+          console.warn('[upload/finalize] thumbnail upload failed:', thumbErr.message);
+        }
+      }
+    } catch (err) {
+      // Don't block the upload over a failed thumbnail
+      console.warn('[upload/finalize] thumbnail processing failed:', err.message);
+    }
+  }
+
   const safeName = (filename || 'uploaded video').replace(/\.[^.]*$/, '').substring(0, 200);
 
   // Create the reel record
@@ -493,7 +523,7 @@ router.post('/:id/reels/upload/finalize', async (req, res) => {
     creator_id: null,
     instagram_id: `upload-${reel_id}`,
     url: videoUrl,
-    thumbnail_url: null,
+    thumbnail_url: thumbnailUrl,
     caption: safeName,
     views: 0, likes: 0, comments: 0,
     posted_at: new Date().toISOString(),
@@ -501,7 +531,7 @@ router.post('/:id/reels/upload/finalize', async (req, res) => {
     is_uploaded: true,
     backup_status: 'done',
     backup_video_url: videoUrl,
-    backup_thumbnail_url: null,
+    backup_thumbnail_url: thumbnailUrl,
     backup_completed_at: new Date().toISOString(),
   };
 
@@ -516,7 +546,7 @@ router.post('/:id/reels/upload/finalize', async (req, res) => {
     .insert({ todo_list_id: req.params.id, reel_id });
   if (linkErr) return res.status(500).json({ error: linkErr.message });
 
-  res.json({ success: true, reel_id, video_url: videoUrl });
+  res.json({ success: true, reel_id, video_url: videoUrl, thumbnail_url: thumbnailUrl });
 });
 
 router.post('/:id/reels/:reelId/backup', async (req, res) => {
