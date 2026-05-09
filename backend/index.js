@@ -21,7 +21,24 @@ app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3001;
 
 // Middleware
-app.use(cors({ origin: process.env.FRONTEND_URL || '*' }));
+// CORS — supports multiple origins via comma-separated FRONTEND_URL env var.
+// e.g. FRONTEND_URL="https://app.reelstrack.io,https://reels-tracker.vercel.app"
+const allowedOrigins = (process.env.FRONTEND_URL || '*')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, curl, server-side)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    callback(new Error(`Origin ${origin} not allowed by CORS`));
+  },
+  credentials: true,
+}));
 app.use(express.json({ limit: '10mb' }));
 
 // Health check endpoint — exempt from rate limiting (used by UptimeRobot to keep the dyno awake)
