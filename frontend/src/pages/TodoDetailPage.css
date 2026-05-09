@@ -12,10 +12,13 @@
   gap: 8px;
 }
 .todo-detail-title-row {
-  display: flex; justify-content: space-between; align-items: center;
-  gap: 12px; flex-wrap: wrap;
+  display: flex; align-items: center;
+  gap: 14px; flex-wrap: wrap;
 }
-.todo-detail-header h1 { margin: 0; color: white; }
+.todo-detail-header h1 {
+  margin: 0; color: white;
+  flex: 1; min-width: 0; /* let the title take remaining space, push share right */
+}
 .todo-detail-stats { color: rgba(255,255,255,0.6); font-size: 14px; }
 .share-btn { display: inline-flex; align-items: center; gap: 6px; }
 
@@ -354,7 +357,4 @@
   .add-by-link input { width: 100%; padding: 4px 0; }
 }
 
-/* Cover image section */
-.cover-image-section {
-  margin-bottom: 16px;
-}
+

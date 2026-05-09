@@ -1,5 +1,5 @@
-import { useState, useRef } from 'react';
-import { Link2, Download, Music, FileVideo, Loader2, AlertCircle, CheckCircle2, Eye, Heart, Play, X } from 'lucide-react';
+import { useState } from 'react';
+import { Link2, Loader2, AlertCircle, FileVideo, Eye, Play, X } from 'lucide-react';
 import { api } from '../lib/api';
 import './ConverterPage.css';
 
@@ -16,18 +16,9 @@ export default function ConverterPage() {
   const [fetchError, setFetchError] = useState('');
   const [reel, setReel] = useState(null);
 
-  // Buffered MP4 once we download it (so we can convert without re-downloading)
   const [mp4Bytes, setMp4Bytes] = useState(null);
   const [downloadingMp4, setDownloadingMp4] = useState(false);
-
-  const [convertingMp3, setConvertingMp3] = useState(false);
-  const [mp3Progress, setMp3Progress] = useState(0); // 0..1
-  const [mp3Error, setMp3Error] = useState('');
-
   const [previewUrl, setPreviewUrl] = useState(null);
-  const ffmpegRef = useRef(null);
-
-  // ----- Fetch reel metadata --------------------------------------
 
   const handleFetch = async (e) => {
     e?.preventDefault();
@@ -37,7 +28,6 @@ export default function ConverterPage() {
     setReel(null);
     setMp4Bytes(null);
     setPreviewUrl(null);
-    setMp3Error('');
     try {
       const data = await api.fetchReelForConverter(linkInput.trim());
       setReel(data);
@@ -48,9 +38,6 @@ export default function ConverterPage() {
     }
   };
 
-  // ----- Download MP4 ---------------------------------------------
-
-  // Download the bytes once and cache them; subsequent calls reuse.
   const ensureMp4Bytes = async () => {
     if (mp4Bytes) return mp4Bytes;
     if (!reel?.video_url) throw new Error('No video URL available');
@@ -73,8 +60,6 @@ export default function ConverterPage() {
     }
   };
 
-  // ----- Preview --------------------------------------------------
-
   const handlePreview = async () => {
     if (previewUrl) {
       setPreviewUrl(null);
@@ -89,76 +74,11 @@ export default function ConverterPage() {
     }
   };
 
-  // ----- Convert to MP3 -------------------------------------------
-
-  // Lazy-load ffmpeg.wasm (single-threaded build — no SharedArrayBuffer required).
-  // The 0.12+ API uses an FFmpeg class instead of createFFmpeg().
-  const loadFfmpeg = async () => {
-    if (ffmpegRef.current) return ffmpegRef.current;
-
-    const [{ FFmpeg }, { fetchFile, toBlobURL }] = await Promise.all([
-      import('@ffmpeg/ffmpeg'),
-      import('@ffmpeg/util'),
-    ]);
-
-    const ffmpeg = new FFmpeg();
-
-    // Track conversion progress
-    ffmpeg.on('progress', ({ progress }) => {
-      if (typeof progress === 'number') {
-        setMp3Progress(Math.max(0, Math.min(1, progress)));
-      }
-    });
-
-    // Use the SINGLE-THREADED core (works without COOP/COEP headers).
-    // Files come from unpkg → converted to blob URLs so the worker can load them
-    // without cross-origin issues.
-    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.10/dist/umd';
-    await ffmpeg.load({
-      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-    });
-
-    ffmpegRef.current = { ffmpeg, fetchFile };
-    return ffmpegRef.current;
-  };
-
-  const handleConvertMp3 = async () => {
-    setConvertingMp3(true);
-    setMp3Progress(0);
-    setMp3Error('');
-    try {
-      const bytes = await ensureMp4Bytes();
-      const { ffmpeg, fetchFile } = await loadFfmpeg();
-
-      const inName = 'input.mp4';
-      const outName = 'output.mp3';
-
-      await ffmpeg.writeFile(inName, await fetchFile(new Blob([bytes], { type: 'video/mp4' })));
-      // -vn: no video, libmp3lame: MP3 codec, -q:a 2: ~190 kbps quality
-      await ffmpeg.exec(['-i', inName, '-vn', '-acodec', 'libmp3lame', '-q:a', '2', outName]);
-      const out = await ffmpeg.readFile(outName);
-
-      // Cleanup virtual FS
-      try { await ffmpeg.deleteFile(inName); } catch {}
-      try { await ffmpeg.deleteFile(outName); } catch {}
-
-      // out is a Uint8Array (or similar)
-      triggerDownload(out, `${reel.suggested_filename}.mp3`, 'audio/mpeg');
-      setMp3Progress(1);
-    } catch (err) {
-      console.error(err);
-      setMp3Error(err.message || 'Conversion failed');
-    } finally {
-      setConvertingMp3(false);
-    }
-  };
-
   return (
     <div className="converter-page">
       <div className="converter-header">
         <h1>Reel Converter</h1>
-        <p className="subtitle">Paste any Instagram reel link → download as MP4 or convert to MP3 right in your browser.</p>
+        <p className="subtitle">Paste any Instagram reel link → preview and download as MP4.</p>
       </div>
 
       <form className="converter-input" onSubmit={handleFetch}>
@@ -210,51 +130,18 @@ export default function ConverterPage() {
             <button
               className="btn btn-primary"
               onClick={handleDownloadMp4}
-              disabled={downloadingMp4 || convertingMp3}
+              disabled={downloadingMp4}
             >
               {downloadingMp4 ? <Loader2 size={14} className="spin" /> : <FileVideo size={14} />}
               {downloadingMp4 ? 'Preparing...' : 'Download MP4'}
             </button>
-            <button
-              className="btn btn-primary"
-              onClick={handleConvertMp3}
-              disabled={convertingMp3 || downloadingMp4}
-            >
-              {convertingMp3 ? <Loader2 size={14} className="spin" /> : <Music size={14} />}
-              {convertingMp3 ? 'Converting...' : 'Convert to MP3'}
-            </button>
           </div>
-
-          {convertingMp3 && (
-            <div className="conversion-progress">
-              <div className="conversion-progress-bar">
-                <div
-                  className="conversion-progress-fill"
-                  style={{ width: `${Math.round(mp3Progress * 100)}%` }}
-                />
-              </div>
-              <div className="conversion-progress-text">
-                {mp3Progress === 0 ? 'Loading converter (first time only ~25 MB)…' : `${Math.round(mp3Progress * 100)}%`}
-              </div>
-            </div>
-          )}
-          {mp3Error && (
-            <div className="converter-error">
-              <AlertCircle size={14} /> {mp3Error}
-            </div>
-          )}
 
           {previewUrl && (
             <div className="converter-preview-player">
               <video src={previewUrl} controls autoPlay playsInline />
             </div>
           )}
-
-          <div className="converter-tip">
-            <CheckCircle2 size={12} />
-            MP3 conversion happens entirely in your browser — nothing is sent to our servers.
-            First conversion may take a moment to load the converter (~25 MB, cached afterwards).
-          </div>
         </div>
       )}
     </div>
@@ -270,6 +157,5 @@ function triggerDownload(uint8Array, filename, mimeType) {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  // Free memory after a tick (browser still needs the URL to start the download)
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

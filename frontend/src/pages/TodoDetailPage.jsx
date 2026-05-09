@@ -177,6 +177,19 @@ export default function TodoDetailPage() {
 
       <div className="todo-detail-header">
         <div className="todo-detail-title-row">
+          <ImageUploader
+            shape="thumbnail"
+            currentUrl={list.cover_image_url}
+            placeholder="Add cover"
+            onUpload={async (dataUrl) => {
+              await api.uploadTodoCover(id, dataUrl);
+              silentReload();
+            }}
+            onRemove={async () => {
+              await api.removeTodoCover(id);
+              silentReload();
+            }}
+          />
           <h1>{list.name}</h1>
           <button className="btn btn-secondary share-btn" onClick={handleShare}>
             <Share2 size={14} />
@@ -186,23 +199,6 @@ export default function TodoDetailPage() {
         <div className="todo-detail-stats">
           {list.items.filter((i) => i.is_done).length} / {list.items.length} done
         </div>
-      </div>
-
-      {/* Cover image (banner) */}
-      <div className="cover-image-section">
-        <ImageUploader
-          shape="banner"
-          currentUrl={list.cover_image_url}
-          placeholder="Add a cover image for this list"
-          onUpload={async (dataUrl) => {
-            await api.uploadTodoCover(id, dataUrl);
-            silentReload();
-          }}
-          onRemove={async () => {
-            await api.removeTodoCover(id);
-            silentReload();
-          }}
-        />
       </div>
 
       {/* List-level notes (public + private) */}

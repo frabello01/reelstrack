@@ -42,6 +42,14 @@
   border-radius: 10px;
 }
 
+/* ===== Thumbnail shape (small rounded square — for inline placement) ===== */
+.image-uploader-thumbnail {
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
 /* ===== Circle shape (for talents) ===== */
 .image-uploader-circle {
   width: 80px;
@@ -62,7 +70,8 @@
   text-align: center;
   padding: 8px;
 }
-.image-uploader-circle .image-uploader-empty { font-size: 11px; gap: 4px; }
+.image-uploader-circle .image-uploader-empty,
+.image-uploader-thumbnail .image-uploader-empty { font-size: 10px; gap: 3px; }
 .image-uploader-empty span { line-height: 1.2; }
 .image-uploader-hint {
   font-size: 11px;

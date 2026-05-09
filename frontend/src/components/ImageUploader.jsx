@@ -94,7 +94,7 @@ export default function ImageUploader({ currentUrl, onUpload, onRemove, shape = 
           <>
             <img src={currentUrl} alt="" />
             <div className="image-uploader-overlay">
-              <Upload size={shape === 'circle' ? 16 : 20} />
+              <Upload size={shape === 'banner' ? 20 : 16} />
               <span>Replace</span>
             </div>
             {!uploading && (
@@ -107,12 +107,12 @@ export default function ImageUploader({ currentUrl, onUpload, onRemove, shape = 
           <div className="image-uploader-empty">
             {uploading ? (
               <>
-                <Loader2 size={shape === 'circle' ? 18 : 22} className="spin" />
+                <Loader2 size={shape === 'banner' ? 22 : 18} className="spin" />
                 <span>Uploading…</span>
               </>
             ) : (
               <>
-                <ImageIcon size={shape === 'circle' ? 18 : 22} />
+                <ImageIcon size={shape === 'banner' ? 22 : 18} />
                 <span>{placeholder}</span>
                 {shape === 'banner' && <span className="image-uploader-hint">click or drag-drop</span>}
               </>

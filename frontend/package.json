@@ -13,10 +13,7 @@
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.20.0",
     "lucide-react": "^0.294.0",
-    "recharts": "^2.12.7",
-    "@ffmpeg/ffmpeg": "0.12.15",
-    "@ffmpeg/core": "0.12.10",
-    "@ffmpeg/util": "0.12.2"
+    "recharts": "^2.12.7"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.0",

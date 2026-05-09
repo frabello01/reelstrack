@@ -65,11 +65,6 @@ export default function PublicTodoPage() {
   return (
     <div className="public-page">
       <div className="public-container">
-        {list.cover_image_url && (
-          <div className="public-cover-image">
-            <img src={list.cover_image_url} alt="" />
-          </div>
-        )}
         <header className="public-header">
           <img src="/logo.png" alt="Creator Advisor" className="public-logo" />
           <h1>{list.name}</h1>
