@@ -72,9 +72,9 @@ export default function Layout() {
             <CheckSquare size={18} />
             To-Do Lists
           </NavLink>
-          <NavLink to="/my-accounts" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+          <NavLink to="/my-creators" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
             <BarChart3 size={18} />
-            My Accounts
+            My Creators
           </NavLink>
         </nav>
 

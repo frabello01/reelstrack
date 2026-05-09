@@ -1,0 +1,134 @@
+.talents-page { padding: 24px; max-width: 1400px; margin: 0 auto; }
+
+.talents-header {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 16px; margin-bottom: 16px; flex-wrap: wrap;
+}
+.talents-header h1 { margin: 0; color: white; font-family: 'Syne', sans-serif; }
+.talents-header .subtitle {
+  color: rgba(255,255,255,0.55); margin: 4px 0 0; font-size: 14px;
+}
+
+.add-talent-form {
+  display: flex; gap: 8px; margin: 16px 0 8px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px; padding: 8px;
+}
+.add-talent-form input {
+  flex: 1; background: transparent; border: none; outline: none;
+  color: white; padding: 8px 12px; font-size: 14px; min-width: 0;
+}
+.add-talent-form input::placeholder { color: rgba(255,255,255,0.35); }
+.add-error { color: #f87171; font-size: 12px; padding: 4px 8px; }
+
+.empty-state {
+  padding: 48px; text-align: center; color: rgba(255,255,255,0.5);
+}
+
+.talent-cards {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 16px; margin-top: 24px;
+}
+
+.talent-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  padding: 16px;
+  text-decoration: none;
+  display: flex; flex-direction: column;
+  transition: all 0.2s;
+}
+.talent-card:hover {
+  background: rgba(255,255,255,0.06);
+  border-color: rgba(167,139,250,0.4);
+  transform: translateY(-2px);
+}
+
+.talent-card-header {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 10px; margin-bottom: 12px;
+}
+.talent-info { flex: 1; min-width: 0; }
+.talent-name {
+  font-family: 'Syne', sans-serif;
+  font-size: 18px; font-weight: 700; color: white;
+}
+.talent-profile-count {
+  font-size: 12px; color: rgba(255,255,255,0.5);
+  margin-top: 2px;
+}
+.banned-tag { color: #f87171; }
+
+.talent-delete-btn {
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.5); width: 30px; height: 30px;
+  border-radius: 6px; display: flex; align-items: center; justify-content: center;
+  cursor: pointer; flex-shrink: 0;
+}
+.talent-delete-btn:hover { color: #f87171; border-color: rgba(248,113,113,0.4); }
+
+/* ===== Profile chips ===== */
+.profile-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.profile-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px 3px 3px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 100px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.85);
+}
+.profile-chip img {
+  width: 20px; height: 20px; border-radius: 50%;
+  object-fit: cover;
+}
+.profile-chip.status-active { border-color: rgba(34,197,94,0.3); }
+.profile-chip.status-inactive,
+.profile-chip.status-private,
+.profile-chip.status-error {
+  background: rgba(248,113,113,0.08);
+  border-color: rgba(248,113,113,0.3);
+  color: #fca5a5;
+  text-decoration: line-through;
+  text-decoration-color: rgba(248,113,113,0.4);
+}
+.chip-warning { color: #f87171; }
+
+.talent-card-body { display: flex; flex-direction: column; gap: 12px; }
+
+.metric-row {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+}
+.metric { display: flex; flex-direction: column; gap: 2px; }
+.metric-label {
+  font-size: 11px; color: rgba(255,255,255,0.5);
+  display: inline-flex; align-items: center; gap: 4px;
+}
+.metric-value { font-size: 18px; font-weight: 700; color: white; }
+.lost-to-bans {
+  font-size: 10px; color: #f87171; margin-top: 2px;
+}
+
+.delta {
+  display: inline-flex; align-items: center; gap: 2px;
+  font-size: 11px; font-weight: 500;
+}
+.delta-up { color: #4ade80; }
+.delta-down { color: #f87171; }
+.delta-neutral { color: rgba(255,255,255,0.4); }
+
+.sparkline { height: 40px; margin-top: 4px; }
+
+@media (max-width: 600px) {
+  .talents-page { padding: 16px; }
+  .talent-cards { grid-template-columns: 1fr; }
+}

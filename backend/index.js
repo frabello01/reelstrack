@@ -10,6 +10,7 @@ const reelsRouter = require('./routes/reels');
 const fetchRouter = require('./routes/fetch');
 const todosRouter = require('./routes/todos');
 const myAccountsRouter = require('./routes/myAccounts');
+const talentsRouter = require('./routes/talents');
 const { runDailyFetch } = require('./services/fetchService');
 const { runMyAccountsFetch } = require('./services/myAccountsService');
 
@@ -39,6 +40,7 @@ app.use('/api/reels', reelsRouter);
 app.use('/api/fetch', fetchRouter);
 app.use('/api/todos', todosRouter);
 app.use('/api/my-accounts', myAccountsRouter);
+app.use('/api/talents', talentsRouter);
 
 // Daily cron: runs every day at 6:00 AM UTC
 cron.schedule('0 6 * * *', async () => {

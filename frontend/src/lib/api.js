@@ -90,11 +90,24 @@ export const api = {
   togglePublicReelDone: (token, reelId, is_done) =>
     request(`/api/todos/public/${token}/reels/${reelId}`, { method: 'PATCH', body: JSON.stringify({ is_done }) }),
 
-  // My Accounts (accounts I manage)
+  // My Accounts (accounts I manage) — kept for the per-profile detail page
   getMyAccounts: () => request('/api/my-accounts'),
   getMyAccount: (id) => request(`/api/my-accounts/${id}`),
   addMyAccount: (body) => request('/api/my-accounts', { method: 'POST', body: JSON.stringify(body) }),
   deleteMyAccount: (id) => request(`/api/my-accounts/${id}`, { method: 'DELETE' }),
   triggerMyAccountsFetch: (account_id) =>
     request('/api/my-accounts/fetch/run', { method: 'POST', body: JSON.stringify({ account_id }) }),
+
+  // Talents ("My Creators") — top-level entity wrapping multiple IG profiles
+  getTalents: () => request('/api/talents'),
+  getTalent: (id) => request(`/api/talents/${id}`),
+  createTalent: (body) => request('/api/talents', { method: 'POST', body: JSON.stringify(body) }),
+  updateTalent: (id, body) => request(`/api/talents/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteTalent: (id) => request(`/api/talents/${id}`, { method: 'DELETE' }),
+  addProfileToTalent: (talentId, username) =>
+    request(`/api/talents/${talentId}/profiles`, { method: 'POST', body: JSON.stringify({ username }) }),
+  removeProfileFromTalent: (talentId, profileId) =>
+    request(`/api/talents/${talentId}/profiles/${profileId}`, { method: 'DELETE' }),
+  triggerTalentFetch: (talentId) =>
+    request(`/api/talents/${talentId}/fetch`, { method: 'POST' }),
 };
