@@ -1,0 +1,99 @@
+.settings-page {
+  padding: 24px;
+  max-width: 720px;
+  margin: 0 auto;
+}
+.settings-page h1 {
+  margin: 0;
+  font-family: 'Syne', sans-serif;
+  color: white;
+  font-size: 28px;
+}
+.settings-page .subtitle {
+  color: rgba(255,255,255,0.55);
+  margin: 6px 0 28px;
+  font-size: 14px;
+}
+
+.settings-section {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+.settings-section h2 {
+  margin: 0 0 14px;
+  color: white;
+  font-size: 16px;
+  font-weight: 600;
+  font-family: 'Syne', sans-serif;
+}
+.settings-help {
+  margin: -8px 0 16px;
+  font-size: 13px;
+  color: rgba(255,255,255,0.5);
+  line-height: 1.5;
+}
+
+.settings-field {
+  margin-bottom: 14px;
+}
+.settings-field label {
+  display: block;
+  font-size: 12px;
+  color: rgba(255,255,255,0.55);
+  margin-bottom: 4px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.settings-readonly {
+  padding: 8px 12px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px;
+  color: rgba(255,255,255,0.7);
+  font-size: 14px;
+}
+
+.settings-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.settings-input-row input {
+  flex: 1;
+  min-width: 200px;
+  padding: 8px 12px;
+  background: rgba(0,0,0,0.25);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px;
+  color: white;
+  font-size: 14px;
+  outline: none;
+}
+.settings-input-row input:focus { border-color: rgba(167, 139, 250, 0.5); }
+
+.saved-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: #4ade80;
+}
+
+.settings-logo-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.settings-logo-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: rgba(255,255,255,0.6);
+}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { ExternalLink, Eye, Heart, StickyNote, CheckCircle2, Play } from 'lucide-react';
+import { ExternalLink, Eye, Heart, StickyNote, CheckCircle2, Play, Flame } from 'lucide-react';
 import { api } from '../lib/api';
 import './PublicTodoPage.css';
 
@@ -17,6 +17,12 @@ export default function PublicTodoPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [playingVideoUrl, setPlayingVideoUrl] = useState(null);
+  const [agency, setAgency] = useState(null);
+
+  // Load agency branding once on mount (independent from list)
+  useEffect(() => {
+    api.getPublicAgency().then(setAgency).catch(() => {});
+  }, []);
 
   const load = async () => {
     setLoading(true);
@@ -66,7 +72,11 @@ export default function PublicTodoPage() {
     <div className="public-page">
       <div className="public-container">
         <header className="public-header">
-          <img src="/logo.png" alt="Creator Advisor" className="public-logo" />
+          <img
+            src={agency?.agency_logo_url || '/logo.png'}
+            alt={agency?.display_name || 'Creator Advisor'}
+            className="public-logo"
+          />
           <h1>{list.name}</h1>
           <div className="public-progress">
             <div className="public-progress-bar">
@@ -102,7 +112,19 @@ export default function PublicTodoPage() {
                   >
                     {item.is_done ? <CheckCircle2 size={22} /> : <div className="public-checkbox-empty" />}
                   </button>
-                  <div className="public-item-rank">#{idx + 1}</div>
+                  <div className="public-item-rank-col">
+                    <div className="public-item-rank">#{idx + 1}</div>
+                    {item.priority === 3 && (
+                      <div className="public-priority-badge public-priority-high" title="High priority">
+                        <Flame size={10} /> HIGH
+                      </div>
+                    )}
+                    {item.priority === 1 && (
+                      <div className="public-priority-badge public-priority-low" title="Low priority">
+                        LOW
+                      </div>
+                    )}
+                  </div>
                   <div className="public-item-thumb">
                     {thumbSrc && <img src={thumbSrc} alt="" />}
                   </div>

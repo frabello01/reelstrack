@@ -83,10 +83,10 @@ export default function Layout() {
         </nav>
 
         <div className="sidebar-footer">
-          <div className="user-info">
+          <NavLink to="/settings" className="user-info-link" title="Settings">
             <div className="user-avatar">{user?.email?.[0].toUpperCase()}</div>
             <span className="user-email">{user?.email}</span>
-          </div>
+          </NavLink>
           <button className="btn btn-ghost btn-sm" onClick={handleSignOut} aria-label="Sign out">
             <LogOut size={14} />
           </button>

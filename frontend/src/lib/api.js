@@ -80,6 +80,18 @@ export const api = {
     request(`/api/todos/${todoId}/reels/${reelId}`, { method: 'PATCH', body: JSON.stringify({ is_done }) }),
   updateReelNotes: (todoId, reelId, { public_note, private_note }) =>
     request(`/api/todos/${todoId}/reels/${reelId}/note`, { method: 'PATCH', body: JSON.stringify({ public_note, private_note }) }),
+  updateReelPriority: (todoId, reelId, priority) =>
+    request(`/api/todos/${todoId}/reels/${reelId}/priority`, { method: 'PATCH', body: JSON.stringify({ priority }) }),
+  moveReel: (sourceId, reelId, target_list_id) =>
+    request(`/api/todos/${sourceId}/reels/${reelId}/move`, { method: 'POST', body: JSON.stringify({ target_list_id }) }),
+  copyReel: (sourceId, reelId, target_list_id) =>
+    request(`/api/todos/${sourceId}/reels/${reelId}/copy`, { method: 'POST', body: JSON.stringify({ target_list_id }) }),
+
+  // Direct video upload (initiates a signed Supabase Storage URL, finalize after upload)
+  initVideoUpload: (todoId, filename, size_bytes) =>
+    request(`/api/todos/${todoId}/reels/upload/init`, { method: 'POST', body: JSON.stringify({ filename, size_bytes }) }),
+  finalizeVideoUpload: (todoId, payload) =>
+    request(`/api/todos/${todoId}/reels/upload/finalize`, { method: 'POST', body: JSON.stringify(payload) }),
   addReelToTodoByLink: (todoId, url) =>
     request(`/api/todos/${todoId}/reels/by-link`, { method: 'POST', body: JSON.stringify({ url }) }),
   retryReelBackup: (todoId, reelId) =>
@@ -124,4 +136,14 @@ export const api = {
   // Reel converter — paste IG link, get fresh video URL + metadata
   fetchReelForConverter: (url) =>
     request('/api/converter/fetch-reel', { method: 'POST', body: JSON.stringify({ url }) }),
+
+  // Agency settings (display name + logo)
+  getSettings: () => request('/api/settings'),
+  updateSettings: (display_name) =>
+    request('/api/settings', { method: 'PATCH', body: JSON.stringify({ display_name }) }),
+  uploadAgencyLogo: (image_data_url) =>
+    request('/api/settings/logo', { method: 'POST', body: JSON.stringify({ image_data_url }) }),
+  removeAgencyLogo: () =>
+    request('/api/settings/logo', { method: 'DELETE' }),
+  getPublicAgency: () => request('/api/settings/public'),
 };

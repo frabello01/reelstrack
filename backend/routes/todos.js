@@ -81,15 +81,16 @@ router.get('/:id', async (req, res) => {
   const { data: items } = await supabase
     .from('todo_list_reels')
     .select(`
-      id, is_done, added_at, done_at, public_note, private_note,
+      id, is_done, added_at, done_at, public_note, private_note, priority,
       reels (
-        id, instagram_id, url, thumbnail_url, caption, is_manual,
+        id, instagram_id, url, thumbnail_url, caption, is_manual, is_uploaded,
         views, likes, comments, posted_at,
         backup_status, backup_video_url, backup_thumbnail_url, backup_error,
         creators ( id, username, display_name )
       )
     `)
     .eq('todo_list_id', req.params.id)
+    .order('priority', { ascending: false })
     .order('added_at', { ascending: false });
 
   res.json({ ...list, items: items || [] });
@@ -298,6 +299,226 @@ router.patch('/:id/reels/:reelId/note', async (req, res) => {
 });
 
 // POST manually retry a backup that failed (or trigger one for a reel that doesn't have one)
+// PATCH update priority (1=low, 2=medium, 3=high)
+router.patch('/:id/reels/:reelId/priority', async (req, res) => {
+  const { priority } = req.body;
+  const p = parseInt(priority, 10);
+  if (![1, 2, 3].includes(p)) {
+    return res.status(400).json({ error: 'priority must be 1, 2, or 3' });
+  }
+  const { data, error } = await supabase
+    .from('todo_list_reels')
+    .update({ priority: p })
+    .eq('todo_list_id', req.params.id)
+    .eq('reel_id', req.params.reelId)
+    .select()
+    .single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+// POST move a reel to another list (removes from current, adds to target)
+router.post('/:id/reels/:reelId/move', async (req, res) => {
+  const { target_list_id } = req.body;
+  if (!target_list_id) return res.status(400).json({ error: 'target_list_id is required' });
+  if (target_list_id === req.params.id) {
+    return res.status(400).json({ error: 'Source and target lists are the same' });
+  }
+
+  // Find the source row to preserve notes/priority
+  const { data: source } = await supabase
+    .from('todo_list_reels')
+    .select('public_note, private_note, priority, is_done')
+    .eq('todo_list_id', req.params.id)
+    .eq('reel_id', req.params.reelId)
+    .maybeSingle();
+  if (!source) return res.status(404).json({ error: 'Reel not in source list' });
+
+  // Check the target doesn't already have it
+  const { data: existing } = await supabase
+    .from('todo_list_reels')
+    .select('id')
+    .eq('todo_list_id', target_list_id)
+    .eq('reel_id', req.params.reelId)
+    .maybeSingle();
+  if (existing) {
+    return res.status(409).json({ error: 'This reel is already in the target list' });
+  }
+
+  // Insert into target preserving notes + priority + done state
+  const { error: insertErr } = await supabase
+    .from('todo_list_reels')
+    .insert({
+      todo_list_id: target_list_id,
+      reel_id: req.params.reelId,
+      public_note: source.public_note,
+      private_note: source.private_note,
+      priority: source.priority,
+      is_done: source.is_done,
+    });
+  if (insertErr) return res.status(500).json({ error: insertErr.message });
+
+  // Remove from source
+  const { error: deleteErr } = await supabase
+    .from('todo_list_reels')
+    .delete()
+    .eq('todo_list_id', req.params.id)
+    .eq('reel_id', req.params.reelId);
+  if (deleteErr) {
+    // Best effort — already inserted in target. Don't bubble up; the user got the move.
+    console.error('[move] source delete failed:', deleteErr.message);
+  }
+
+  res.json({ success: true });
+});
+
+// POST copy a reel to another list (keeps the source row intact)
+router.post('/:id/reels/:reelId/copy', async (req, res) => {
+  const { target_list_id, copy_notes = true } = req.body;
+  if (!target_list_id) return res.status(400).json({ error: 'target_list_id is required' });
+  if (target_list_id === req.params.id) {
+    return res.status(400).json({ error: 'Source and target lists are the same' });
+  }
+
+  const { data: source } = await supabase
+    .from('todo_list_reels')
+    .select('public_note, private_note, priority')
+    .eq('todo_list_id', req.params.id)
+    .eq('reel_id', req.params.reelId)
+    .maybeSingle();
+  if (!source) return res.status(404).json({ error: 'Reel not in source list' });
+
+  const { data: existing } = await supabase
+    .from('todo_list_reels')
+    .select('id')
+    .eq('todo_list_id', target_list_id)
+    .eq('reel_id', req.params.reelId)
+    .maybeSingle();
+  if (existing) {
+    return res.status(409).json({ error: 'This reel is already in the target list' });
+  }
+
+  const insertPayload = {
+    todo_list_id: target_list_id,
+    reel_id: req.params.reelId,
+    priority: source.priority,
+  };
+  if (copy_notes) {
+    insertPayload.public_note = source.public_note;
+    insertPayload.private_note = source.private_note;
+  }
+
+  const { error: insertErr } = await supabase
+    .from('todo_list_reels')
+    .insert(insertPayload);
+  if (insertErr) return res.status(500).json({ error: insertErr.message });
+
+  res.json({ success: true });
+});
+
+// POST initiate an uploaded-video reel.
+// 1. Frontend asks the server to create a signed upload URL for Supabase Storage.
+// 2. Frontend uploads the video bytes directly to Storage (does NOT pass through Render).
+// 3. Frontend calls /finalize with the file path to create the reel + link to the list.
+router.post('/:id/reels/upload/init', async (req, res) => {
+  const { filename, size_bytes } = req.body;
+  if (!filename) return res.status(400).json({ error: 'filename is required' });
+  // 10 MB hard cap
+  const MAX_BYTES = 10 * 1024 * 1024;
+  if (size_bytes && size_bytes > MAX_BYTES) {
+    return res.status(400).json({ error: `Video exceeds 10 MB limit (${(size_bytes/1024/1024).toFixed(1)} MB)` });
+  }
+
+  // Verify the list exists
+  const { data: list } = await supabase
+    .from('todo_lists')
+    .select('id')
+    .eq('id', req.params.id)
+    .maybeSingle();
+  if (!list) return res.status(404).json({ error: 'List not found' });
+
+  // We use a fresh UUID for the reel id ahead of time, so the storage path matches it
+  const { randomUUID } = require('crypto');
+  const reelId = randomUUID();
+  const storagePath = `uploads/${reelId}.mp4`;
+
+  // Create a signed upload URL (Supabase JS v2 supports this)
+  const { data, error } = await supabase.storage
+    .from('reel-backups')
+    .createSignedUploadUrl(storagePath);
+
+  if (error) {
+    return res.status(500).json({ error: `Could not create upload URL: ${error.message}` });
+  }
+
+  res.json({
+    reel_id: reelId,
+    storage_path: storagePath,
+    signed_url: data.signedUrl,
+    token: data.token, // Supabase needs this for the upload itself
+  });
+});
+
+// POST finalize an upload: create the reel record + link to the list
+router.post('/:id/reels/upload/finalize', async (req, res) => {
+  const { reel_id, storage_path, filename } = req.body;
+  if (!reel_id || !storage_path) {
+    return res.status(400).json({ error: 'reel_id and storage_path are required' });
+  }
+
+  // Get the public URL for the just-uploaded file
+  const { data: pub } = supabase.storage
+    .from('reel-backups')
+    .getPublicUrl(storage_path);
+  const videoUrl = pub?.publicUrl;
+  if (!videoUrl) {
+    return res.status(500).json({ error: 'Could not generate public URL for uploaded video' });
+  }
+
+  // Verify the file actually exists (the frontend may have failed mid-upload)
+  try {
+    const head = await fetch(videoUrl, { method: 'HEAD' });
+    if (!head.ok) {
+      return res.status(400).json({ error: 'Upload appears incomplete or missing' });
+    }
+  } catch {
+    // Best-effort check; don't block the finalize call
+  }
+
+  const safeName = (filename || 'uploaded video').replace(/\.[^.]*$/, '').substring(0, 200);
+
+  // Create the reel record
+  const newReel = {
+    id: reel_id, // matches the storage path
+    creator_id: null,
+    instagram_id: `upload-${reel_id}`,
+    url: videoUrl,
+    thumbnail_url: null,
+    caption: safeName,
+    views: 0, likes: 0, comments: 0,
+    posted_at: new Date().toISOString(),
+    is_manual: true,
+    is_uploaded: true,
+    backup_status: 'done',
+    backup_video_url: videoUrl,
+    backup_thumbnail_url: null,
+    backup_completed_at: new Date().toISOString(),
+  };
+
+  const { error: reelErr } = await supabase
+    .from('reels')
+    .insert(newReel);
+  if (reelErr) return res.status(500).json({ error: `Failed to save reel: ${reelErr.message}` });
+
+  // Link to list
+  const { error: linkErr } = await supabase
+    .from('todo_list_reels')
+    .insert({ todo_list_id: req.params.id, reel_id });
+  if (linkErr) return res.status(500).json({ error: linkErr.message });
+
+  res.json({ success: true, reel_id, video_url: videoUrl });
+});
+
 router.post('/:id/reels/:reelId/backup', async (req, res) => {
   // Verify the reel is in the list (defensive)
   const { data: link } = await supabase
@@ -366,15 +587,16 @@ router.get('/public/:token', async (req, res) => {
   const { data: items } = await supabase
     .from('todo_list_reels')
     .select(`
-      id, is_done, added_at, done_at, public_note,
+      id, is_done, added_at, done_at, public_note, priority,
       reels (
-        id, url, thumbnail_url, caption, is_manual,
+        id, url, thumbnail_url, caption, is_manual, is_uploaded,
         views, likes, comments, posted_at,
         backup_status, backup_video_url, backup_thumbnail_url,
         creators ( username, display_name )
       )
     `)
     .eq('todo_list_id', list.id)
+    .order('priority', { ascending: false })
     .order('added_at', { ascending: false });
 
   res.json({

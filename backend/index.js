@@ -12,6 +12,7 @@ const todosRouter = require('./routes/todos');
 const myAccountsRouter = require('./routes/myAccounts');
 const talentsRouter = require('./routes/talents');
 const converterRouter = require('./routes/converter');
+const settingsRouter = require('./routes/settings');
 const { runDailyFetch } = require('./services/fetchService');
 const { runMyAccountsFetch } = require('./services/myAccountsService');
 
@@ -43,6 +44,7 @@ app.use('/api/todos', todosRouter);
 app.use('/api/my-accounts', myAccountsRouter);
 app.use('/api/talents', talentsRouter);
 app.use('/api/converter', converterRouter);
+app.use('/api/settings', settingsRouter);
 
 // Daily cron: runs every day at 6:00 AM UTC
 cron.schedule('0 6 * * *', async () => {

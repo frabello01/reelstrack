@@ -3,9 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, ExternalLink, Trash2, Eye, Heart, Share2, Link2,
   StickyNote, Lock, Check, X, Plus, Save, AlertCircle, Loader2,
-  RefreshCw, Play, Download
+  RefreshCw, Play, Download, MoreVertical, Move, Copy, Flame, Upload, Video
 } from 'lucide-react';
 import { api } from '../lib/api';
+import { uploadVideoToTodo } from '../lib/videoUpload';
 import ImageUploader from '../components/ImageUploader';
 import './TodoDetailPage.css';
 
@@ -35,6 +36,18 @@ export default function TodoDetailPage() {
   const [listPublicDraft, setListPublicDraft] = useState('');
   const [listPrivateDraft, setListPrivateDraft] = useState('');
 
+  // All other to-do lists (for the Move/Copy menu)
+  const [allLists, setAllLists] = useState([]);
+
+  // Tracks which reel's "more actions" menu is open (reelId or null)
+  const [openMenuFor, setOpenMenuFor] = useState(null);
+
+  // Video upload state
+  const fileInputRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadError, setUploadError] = useState('');
+
   const load = async () => {
     setLoading(true);
     try {
@@ -55,6 +68,19 @@ export default function TodoDetailPage() {
   };
 
   useEffect(() => { load(); }, [id]);
+
+  // Load all to-do lists (for the move/copy menu)
+  useEffect(() => {
+    api.getTodos().then((lists) => setAllLists(lists || [])).catch(() => {});
+  }, []);
+
+  // Close action menu when clicking outside
+  useEffect(() => {
+    if (!openMenuFor) return;
+    const handler = () => setOpenMenuFor(null);
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
+  }, [openMenuFor]);
 
   // Auto-poll while any backup is in progress
   useEffect(() => {
@@ -132,6 +158,65 @@ export default function TodoDetailPage() {
       ? { public_note: listPublicDraft }
       : { private_note: listPrivateDraft };
     await api.updateTodoNotes(id, payload);
+  };
+
+  // Set priority on a reel (1=low, 2=medium, 3=high). Optimistic update.
+  const handleSetPriority = async (reelId, priority) => {
+    setList((l) => ({
+      ...l,
+      items: l.items.map((it) => it.reels?.id === reelId ? { ...it, priority } : it),
+    }));
+    try {
+      await api.updateReelPriority(id, reelId, priority);
+      // Reload to get re-sorted order from the server
+      silentReload();
+    } catch (err) {
+      alert(`Failed to update priority: ${err.message}`);
+      load();
+    }
+  };
+
+  // Move a reel to another list. Removes from current list.
+  const handleMove = async (reelId, targetListId) => {
+    setOpenMenuFor(null);
+    try {
+      await api.moveReel(id, reelId, targetListId);
+      load();
+    } catch (err) {
+      alert(`Move failed: ${err.message}`);
+    }
+  };
+
+  // Copy a reel to another list (keeps current). Notes are copied by default.
+  const handleCopy = async (reelId, targetListId) => {
+    setOpenMenuFor(null);
+    try {
+      await api.copyReel(id, reelId, targetListId);
+      const target = allLists.find((l) => l.id === targetListId);
+      if (target) {
+        // brief feedback
+        // eslint-disable-next-line no-alert
+        // (could be a toast — keeping simple alert for now)
+      }
+    } catch (err) {
+      alert(`Copy failed: ${err.message}`);
+    }
+  };
+
+  // Direct video upload from file input
+  const handleVideoSelected = async (file) => {
+    if (!file) return;
+    setUploading(true);
+    setUploadError('');
+    setUploadProgress(0);
+    try {
+      await uploadVideoToTodo(id, file, (p) => setUploadProgress(p));
+      load();
+    } catch (err) {
+      setUploadError(err.message || 'Upload failed');
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleRetryBackup = async (reelId) => {
@@ -246,6 +331,32 @@ export default function TodoDetailPage() {
       </form>
       {linkError && <div className="add-by-link-error">{linkError}</div>}
 
+      {/* Direct video upload */}
+      <div className="upload-video-row">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="video/mp4"
+          style={{ display: 'none' }}
+          onChange={(e) => handleVideoSelected(e.target.files?.[0])}
+        />
+        <button
+          type="button"
+          className="btn btn-secondary upload-btn"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+        >
+          {uploading ? <Loader2 size={14} className="spin" /> : <Upload size={14} />}
+          {uploading ? `Uploading… ${Math.round(uploadProgress * 100)}%` : 'Upload video (MP4, max 10 MB)'}
+        </button>
+        {uploading && (
+          <div className="upload-progress-bar">
+            <div className="upload-progress-fill" style={{ width: `${uploadProgress * 100}%` }} />
+          </div>
+        )}
+      </div>
+      {uploadError && <div className="add-by-link-error">{uploadError}</div>}
+
       {list.items.length === 0 ? (
         <div className="empty-state">
           <p>No reels saved yet. Add reels from the dashboard using the bookmark icon, or paste an Instagram link above.</p>
@@ -265,7 +376,13 @@ export default function TodoDetailPage() {
                     checked={item.is_done}
                     onChange={() => toggleDone(item)}
                   />
-                  <div className="todo-item-rank">#{idx + 1}</div>
+                  <div className="todo-item-rank-col">
+                    <div className="todo-item-rank">#{idx + 1}</div>
+                    <PriorityPill
+                      priority={item.priority}
+                      onChange={(p) => handleSetPriority(reel.id, p)}
+                    />
+                  </div>
                   <div className="todo-item-thumb">
                     {(reel?.backup_thumbnail_url || reel?.thumbnail_url) && (
                       <img src={reel.backup_thumbnail_url || reel.thumbnail_url} alt="" />
@@ -275,7 +392,9 @@ export default function TodoDetailPage() {
                     <div className="todo-item-creator">
                       {reel?.creators?.username
                         ? `@${reel.creators.username}`
-                        : <span className="manual-badge">Manually added</span>}
+                        : reel?.is_uploaded
+                          ? <span className="manual-badge">Uploaded video</span>
+                          : <span className="manual-badge">Manually added</span>}
                     </div>
                     <div className="todo-item-caption">
                       {reel?.caption?.substring(0, 80) || '(no caption)'}
@@ -295,37 +414,58 @@ export default function TodoDetailPage() {
                         <button
                           className="todo-item-action-btn"
                           onClick={() => setPlayingVideoUrl(reel.backup_video_url)}
-                          title="Play backup video"
-                          aria-label="Play backup video"
+                          title="Play video"
+                          aria-label="Play video"
                         >
                           <Play size={14} />
                         </button>
                         <button
                           className="todo-item-action-btn"
                           onClick={() => handleDownload(reel)}
-                          title="Download MP4 (you can convert to MP3 locally)"
+                          title="Download MP4"
                           aria-label="Download MP4"
                         >
                           <Download size={14} />
                         </button>
                       </>
                     )}
-                    <a
-                      href={reel?.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="todo-item-action-btn"
-                      title="Open on Instagram"
-                    >
-                      <ExternalLink size={14} />
-                    </a>
-                    <button
-                      className="todo-item-action-btn danger"
-                      onClick={() => removeReel(reel.id)}
-                      title="Remove from list"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    {!reel?.is_uploaded && (
+                      <a
+                        href={reel?.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="todo-item-action-btn"
+                        title="Open on Instagram"
+                      >
+                        <ExternalLink size={14} />
+                      </a>
+                    )}
+                    <div className="reel-menu-wrap">
+                      <button
+                        className="todo-item-action-btn"
+                        onClick={(e) => { e.stopPropagation(); setOpenMenuFor(openMenuFor === reel.id ? null : reel.id); }}
+                        title="More actions"
+                        aria-label="More actions"
+                      >
+                        <MoreVertical size={14} />
+                      </button>
+                      {openMenuFor === reel.id && (
+                        <div className="reel-menu" onClick={(e) => e.stopPropagation()}>
+                          <ReelMoveCopyMenu
+                            currentListId={id}
+                            allLists={allLists}
+                            onMove={(targetId) => handleMove(reel.id, targetId)}
+                            onCopy={(targetId) => handleCopy(reel.id, targetId)}
+                          />
+                          <button
+                            className="reel-menu-item danger"
+                            onClick={() => { setOpenMenuFor(null); removeReel(reel.id); }}
+                          >
+                            <Trash2 size={12} /> Remove from list
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -458,5 +598,66 @@ function BackupBadge({ reel, onRetry }) {
         <Save size={11} />
       </button>
     </div>
+  );
+}
+
+// ----- PriorityPill: cycles 1 → 2 → 3 on click -----
+function PriorityPill({ priority, onChange }) {
+  const p = priority ?? 2;
+  const labels = { 1: 'Low', 2: 'Medium', 3: 'High' };
+  const cycle = () => onChange(p === 3 ? 1 : p + 1);
+  return (
+    <button
+      className={`priority-pill priority-${p}`}
+      onClick={cycle}
+      title={`Priority: ${labels[p]} (click to change)`}
+    >
+      {p === 3 && <Flame size={11} />}
+      {labels[p]}
+    </button>
+  );
+}
+
+// ----- ReelMoveCopyMenu: shows a dropdown of other lists -----
+function ReelMoveCopyMenu({ currentListId, allLists, onMove, onCopy }) {
+  const [mode, setMode] = useState(null); // 'move' | 'copy' | null
+  const otherLists = allLists.filter((l) => l.id !== currentListId);
+
+  if (otherLists.length === 0) {
+    return (
+      <div className="reel-menu-empty">
+        Create another list first to move/copy reels.
+      </div>
+    );
+  }
+
+  if (!mode) {
+    return (
+      <>
+        <button className="reel-menu-item" onClick={() => setMode('move')}>
+          <Move size={12} /> Move to…
+        </button>
+        <button className="reel-menu-item" onClick={() => setMode('copy')}>
+          <Copy size={12} /> Copy to…
+        </button>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <div className="reel-menu-header">
+        {mode === 'move' ? 'Move to which list?' : 'Copy to which list?'}
+      </div>
+      {otherLists.map((l) => (
+        <button
+          key={l.id}
+          className="reel-menu-item"
+          onClick={() => mode === 'move' ? onMove(l.id) : onCopy(l.id)}
+        >
+          {l.name}
+        </button>
+      ))}
+    </>
   );
 }
