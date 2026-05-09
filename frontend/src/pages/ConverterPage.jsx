@@ -91,23 +91,34 @@ export default function ConverterPage() {
 
   // ----- Convert to MP3 -------------------------------------------
 
-  // Lazy-load ffmpeg.wasm (~25 MB on first use) only when needed.
+  // Lazy-load ffmpeg.wasm (single-threaded build — no SharedArrayBuffer required).
+  // The 0.12+ API uses an FFmpeg class instead of createFFmpeg().
   const loadFfmpeg = async () => {
     if (ffmpegRef.current) return ffmpegRef.current;
-    // Dynamic import so the rest of the app stays fast.
-    const { createFFmpeg, fetchFile } = await import('@ffmpeg/ffmpeg');
-    const ffmpeg = createFFmpeg({
-      log: false,
-      // Pin to a stable CDN-served core (avoids needing COEP/COOP headers on Vercel)
-      corePath: 'https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js',
-      progress: (p) => {
-        if (typeof p?.ratio === 'number') {
-          // p.ratio is 0..1
-          setMp3Progress(Math.max(0, Math.min(1, p.ratio)));
-        }
-      },
+
+    const [{ FFmpeg }, { fetchFile, toBlobURL }] = await Promise.all([
+      import('@ffmpeg/ffmpeg'),
+      import('@ffmpeg/util'),
+    ]);
+
+    const ffmpeg = new FFmpeg();
+
+    // Track conversion progress
+    ffmpeg.on('progress', ({ progress }) => {
+      if (typeof progress === 'number') {
+        setMp3Progress(Math.max(0, Math.min(1, progress)));
+      }
     });
-    await ffmpeg.load();
+
+    // Use the SINGLE-THREADED core (works without COOP/COEP headers).
+    // Files come from unpkg → converted to blob URLs so the worker can load them
+    // without cross-origin issues.
+    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.10/dist/umd';
+    await ffmpeg.load({
+      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+    });
+
     ffmpegRef.current = { ffmpeg, fetchFile };
     return ffmpegRef.current;
   };
@@ -123,14 +134,16 @@ export default function ConverterPage() {
       const inName = 'input.mp4';
       const outName = 'output.mp3';
 
-      ffmpeg.FS('writeFile', inName, await fetchFile(new Blob([bytes], { type: 'video/mp4' })));
-      // -vn: no video, -acodec libmp3lame: MP3, -q:a 2: ~190 kbps quality
-      await ffmpeg.run('-i', inName, '-vn', '-acodec', 'libmp3lame', '-q:a', '2', outName);
-      const out = ffmpeg.FS('readFile', outName);
-      // Cleanup virtual FS
-      try { ffmpeg.FS('unlink', inName); } catch {}
-      try { ffmpeg.FS('unlink', outName); } catch {}
+      await ffmpeg.writeFile(inName, await fetchFile(new Blob([bytes], { type: 'video/mp4' })));
+      // -vn: no video, libmp3lame: MP3 codec, -q:a 2: ~190 kbps quality
+      await ffmpeg.exec(['-i', inName, '-vn', '-acodec', 'libmp3lame', '-q:a', '2', outName]);
+      const out = await ffmpeg.readFile(outName);
 
+      // Cleanup virtual FS
+      try { await ffmpeg.deleteFile(inName); } catch {}
+      try { await ffmpeg.deleteFile(outName); } catch {}
+
+      // out is a Uint8Array (or similar)
       triggerDownload(out, `${reel.suggested_filename}.mp3`, 'audio/mpeg');
       setMp3Progress(1);
     } catch (err) {
