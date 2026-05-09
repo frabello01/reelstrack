@@ -6,6 +6,7 @@ import {
   RefreshCw, Play, Download
 } from 'lucide-react';
 import { api } from '../lib/api';
+import ImageUploader from '../components/ImageUploader';
 import './TodoDetailPage.css';
 
 function formatViews(n) {
@@ -185,6 +186,23 @@ export default function TodoDetailPage() {
         <div className="todo-detail-stats">
           {list.items.filter((i) => i.is_done).length} / {list.items.length} done
         </div>
+      </div>
+
+      {/* Cover image (banner) */}
+      <div className="cover-image-section">
+        <ImageUploader
+          shape="banner"
+          currentUrl={list.cover_image_url}
+          placeholder="Add a cover image for this list"
+          onUpload={async (dataUrl) => {
+            await api.uploadTodoCover(id, dataUrl);
+            silentReload();
+          }}
+          onRemove={async () => {
+            await api.removeTodoCover(id);
+            silentReload();
+          }}
+        />
       </div>
 
       {/* List-level notes (public + private) */}

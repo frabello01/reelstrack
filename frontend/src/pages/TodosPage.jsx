@@ -63,7 +63,9 @@ export default function TodosPage() {
           {todos.map((t) => (
             <div key={t.id} className="todo-card" onClick={() => navigate(`/todos/${t.id}`)}>
               <div className="todo-thumb">
-                {t.preview_thumbnail ? (
+                {t.cover_image_url ? (
+                  <img src={t.cover_image_url} alt={t.name} />
+                ) : t.preview_thumbnail ? (
                   <img src={t.preview_thumbnail} alt={t.name} />
                 ) : (
                   <div className="todo-thumb-placeholder"><CheckSquare size={32} /></div>

@@ -20,7 +20,7 @@ const PORT = process.env.PORT || 3001;
 
 // Middleware
 app.use(cors({ origin: process.env.FRONTEND_URL || '*' }));
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
 // Health check endpoint — exempt from rate limiting (used by UptimeRobot to keep the dyno awake)
 app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date() }));

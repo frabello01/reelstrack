@@ -106,6 +106,15 @@ export default function TalentsPage() {
           {talents.map((t) => (
             <Link to={`/my-creators/${t.id}`} key={t.id} className="talent-card">
               <div className="talent-card-header">
+                <div className="talent-pic">
+                  {t.profile_pic_url ? (
+                    <img src={t.profile_pic_url} alt="" />
+                  ) : (
+                    <div className="talent-pic-placeholder">
+                      {t.name?.[0]?.toUpperCase()}
+                    </div>
+                  )}
+                </div>
                 <div className="talent-info">
                   <div className="talent-name">{t.name}</div>
                   <div className="talent-profile-count">

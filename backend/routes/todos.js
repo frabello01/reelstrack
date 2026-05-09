@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const supabase = require('../lib/supabase');
 const { backupReelInBackground } = require('../services/backupService');
+const { uploadImageDataUrl } = require('../lib/imageUpload');
 
 const HIKERAPI_BASE = 'https://api.hikerapi.com';
 const HIKERAPI_TOKEN = process.env.HIKERAPI_TOKEN;
@@ -311,13 +312,51 @@ router.post('/:id/reels/:reelId/backup', async (req, res) => {
   res.json({ success: true, message: 'Backup started' });
 });
 
+// POST upload a cover image for a list (accepts a base64 data URL)
+router.post('/:id/cover-image', async (req, res) => {
+  const { image_data_url } = req.body;
+  if (!image_data_url) return res.status(400).json({ error: 'image_data_url is required' });
+
+  // Verify the list exists
+  const { data: list } = await supabase
+    .from('todo_lists')
+    .select('id')
+    .eq('id', req.params.id)
+    .maybeSingle();
+  if (!list) return res.status(404).json({ error: 'List not found' });
+
+  try {
+    const url = await uploadImageDataUrl(image_data_url, `todo-lists/${req.params.id}`);
+    const { data, error } = await supabase
+      .from('todo_lists')
+      .update({ cover_image_url: url })
+      .eq('id', req.params.id)
+      .select('id, cover_image_url')
+      .single();
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// DELETE the cover image (clear it from the list, file stays in storage)
+router.delete('/:id/cover-image', async (req, res) => {
+  const { error } = await supabase
+    .from('todo_lists')
+    .update({ cover_image_url: null })
+    .eq('id', req.params.id);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
 // ----- PUBLIC ENDPOINTS (no auth — accessed by token) ----------
 
 // GET public list by token
 router.get('/public/:token', async (req, res) => {
   const { data: list, error } = await supabase
     .from('todo_lists')
-    .select('id, name, public_token, public_note, created_at')
+    .select('id, name, public_token, public_note, cover_image_url, created_at')
     .eq('public_token', req.params.token)
     .maybeSingle();
   if (error) return res.status(500).json({ error: error.message });
@@ -343,6 +382,7 @@ router.get('/public/:token', async (req, res) => {
     name: list.name,
     public_token: list.public_token,
     public_note: list.public_note,
+    cover_image_url: list.cover_image_url,
     items: items || [],
   });
 });

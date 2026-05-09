@@ -110,4 +110,14 @@ export const api = {
     request(`/api/talents/${talentId}/profiles/${profileId}`, { method: 'DELETE' }),
   triggerTalentFetch: (talentId) =>
     request(`/api/talents/${talentId}/fetch`, { method: 'POST' }),
+  uploadTalentProfilePic: (talentId, image_data_url) =>
+    request(`/api/talents/${talentId}/profile-pic`, { method: 'POST', body: JSON.stringify({ image_data_url }) }),
+  removeTalentProfilePic: (talentId) =>
+    request(`/api/talents/${talentId}/profile-pic`, { method: 'DELETE' }),
+
+  // To-do list cover image
+  uploadTodoCover: (todoId, image_data_url) =>
+    request(`/api/todos/${todoId}/cover-image`, { method: 'POST', body: JSON.stringify({ image_data_url }) }),
+  removeTodoCover: (todoId) =>
+    request(`/api/todos/${todoId}/cover-image`, { method: 'DELETE' }),
 };

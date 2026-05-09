@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid } from 'recharts';
 import { api } from '../lib/api';
+import ImageUploader from '../components/ImageUploader';
 import './TalentDetailPage.css';
 
 function formatNum(n) {
@@ -106,6 +107,19 @@ export default function TalentDetailPage() {
       </button>
 
       <div className="talent-detail-header">
+        <ImageUploader
+          shape="circle"
+          currentUrl={talent.profile_pic_url}
+          placeholder="Add photo"
+          onUpload={async (dataUrl) => {
+            await api.uploadTalentProfilePic(id, dataUrl);
+            load();
+          }}
+          onRemove={async () => {
+            await api.removeTalentProfilePic(id);
+            load();
+          }}
+        />
         <div className="talent-detail-info">
           <h1>{talent.name}</h1>
           <div className="talent-detail-stats">

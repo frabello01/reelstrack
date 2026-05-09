@@ -353,3 +353,8 @@
   .add-by-link { flex-wrap: wrap; }
   .add-by-link input { width: 100%; padding: 4px 0; }
 }
+
+/* Cover image section */
+.cover-image-section {
+  margin-bottom: 16px;
+}

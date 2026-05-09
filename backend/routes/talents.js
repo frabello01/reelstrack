@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const supabase = require('../lib/supabase');
 const { fetchAccount, runMyAccountsFetch } = require('../services/myAccountsService');
+const { uploadImageDataUrl } = require('../lib/imageUpload');
 
 // ----- Helpers ---------------------------------------------------
 
@@ -412,6 +413,43 @@ router.post('/:id/fetch', async (req, res) => {
   } catch (err) {
     console.error('[talents/fetch] failed:', err.message);
   }
+});
+
+// POST upload a profile picture for a talent (accepts a base64 data URL)
+router.post('/:id/profile-pic', async (req, res) => {
+  const { image_data_url } = req.body;
+  if (!image_data_url) return res.status(400).json({ error: 'image_data_url is required' });
+
+  const { data: existing } = await supabase
+    .from('talents')
+    .select('id')
+    .eq('id', req.params.id)
+    .maybeSingle();
+  if (!existing) return res.status(404).json({ error: 'Talent not found' });
+
+  try {
+    const url = await uploadImageDataUrl(image_data_url, `talents/${req.params.id}`);
+    const { data, error } = await supabase
+      .from('talents')
+      .update({ profile_pic_url: url })
+      .eq('id', req.params.id)
+      .select('id, profile_pic_url')
+      .single();
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// DELETE the profile picture (clear it; file stays in storage)
+router.delete('/:id/profile-pic', async (req, res) => {
+  const { error } = await supabase
+    .from('talents')
+    .update({ profile_pic_url: null })
+    .eq('id', req.params.id);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
 });
 
 module.exports = router;
