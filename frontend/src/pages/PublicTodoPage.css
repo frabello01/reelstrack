@@ -42,7 +42,7 @@
 
 .public-item {
   display: grid;
-  grid-template-columns: auto 80px 1fr auto;
+  grid-template-columns: auto auto 80px 1fr auto;
   gap: 12px; align-items: center;
   padding: 12px;
   background: rgba(255,255,255,0.04);
@@ -120,7 +120,7 @@
 /* ===== Mobile ===== */
 @media (max-width: 480px) {
   .public-item {
-    grid-template-columns: auto 60px 1fr auto;
+    grid-template-columns: auto auto 60px 1fr auto;
     gap: 10px; padding: 10px;
   }
   .public-item-thumb { width: 60px; height: 60px; }
@@ -186,4 +186,38 @@
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* Numbered rank for each reel */
+.public-item-rank {
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 16px;
+  color: rgba(255,255,255,0.5);
+  min-width: 28px;
+  text-align: center;
+}
+
+/* List-level public note (top of share page) */
+.public-list-note {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 14px 16px;
+  margin-bottom: 20px;
+  background: rgba(251, 191, 36, 0.08);
+  border-left: 3px solid rgba(251, 191, 36, 0.6);
+  border-radius: 6px;
+}
+.public-list-note svg {
+  color: rgba(251, 191, 36, 0.9);
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+.public-list-note p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: rgba(255,255,255,0.9);
+  white-space: pre-wrap;
 }

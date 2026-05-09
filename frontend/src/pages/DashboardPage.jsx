@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
-import { RefreshCw, TrendingUp, Eye, Film, Clock, ChevronDown, EyeOff, CheckCheck } from 'lucide-react';
+import { RefreshCw, TrendingUp, Eye, Film, Clock, ChevronDown, EyeOff, ChevronLeft, ChevronRight } from 'lucide-react';
 import ReelCard from '../components/ReelCard';
 import './DashboardPage.css';
+
+const PAGE_SIZE = 100;
 
 const DAY_OPTIONS = [
   { label: 'Last 24h', value: '1' },
@@ -19,38 +21,54 @@ const SEEN_OPTIONS = [
 
 export default function DashboardPage() {
   const [reels, setReels] = useState([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [lists, setLists] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [fetching, setFetching] = useState(false);
-  const [bulkMarking, setBulkMarking] = useState(false);
 
   const [selectedList, setSelectedList] = useState('');
   const [days, setDays] = useState('30');
   const [sort, setSort] = useState('outlier_score');
-  const [seenFilter, setSeenFilter] = useState('unseen'); // default = hide seen
+  const [seenFilter, setSeenFilter] = useState('unseen');
+  const [page, setPage] = useState(0); // zero-indexed
+
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const offset = page * PAGE_SIZE;
 
   const loadReels = useCallback(async () => {
     setLoading(true);
     try {
-      const params = { days, sort, limit: 100, seen_filter: seenFilter };
+      const params = {
+        days,
+        sort,
+        limit: PAGE_SIZE,
+        offset,
+        seen_filter: seenFilter,
+      };
       if (selectedList) params.list_id = selectedList;
       const [reelsData, statsData] = await Promise.all([
         api.getReels(params),
         api.getStats(selectedList ? { list_id: selectedList } : {}),
       ]);
       setReels(reelsData.data || []);
+      setTotalCount(reelsData.count || 0);
       setStats(statsData);
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
     }
-  }, [selectedList, days, sort, seenFilter]);
+  }, [selectedList, days, sort, seenFilter, offset]);
 
   useEffect(() => {
     api.getLists().then(setLists).catch(console.error);
   }, []);
+
+  // Whenever filters change, jump back to page 0
+  useEffect(() => {
+    setPage(0);
+  }, [selectedList, days, sort, seenFilter]);
 
   useEffect(() => {
     loadReels();
@@ -69,21 +87,11 @@ export default function DashboardPage() {
     }
   };
 
-  // Toggle seen on a single reel — called from ReelCard.
-  // Optimistic: removes the card immediately if we're in "unseen" view.
   const handleToggleSeen = async (reelId, currentlySeen) => {
     const newSeen = !currentlySeen;
-    // Optimistic UI update
     setReels((prev) => {
-      // If we're filtering to unseen and we just marked it seen → remove from view
-      if (seenFilter === 'unseen' && newSeen) {
-        return prev.filter((r) => r.id !== reelId);
-      }
-      // If filtering to seen and we just unmarked → remove
-      if (seenFilter === 'seen' && !newSeen) {
-        return prev.filter((r) => r.id !== reelId);
-      }
-      // Otherwise just update the seen_at value
+      if (seenFilter === 'unseen' && newSeen) return prev.filter((r) => r.id !== reelId);
+      if (seenFilter === 'seen' && !newSeen) return prev.filter((r) => r.id !== reelId);
       return prev.map((r) =>
         r.id === reelId ? { ...r, seen_at: newSeen ? new Date().toISOString() : null } : r
       );
@@ -91,27 +99,8 @@ export default function DashboardPage() {
     try {
       await api.setReelSeen(reelId, newSeen);
     } catch (err) {
-      // Revert on error
       console.error('[seen] toggle failed, reloading:', err.message);
       loadReels();
-    }
-  };
-
-  const handleMarkAllSeen = async () => {
-    if (reels.length === 0) return;
-    if (!confirm(`Mark all ${reels.length} reels currently shown as seen?`)) return;
-    setBulkMarking(true);
-    const ids = reels.map((r) => r.id);
-    // Optimistic — clear from view immediately if we're hiding seen
-    if (seenFilter === 'unseen') setReels([]);
-    try {
-      await api.bulkMarkSeen(ids);
-      loadReels();
-    } catch (err) {
-      console.error('[bulk seen] failed:', err.message);
-      loadReels();
-    } finally {
-      setBulkMarking(false);
     }
   };
 
@@ -137,7 +126,6 @@ export default function DashboardPage() {
         </button>
       </div>
 
-      {/* Stats row */}
       {stats && (
         <div className="stats-row">
           <div className="stat-card">
@@ -164,7 +152,6 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Filters */}
       <div className="filters-bar">
         <div className="filter-group">
           <label>List</label>
@@ -220,18 +207,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Bulk action bar — only show if there are reels currently */}
-      {reels.length > 0 && seenFilter === 'unseen' && (
-        <div className="bulk-actions">
-          <span className="bulk-count">{reels.length} unseen reels shown</span>
-          <button className="btn btn-ghost btn-sm" onClick={handleMarkAllSeen} disabled={bulkMarking}>
-            <CheckCheck size={14} />
-            {bulkMarking ? 'Marking…' : 'Mark all as seen'}
-          </button>
-        </div>
-      )}
-
-      {/* Reels grid */}
       {loading ? (
         <div className="loading-screen" style={{ height: 300 }}><div className="spinner" /></div>
       ) : reels.length === 0 ? (
@@ -254,18 +229,98 @@ export default function DashboardPage() {
           )}
         </div>
       ) : (
-        <div className="reels-grid">
-          {reels.map((reel, i) => (
-            <ReelCard
-              key={reel.id}
-              reel={reel}
-              rank={i + 1}
-              formatViews={formatViews}
-              onToggleSeen={handleToggleSeen}
+        <>
+          <div className="reels-grid">
+            {reels.map((reel, i) => (
+              <ReelCard
+                key={reel.id}
+                reel={reel}
+                rank={offset + i + 1}
+                formatViews={formatViews}
+                onToggleSeen={handleToggleSeen}
+              />
+            ))}
+          </div>
+
+          {totalPages > 1 && (
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              totalCount={totalCount}
+              pageSize={PAGE_SIZE}
+              onPageChange={(p) => {
+                setPage(p);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
             />
-          ))}
-        </div>
+          )}
+        </>
       )}
+    </div>
+  );
+}
+
+// ----- Pagination component -----
+function Pagination({ page, totalPages, totalCount, pageSize, onPageChange }) {
+  const start = page * pageSize + 1;
+  const end = Math.min((page + 1) * pageSize, totalCount);
+
+  // Build a compact page-number list with ellipses for many pages.
+  const buildPages = () => {
+    const pages = [];
+    const max = totalPages;
+    const cur = page + 1; // 1-indexed for display
+
+    if (max <= 7) {
+      for (let i = 1; i <= max; i++) pages.push(i);
+      return pages;
+    }
+    pages.push(1);
+    if (cur > 4) pages.push('…');
+    const startN = Math.max(2, cur - 2);
+    const endN = Math.min(max - 1, cur + 2);
+    for (let i = startN; i <= endN; i++) pages.push(i);
+    if (cur < max - 3) pages.push('…');
+    pages.push(max);
+    return pages;
+  };
+
+  return (
+    <div className="pagination">
+      <div className="pagination-info">
+        Showing <strong>{start.toLocaleString()}–{end.toLocaleString()}</strong> of <strong>{totalCount.toLocaleString()}</strong>
+      </div>
+      <div className="pagination-controls">
+        <button
+          className="page-btn"
+          onClick={() => onPageChange(page - 1)}
+          disabled={page === 0}
+          aria-label="Previous page"
+        >
+          <ChevronLeft size={14} /> Prev
+        </button>
+        {buildPages().map((p, i) =>
+          p === '…' ? (
+            <span key={`e${i}`} className="page-ellipsis">…</span>
+          ) : (
+            <button
+              key={p}
+              className={`page-btn page-num ${p === page + 1 ? 'active' : ''}`}
+              onClick={() => onPageChange(p - 1)}
+            >
+              {p}
+            </button>
+          )
+        )}
+        <button
+          className="page-btn"
+          onClick={() => onPageChange(page + 1)}
+          disabled={page >= totalPages - 1}
+          aria-label="Next page"
+        >
+          Next <ChevronRight size={14} />
+        </button>
+      </div>
     </div>
   );
 }

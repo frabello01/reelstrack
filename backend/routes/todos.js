@@ -80,7 +80,7 @@ router.get('/:id', async (req, res) => {
   const { data: items } = await supabase
     .from('todo_list_reels')
     .select(`
-      id, is_done, added_at, done_at, note,
+      id, is_done, added_at, done_at, public_note, private_note,
       reels (
         id, instagram_id, url, thumbnail_url, caption, is_manual,
         views, likes, comments, posted_at,
@@ -107,12 +107,21 @@ router.post('/', async (req, res) => {
   res.json(data);
 });
 
-// PATCH rename
+// PATCH rename + update list-level notes
 router.patch('/:id', async (req, res) => {
-  const { name } = req.body;
+  const { name, public_note, private_note } = req.body;
+  // Only update fields that were actually provided (so callers can patch one at a time)
+  const updates = {};
+  if (name !== undefined) updates.name = name;
+  if (public_note !== undefined) updates.public_note = public_note;
+  if (private_note !== undefined) updates.private_note = private_note;
+  if (Object.keys(updates).length === 0) {
+    return res.status(400).json({ error: 'Nothing to update' });
+  }
+
   const { data, error } = await supabase
     .from('todo_lists')
-    .update({ name })
+    .update(updates)
     .eq('id', req.params.id)
     .select()
     .single();
@@ -266,12 +275,19 @@ router.patch('/:id/reels/:reelId', async (req, res) => {
   res.json(data);
 });
 
-// PATCH update note on a reel within a list (new feature 2)
+// PATCH update notes on a reel within a list (public + private)
 router.patch('/:id/reels/:reelId/note', async (req, res) => {
-  const { note } = req.body;
+  const { public_note, private_note } = req.body;
+  const updates = {};
+  if (public_note !== undefined) updates.public_note = public_note;
+  if (private_note !== undefined) updates.private_note = private_note;
+  if (Object.keys(updates).length === 0) {
+    return res.status(400).json({ error: 'Nothing to update' });
+  }
+
   const { data, error } = await supabase
     .from('todo_list_reels')
-    .update({ note: note ?? null })
+    .update(updates)
     .eq('todo_list_id', req.params.id)
     .eq('reel_id', req.params.reelId)
     .select()
@@ -301,16 +317,17 @@ router.post('/:id/reels/:reelId/backup', async (req, res) => {
 router.get('/public/:token', async (req, res) => {
   const { data: list, error } = await supabase
     .from('todo_lists')
-    .select('*')
+    .select('id, name, public_token, public_note, created_at')
     .eq('public_token', req.params.token)
     .maybeSingle();
   if (error) return res.status(500).json({ error: error.message });
   if (!list) return res.status(404).json({ error: 'List not found' });
 
+  // IMPORTANT: select only public_note, never private_note
   const { data: items } = await supabase
     .from('todo_list_reels')
     .select(`
-      id, is_done, added_at, done_at, note,
+      id, is_done, added_at, done_at, public_note,
       reels (
         id, url, thumbnail_url, caption, is_manual,
         views, likes, comments, posted_at,
@@ -325,6 +342,7 @@ router.get('/public/:token', async (req, res) => {
     id: list.id,
     name: list.name,
     public_token: list.public_token,
+    public_note: list.public_note,
     items: items || [],
   });
 });

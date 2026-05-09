@@ -69,6 +69,8 @@ export const api = {
   getTodo: (id) => request(`/api/todos/${id}`),
   createTodo: (name) => request('/api/todos', { method: 'POST', body: JSON.stringify({ name }) }),
   renameTodo: (id, name) => request(`/api/todos/${id}`, { method: 'PATCH', body: JSON.stringify({ name }) }),
+  updateTodoNotes: (id, { public_note, private_note }) =>
+    request(`/api/todos/${id}`, { method: 'PATCH', body: JSON.stringify({ public_note, private_note }) }),
   deleteTodo: (id) => request(`/api/todos/${id}`, { method: 'DELETE' }),
   addReelToTodo: (todoId, reel_id) =>
     request(`/api/todos/${todoId}/reels`, { method: 'POST', body: JSON.stringify({ reel_id }) }),
@@ -76,8 +78,8 @@ export const api = {
     request(`/api/todos/${todoId}/reels/${reelId}`, { method: 'DELETE' }),
   toggleReelDone: (todoId, reelId, is_done) =>
     request(`/api/todos/${todoId}/reels/${reelId}`, { method: 'PATCH', body: JSON.stringify({ is_done }) }),
-  updateReelNote: (todoId, reelId, note) =>
-    request(`/api/todos/${todoId}/reels/${reelId}/note`, { method: 'PATCH', body: JSON.stringify({ note }) }),
+  updateReelNotes: (todoId, reelId, { public_note, private_note }) =>
+    request(`/api/todos/${todoId}/reels/${reelId}/note`, { method: 'PATCH', body: JSON.stringify({ public_note, private_note }) }),
   addReelToTodoByLink: (todoId, url) =>
     request(`/api/todos/${todoId}/reels/by-link`, { method: 'POST', body: JSON.stringify({ url }) }),
   retryReelBackup: (todoId, reelId) =>

@@ -76,13 +76,20 @@ export default function PublicTodoPage() {
           </div>
         </header>
 
+        {list.public_note && (
+          <div className="public-list-note">
+            <StickyNote size={14} />
+            <p>{list.public_note}</p>
+          </div>
+        )}
+
         {list.items.length === 0 ? (
           <div className="public-empty">
             <p>No reels in this list yet.</p>
           </div>
         ) : (
           <div className="public-items">
-            {list.items.map((item) => {
+            {list.items.map((item, idx) => {
               const reel = item.reels;
               const hasBackup = reel?.backup_status === 'done' && reel?.backup_video_url;
               const thumbSrc = reel?.backup_thumbnail_url || reel?.thumbnail_url;
@@ -95,6 +102,7 @@ export default function PublicTodoPage() {
                   >
                     {item.is_done ? <CheckCircle2 size={22} /> : <div className="public-checkbox-empty" />}
                   </button>
+                  <div className="public-item-rank">#{idx + 1}</div>
                   <div className="public-item-thumb">
                     {thumbSrc && <img src={thumbSrc} alt="" />}
                   </div>
@@ -111,10 +119,10 @@ export default function PublicTodoPage() {
                       <span><Eye size={12} /> {formatViews(reel?.views)}</span>
                       <span><Heart size={12} /> {formatViews(reel?.likes)}</span>
                     </div>
-                    {item.note && (
+                    {item.public_note && (
                       <div className="public-note">
                         <StickyNote size={12} />
-                        <span>{item.note}</span>
+                        <span>{item.public_note}</span>
                       </div>
                     )}
                   </div>
