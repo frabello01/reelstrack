@@ -50,6 +50,7 @@ export default function TalentDetailPage() {
   const [newProfile, setNewProfile] = useState('');
   const [addingProfile, setAddingProfile] = useState(false);
   const [profileError, setProfileError] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -86,11 +87,36 @@ export default function TalentDetailPage() {
   };
 
   const handleRefresh = async () => {
+    if (refreshing) return; // guard against double-clicks
+    setRefreshing(true);
     try {
       await api.triggerTalentFetch(id);
-      setTimeout(load, 5000);
+      // The backend kicks off the fetch in the background — it usually takes
+      // 10-60 seconds depending on how many profiles. We poll the talent
+      // detail endpoint a few times, looking for changes in updated_at on
+      // the profiles. After ~60 sec we give up and just reload once anyway.
+      let attempts = 0;
+      const initialUpdated = (talent.profiles || []).map((p) => p.updated_at).join(',');
+      const interval = setInterval(async () => {
+        attempts++;
+        try {
+          const fresh = await api.getTalent(id);
+          const freshUpdated = (fresh.profiles || []).map((p) => p.updated_at).join(',');
+          if (freshUpdated !== initialUpdated || attempts >= 12) {
+            clearInterval(interval);
+            setTalent(fresh);
+            setRefreshing(false);
+          }
+        } catch {
+          if (attempts >= 12) {
+            clearInterval(interval);
+            setRefreshing(false);
+          }
+        }
+      }, 5000);
     } catch (err) {
       alert(`Refresh failed: ${err.message}`);
+      setRefreshing(false);
     }
   };
 
@@ -130,8 +156,9 @@ export default function TalentDetailPage() {
             )}
           </div>
         </div>
-        <button className="btn btn-secondary" onClick={handleRefresh}>
-          <RefreshCw size={14} /> Refresh now
+        <button className="btn btn-secondary" onClick={handleRefresh} disabled={refreshing}>
+          <RefreshCw size={14} className={refreshing ? 'spin' : ''} />
+          {refreshing ? 'Refreshing…' : 'Refresh now'}
         </button>
       </div>
 
