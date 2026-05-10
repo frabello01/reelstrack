@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   ArrowLeft, Plus, Trash2, RefreshCw, ExternalLink,
-  TrendingUp, TrendingDown, Eye, Heart, Users, Film, Trophy, AlertTriangle, CheckCircle2
+  TrendingUp, TrendingDown, Eye, Heart, Users, Film, Trophy, AlertTriangle, CheckCircle2,
+  StickyNote, Check, X
 } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid } from 'recharts';
 import { api } from '../lib/api';
@@ -156,42 +157,45 @@ export default function TalentDetailPage() {
         ) : (
           <div className="profiles-list">
             {talent.profiles.map((p) => (
-              <div key={p.id} className="profile-row">
-                <Link to={`/my-accounts/${p.id}`} className="profile-row-main">
-                  <div className="profile-avatar">
-                    {p.profile_pic_url ? (
-                      <img src={p.profile_pic_url} alt="" />
-                    ) : (
-                      <div className="profile-avatar-placeholder">{p.username[0]?.toUpperCase()}</div>
-                    )}
-                  </div>
-                  <div className="profile-row-info">
-                    <div className="profile-username">@{p.username}</div>
-                    <div className="profile-row-meta">
-                      <ProfileStatusBadge status={p.status} />
-                      {p.follower_count != null && (
-                        <span><Users size={11} /> {formatNum(p.follower_count)} followers</span>
+              <div key={p.id} className="profile-card">
+                <div className="profile-row">
+                  <Link to={`/my-accounts/${p.id}`} className="profile-row-main">
+                    <div className="profile-avatar">
+                      {p.profile_pic_url ? (
+                        <img src={p.profile_pic_url} alt="" />
+                      ) : (
+                        <div className="profile-avatar-placeholder">{p.username[0]?.toUpperCase()}</div>
                       )}
                     </div>
-                  </div>
-                </Link>
-                <a
-                  href={`https://www.instagram.com/${p.username}/`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="profile-row-btn"
-                  onClick={(e) => e.stopPropagation()}
-                  title="Open on Instagram"
-                >
-                  <ExternalLink size={14} />
-                </a>
-                <button
-                  className="profile-row-btn danger"
-                  onClick={() => handleRemoveProfile(p.id, p.username)}
-                  title="Remove profile"
-                >
-                  <Trash2 size={14} />
-                </button>
+                    <div className="profile-row-info">
+                      <div className="profile-username">@{p.username}</div>
+                      <div className="profile-row-meta">
+                        <ProfileStatusBadge status={p.status} />
+                        {p.follower_count != null && (
+                          <span><Users size={11} /> {formatNum(p.follower_count)} followers</span>
+                        )}
+                      </div>
+                    </div>
+                  </Link>
+                  <a
+                    href={`https://www.instagram.com/${p.username}/`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="profile-row-btn"
+                    onClick={(e) => e.stopPropagation()}
+                    title="Open on Instagram"
+                  >
+                    <ExternalLink size={14} />
+                  </a>
+                  <button
+                    className="profile-row-btn danger"
+                    onClick={() => handleRemoveProfile(p.id, p.username)}
+                    title="Remove profile"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+                <AccountInfoEditor profileId={p.id} initialValue={p.account_info} />
               </div>
             ))}
           </div>
@@ -368,3 +372,81 @@ const tooltipStyle = {
   fontSize: 12,
   color: 'white',
 };
+
+// ----- AccountInfoEditor: inline editable note for each IG profile -----
+// Free-text field for emails, phone numbers, recovery info, etc.
+// NO PASSWORDS — that's by design. This is for non-sensitive context only.
+function AccountInfoEditor({ profileId, initialValue }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(initialValue || '');
+  const [saved, setSaved] = useState(initialValue || '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSave = async () => {
+    if (value === saved) {
+      setEditing(false);
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      await api.updateMyAccountInfo(profileId, value || null);
+      setSaved(value);
+      setEditing(false);
+    } catch (err) {
+      setError(err.message || 'Save failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCancel = () => {
+    setValue(saved);
+    setEditing(false);
+    setError('');
+  };
+
+  if (editing) {
+    return (
+      <div className="account-info-editor">
+        <div className="account-info-label">
+          <StickyNote size={11} /> Account info (non-sensitive notes — no passwords)
+        </div>
+        <textarea
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder="e.g. [email protected] · phone +39 333 1234567 · recovery: [email protected]"
+          rows={3}
+          autoFocus
+          disabled={saving}
+        />
+        <div className="account-info-actions">
+          <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={saving}>
+            <Check size={12} /> {saving ? 'Saving...' : 'Save'}
+          </button>
+          <button className="btn btn-ghost btn-sm" onClick={handleCancel} disabled={saving}>
+            <X size={12} /> Cancel
+          </button>
+        </div>
+        {error && <div className="account-info-error">{error}</div>}
+      </div>
+    );
+  }
+
+  if (saved) {
+    return (
+      <div className="account-info-display" onClick={() => setEditing(true)}>
+        <StickyNote size={11} />
+        <span>{saved}</span>
+        <span className="account-info-edit-hint">click to edit</span>
+      </div>
+    );
+  }
+
+  return (
+    <button className="account-info-add-btn" onClick={() => setEditing(true)}>
+      <StickyNote size={11} /> Add account info (email, phone, recovery — no passwords)
+    </button>
+  );
+}

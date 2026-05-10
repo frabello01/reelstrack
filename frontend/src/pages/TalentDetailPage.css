@@ -277,3 +277,106 @@
   .metric-grid { grid-template-columns: repeat(2, 1fr); }
   .breakdown-stats { width: 100%; justify-content: flex-start; }
 }
+
+/* ===== Profile card (wraps the row + the account info note) ===== */
+.profile-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 8px;
+}
+/* Override the existing .profile-row background since the card now provides it */
+.profile-card > .profile-row {
+  background: transparent;
+  border: none;
+  margin: 0;
+}
+
+/* ===== Account info note ===== */
+.account-info-add-btn {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: none;
+  border: none;
+  border-top: 1px dashed rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.4);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+.account-info-add-btn:hover {
+  color: rgba(255,255,255,0.75);
+  background: rgba(255,255,255,0.02);
+}
+
+.account-info-display {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 10px 14px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  font-size: 13px;
+  color: rgba(255,255,255,0.85);
+  cursor: pointer;
+  line-height: 1.4;
+  white-space: pre-wrap; /* preserve newlines */
+}
+.account-info-display:hover { background: rgba(255,255,255,0.03); }
+.account-info-display svg {
+  color: rgba(167, 139, 250, 0.7);
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+.account-info-display span:first-of-type {
+  flex: 1;
+  word-break: break-word;
+}
+.account-info-edit-hint {
+  font-size: 10px;
+  color: rgba(255,255,255,0.35);
+  font-style: italic;
+  flex-shrink: 0;
+}
+
+.account-info-editor {
+  padding: 10px 14px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+.account-info-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: rgba(255,255,255,0.55);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-bottom: 6px;
+}
+.account-info-editor textarea {
+  width: 100%;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 6px;
+  padding: 8px 10px;
+  color: white;
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+  outline: none;
+  box-sizing: border-box;
+  line-height: 1.4;
+}
+.account-info-editor textarea:focus { border-color: rgba(167, 139, 250, 0.5); }
+.account-info-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+.account-info-error {
+  color: #f87171;
+  font-size: 12px;
+  margin-top: 4px;
+}

@@ -107,6 +107,8 @@ export const api = {
   getMyAccount: (id) => request(`/api/my-accounts/${id}`),
   addMyAccount: (body) => request('/api/my-accounts', { method: 'POST', body: JSON.stringify(body) }),
   deleteMyAccount: (id) => request(`/api/my-accounts/${id}`, { method: 'DELETE' }),
+  updateMyAccountInfo: (id, account_info) =>
+    request(`/api/my-accounts/${id}`, { method: 'PATCH', body: JSON.stringify({ account_info }) }),
   triggerMyAccountsFetch: (account_id) =>
     request('/api/my-accounts/fetch/run', { method: 'POST', body: JSON.stringify({ account_id }) }),
 

@@ -265,4 +265,21 @@ async function getReelsPerDay(accountId, days) {
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
+// PATCH update account_info (free-text notes about the IG account — no passwords)
+router.patch('/:id', async (req, res) => {
+  const { account_info } = req.body;
+  if (account_info === undefined) {
+    return res.status(400).json({ error: 'account_info is required' });
+  }
+
+  const { data, error } = await supabase
+    .from('my_accounts')
+    .update({ account_info: account_info || null })
+    .eq('id', req.params.id)
+    .select('id, account_info')
+    .single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
 module.exports = router;
