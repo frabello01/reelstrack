@@ -78,6 +78,7 @@ async function fetchAccount(account) {
   const allReels = [];
   let endCursor = null;
   const MAX_PAGES = 10;
+  let reelsFetchError = null;
   try {
     for (let i = 0; i < MAX_PAGES; i++) {
       const result = await hikerGet('/v1/user/clips/chunk', {
@@ -91,12 +92,27 @@ async function fetchAccount(account) {
       endCursor = nextCursor;
     }
   } catch (err) {
-    return await markAccountStatus(account.id, 'error', `Reels fetch failed: ${err.message}`);
+    // HikerAPI returns 404 on /v1/user/clips/chunk when the account simply has
+    // zero reels (even if it has other media like photos). That's a perfectly
+    // normal state — not a real error. We still save everything else we have.
+    if (err.status === 404) {
+      console.log(`[MyAccounts] @${account.username}: no reels yet (HikerAPI 404 on clips)`);
+    } else {
+      reelsFetchError = err.message;
+    }
   }
 
   console.log(`[MyAccounts] @${account.username}: got ${allReels.length} reels`);
 
-  // Step 3: persist account info + reels + daily snapshot
+  // If reels fetch hit a real error (not a 404 = no reels), mark as error but
+  // still keep the profile data we got from step 1.
+  if (reelsFetchError) {
+    await persistAndUpdateAccount(account, profile, 'error', `Reels fetch failed: ${reelsFetchError}`);
+    return { reelsStored: 0 };
+  }
+
+  // Step 3: persist account info + reels + daily snapshot. Account is "active"
+  // even if it has zero reels — the profile is fine, just empty.
   await persistAndUpdateAccount(account, profile, 'active', null);
   const stored = await storeAccountReels(account.id, allReels);
   await writeDailySnapshot(account.id, profile.follower_count, stored.totalViews, stored.reelsCount);
