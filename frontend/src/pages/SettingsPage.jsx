@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Save, CheckCircle2, Image as ImageIcon } from 'lucide-react';
+import { Save, CheckCircle2, Image as ImageIcon, Plus, Trash2, ListChecks, GripVertical } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { api } from '../lib/api';
 import ImageUploader from '../components/ImageUploader';
@@ -106,6 +106,115 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+
+      <div className="settings-section">
+        <h2><ListChecks size={16} style={{ verticalAlign: '-3px', marginRight: 6 }} /> Daily tasks</h2>
+        <p className="settings-help">
+          Tasks defined here are generated <strong>every day at midnight (Rome time)</strong> for
+          every active IG profile in My Creators. Your "My Day" page shows the daily checklist.
+          To exclude a profile (e.g. shadowbanned), toggle it off on its talent's page.
+        </p>
+        <TaskTemplateManager />
+      </div>
+    </div>
+  );
+}
+
+// ----- TaskTemplateManager: list + add + delete templates -----
+function TaskTemplateManager() {
+  const [templates, setTemplates] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState(false);
+  const [newLabel, setNewLabel] = useState('');
+  const [error, setError] = useState('');
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      setTemplates(await api.getTaskTemplates());
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const handleAdd = async (e) => {
+    e.preventDefault();
+    if (!newLabel.trim()) return;
+    setAdding(true);
+    setError('');
+    try {
+      await api.createTaskTemplate(newLabel.trim());
+      setNewLabel('');
+      load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const handleDelete = async (id, label) => {
+    if (!confirm(`Delete the task "${label}"? Existing daily checkboxes for this task will also be removed.`)) return;
+    await api.deleteTaskTemplate(id);
+    load();
+  };
+
+  const handleEdit = async (id, currentLabel) => {
+    const next = prompt('Edit task label:', currentLabel);
+    if (next === null) return; // cancelled
+    const trimmed = next.trim();
+    if (!trimmed || trimmed === currentLabel) return;
+    try {
+      await api.updateTaskTemplate(id, { label: trimmed });
+      load();
+    } catch (err) {
+      alert(`Update failed: ${err.message}`);
+    }
+  };
+
+  return (
+    <div className="task-template-manager">
+      <form className="task-template-add" onSubmit={handleAdd}>
+        <input
+          type="text"
+          placeholder="e.g. Post 1 Story, 15 min warmup, Reply to DMs"
+          value={newLabel}
+          onChange={(e) => setNewLabel(e.target.value)}
+          disabled={adding}
+        />
+        <button type="submit" className="btn btn-primary" disabled={adding || !newLabel.trim()}>
+          {adding ? 'Adding...' : <><Plus size={14} /> Add task</>}
+        </button>
+      </form>
+      {error && <div className="task-template-error">{error}</div>}
+
+      {loading ? (
+        <div className="task-template-loading">Loading…</div>
+      ) : templates.length === 0 ? (
+        <div className="task-template-empty">
+          No tasks defined yet. Add one above to start generating daily checklists.
+        </div>
+      ) : (
+        <div className="task-template-list">
+          {templates.map((t) => (
+            <div key={t.id} className="task-template-row">
+              <GripVertical size={14} className="task-template-grip" />
+              <span className="task-template-label" onClick={() => handleEdit(t.id, t.label)}>
+                {t.label}
+              </span>
+              <button
+                className="task-template-delete-btn"
+                onClick={() => handleDelete(t.id, t.label)}
+                title="Delete task"
+              >
+                <Trash2 size={13} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

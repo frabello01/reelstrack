@@ -97,3 +97,61 @@
   font-size: 13px;
   color: rgba(255,255,255,0.6);
 }
+
+/* ===== Task template manager ===== */
+.task-template-manager { display: flex; flex-direction: column; gap: 10px; }
+
+.task-template-add {
+  display: flex; gap: 8px;
+  background: rgba(0,0,0,0.25);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px;
+  padding: 6px;
+}
+.task-template-add input {
+  flex: 1; min-width: 0;
+  background: transparent; border: none; outline: none;
+  color: white; padding: 6px 10px; font-size: 14px;
+}
+.task-template-add input::placeholder { color: rgba(255,255,255,0.35); }
+.task-template-add .btn {
+  display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
+}
+.task-template-error { color: #f87171; font-size: 12px; }
+.task-template-empty,
+.task-template-loading {
+  text-align: center; padding: 16px;
+  color: rgba(255,255,255,0.45); font-size: 13px;
+}
+
+.task-template-list {
+  display: flex; flex-direction: column; gap: 4px;
+}
+.task-template-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 6px;
+}
+.task-template-grip {
+  color: rgba(255,255,255,0.3); flex-shrink: 0;
+}
+.task-template-label {
+  flex: 1; min-width: 0;
+  color: rgba(255,255,255,0.85); font-size: 14px;
+  cursor: pointer;
+}
+.task-template-label:hover { color: white; }
+.task-template-delete-btn {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.5);
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; flex-shrink: 0;
+}
+.task-template-delete-btn:hover {
+  color: #f87171; border-color: rgba(248,113,113,0.4);
+}

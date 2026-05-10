@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   ArrowLeft, Plus, Trash2, RefreshCw, ExternalLink,
   TrendingUp, TrendingDown, Eye, Heart, Users, Film, Trophy, AlertTriangle, CheckCircle2,
-  StickyNote, Check, X
+  StickyNote, Check, X, ListChecks
 } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid } from 'recharts';
 import { api } from '../lib/api';
@@ -177,6 +177,10 @@ export default function TalentDetailPage() {
                       </div>
                     </div>
                   </Link>
+                  <DailyTasksToggle
+                    profileId={p.id}
+                    initialEnabled={p.daily_tasks_enabled !== false}
+                  />
                   <a
                     href={`https://www.instagram.com/${p.username}/`}
                     target="_blank"
@@ -447,6 +451,42 @@ function AccountInfoEditor({ profileId, initialValue }) {
   return (
     <button className="account-info-add-btn" onClick={() => setEditing(true)}>
       <StickyNote size={11} /> Add account info (email, phone, recovery — no passwords)
+    </button>
+  );
+}
+
+// ----- DailyTasksToggle: per-profile opt-in for daily task generation -----
+function DailyTasksToggle({ profileId, initialEnabled }) {
+  const [enabled, setEnabled] = useState(initialEnabled);
+  const [pending, setPending] = useState(false);
+
+  const handleToggle = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (pending) return;
+    const next = !enabled;
+    setEnabled(next); // optimistic
+    setPending(true);
+    try {
+      await api.toggleProfileDailyTasks(profileId, next);
+    } catch (err) {
+      setEnabled(!next); // revert
+      alert(`Could not update: ${err.message}`);
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <button
+      className={`daily-tasks-toggle ${enabled ? 'enabled' : 'disabled'}`}
+      onClick={handleToggle}
+      title={enabled
+        ? 'Including this profile in daily tasks. Click to exclude (e.g. shadowbanned).'
+        : 'Excluded from daily tasks. Click to include.'}
+    >
+      <ListChecks size={13} />
+      <span>{enabled ? 'In daily tasks' : 'Excluded'}</span>
     </button>
   );
 }

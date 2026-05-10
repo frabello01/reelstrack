@@ -13,8 +13,10 @@ const myAccountsRouter = require('./routes/myAccounts');
 const talentsRouter = require('./routes/talents');
 const converterRouter = require('./routes/converter');
 const settingsRouter = require('./routes/settings');
+const dailyTasksRouter = require('./routes/dailyTasks');
 const { runDailyFetch } = require('./services/fetchService');
 const { runMyAccountsFetch } = require('./services/myAccountsService');
+const { generateDailyTasks, cleanupOldDailyTasks } = require('./services/dailyTasksService');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -62,6 +64,7 @@ app.use('/api/my-accounts', myAccountsRouter);
 app.use('/api/talents', talentsRouter);
 app.use('/api/converter', converterRouter);
 app.use('/api/settings', settingsRouter);
+app.use('/api/daily-tasks', dailyTasksRouter);
 
 // Daily cron: runs every day at 6:00 AM UTC
 cron.schedule('0 6 * * *', async () => {
@@ -84,6 +87,23 @@ cron.schedule('0 5 * * *', async () => {
   } catch (err) {
     console.error('[CRON] My-accounts snapshot failed:', err.message);
   }
+});
+
+// Daily-tasks cron: runs at 00:01 Europe/Rome every day.
+// Generates fresh task instances for every (active + opted-in) profile, and
+// cleans up tasks older than 30 days. node-cron's `timezone` option handles
+// DST transitions automatically.
+cron.schedule('1 0 * * *', async () => {
+  console.log('[CRON] Generating daily tasks for today (Europe/Rome)...');
+  try {
+    const r = await generateDailyTasks();
+    console.log(`[CRON] Daily tasks generated:`, r);
+    await cleanupOldDailyTasks();
+  } catch (err) {
+    console.error('[CRON] Daily tasks generation failed:', err.message);
+  }
+}, {
+  timezone: 'Europe/Rome',
 });
 
 app.listen(PORT, () => {

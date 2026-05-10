@@ -150,4 +150,18 @@ export const api = {
   removeAgencyLogo: () =>
     request('/api/settings/logo', { method: 'DELETE' }),
   getPublicAgency: () => request('/api/settings/public'),
+
+  // Daily tasks
+  getTaskTemplates: () => request('/api/daily-tasks/templates'),
+  createTaskTemplate: (label) =>
+    request('/api/daily-tasks/templates', { method: 'POST', body: JSON.stringify({ label }) }),
+  updateTaskTemplate: (id, body) =>
+    request(`/api/daily-tasks/templates/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteTaskTemplate: (id) =>
+    request(`/api/daily-tasks/templates/${id}`, { method: 'DELETE' }),
+  getTodaysTasks: () => request('/api/daily-tasks/today'),
+  toggleDailyTask: (taskId, is_done) =>
+    request(`/api/daily-tasks/today/${taskId}`, { method: 'PATCH', body: JSON.stringify({ is_done }) }),
+  toggleProfileDailyTasks: (profileId, enabled) =>
+    request(`/api/daily-tasks/profiles/${profileId}/toggle`, { method: 'PATCH', body: JSON.stringify({ enabled }) }),
 };
