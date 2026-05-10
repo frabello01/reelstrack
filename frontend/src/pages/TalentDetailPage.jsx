@@ -22,6 +22,35 @@ function pctChange(current, previous) {
   return Math.round(((current - previous) / previous) * 100);
 }
 
+function timeAgo(iso) {
+  if (!iso) return '';
+  const sec = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+  if (sec < 60) return 'just now';
+  if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
+  if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`;
+  return `${Math.floor(sec / 86400)}d ago`;
+}
+
+// Translate raw HikerAPI errors into something the user can act on
+function humanizeStatusError(rawError) {
+  if (!rawError) return '';
+  const e = String(rawError).toLowerCase();
+  if (e.includes('entries not found') || e.includes('user not found') || (e.includes('404') && e.includes('user'))) {
+    return "Instagram couldn't find this username. Check the spelling, or the account may have been deleted/renamed.";
+  }
+  if (e.includes('private')) {
+    return 'This account is private — public reel data is not available.';
+  }
+  if (e.includes('rate limit') || e.includes('429')) {
+    return 'Hit Instagram rate limit. Try again in a few minutes.';
+  }
+  if (e.includes('login') || e.includes('challenge')) {
+    return 'Instagram is challenging the connection. Will retry on the next daily cron.';
+  }
+  // Fallback: show the raw message but truncated
+  return rawError.length > 140 ? rawError.slice(0, 140) + '…' : rawError;
+}
+
 function Delta({ current, previous, label }) {
   const pct = pctChange(current, previous);
   if (pct == null) return <span className="delta-text delta-neutral">no prior data</span>;
@@ -93,22 +122,28 @@ export default function TalentDetailPage() {
       await api.triggerTalentFetch(id);
       // The backend kicks off the fetch in the background — it usually takes
       // 10-60 seconds depending on how many profiles. We poll the talent
-      // detail endpoint a few times, looking for changes in updated_at on
-      // the profiles. After ~60 sec we give up and just reload once anyway.
+      // detail endpoint, looking for changes in last_fetched_at on the profiles.
+      // After ~90 sec we give up and just reload once anyway.
       let attempts = 0;
-      const initialUpdated = (talent.profiles || []).map((p) => p.updated_at).join(',');
+      const initialFetched = (talent.profiles || [])
+        .map((p) => p.last_fetched_at || '')
+        .join(',');
       const interval = setInterval(async () => {
         attempts++;
         try {
           const fresh = await api.getTalent(id);
-          const freshUpdated = (fresh.profiles || []).map((p) => p.updated_at).join(',');
-          if (freshUpdated !== initialUpdated || attempts >= 12) {
+          const freshFetched = (fresh.profiles || [])
+            .map((p) => p.last_fetched_at || '')
+            .join(',');
+          const dataChanged = freshFetched !== initialFetched;
+          if (dataChanged || attempts >= 18) {
             clearInterval(interval);
             setTalent(fresh);
             setRefreshing(false);
           }
-        } catch {
-          if (attempts >= 12) {
+        } catch (err) {
+          console.error('[refresh] poll error:', err.message);
+          if (attempts >= 18) {
             clearInterval(interval);
             setRefreshing(false);
           }
@@ -201,7 +236,18 @@ export default function TalentDetailPage() {
                         {p.follower_count != null && (
                           <span><Users size={11} /> {formatNum(p.follower_count)} followers</span>
                         )}
+                        {p.last_fetched_at && (
+                          <span className="last-fetched" title={`Last fetched: ${new Date(p.last_fetched_at).toLocaleString()}`}>
+                            updated {timeAgo(p.last_fetched_at)}
+                          </span>
+                        )}
                       </div>
+                      {p.status === 'error' && p.status_error && (
+                        <div className="profile-error-detail">
+                          <AlertTriangle size={11} />
+                          <span>{humanizeStatusError(p.status_error)}</span>
+                        </div>
+                      )}
                     </div>
                   </Link>
                   <DailyTasksToggle
