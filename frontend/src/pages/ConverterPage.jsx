@@ -69,18 +69,18 @@ export default function ConverterPage() {
     try {
       // Server does the conversion via ConvertHub (~5-15 sec).
       const { mp3_url, filename } = await api.convertReelToMp3(linkInput.trim());
-      // Browser fetches the MP3 from ConvertHub's CDN and triggers a download.
-      const res = await fetch(mp3_url);
-      if (!res.ok) throw new Error(`Could not download MP3 (${res.status})`);
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
+      // ConvertHub's CDN doesn't allow JS fetch() (CORS), but direct browser
+      // navigation works fine. So we use an anchor tag with the download attr —
+      // the browser handles it as a native download, no CORS check.
       const a = document.createElement('a');
-      a.href = url;
+      a.href = mp3_url;
       a.download = filename || `${reel.suggested_filename}.mp3`;
+      // Open in same tab; the browser will start the download instead of navigating
+      // because of the `download` attribute and ConvertHub's Content-Disposition header.
+      a.rel = 'noopener noreferrer';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (err) {
       setMp3Error(err.message || 'MP3 conversion failed');
     } finally {
