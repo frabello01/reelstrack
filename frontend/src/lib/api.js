@@ -136,6 +136,8 @@ export const api = {
   // Reel converter — paste IG link, get fresh video URL + metadata
   fetchReelForConverter: (url) =>
     request('/api/converter/fetch-reel', { method: 'POST', body: JSON.stringify({ url }) }),
+  convertReelToMp3: (url) =>
+    request('/api/converter/convert-to-mp3', { method: 'POST', body: JSON.stringify({ url }) }),
 
   // Agency settings (display name + logo)
   getSettings: () => request('/api/settings'),

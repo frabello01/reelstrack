@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link2, Loader2, AlertCircle, FileVideo, Eye, Play, X } from 'lucide-react';
+import { Link2, Loader2, AlertCircle, FileVideo, Music, Eye, Play, X } from 'lucide-react';
 import { api } from '../lib/api';
 import './ConverterPage.css';
 
@@ -19,6 +19,8 @@ export default function ConverterPage() {
   const [mp4Bytes, setMp4Bytes] = useState(null);
   const [downloadingMp4, setDownloadingMp4] = useState(false);
   const [previewUrl, setPreviewUrl] = useState(null);
+  const [convertingMp3, setConvertingMp3] = useState(false);
+  const [mp3Error, setMp3Error] = useState('');
 
   const handleFetch = async (e) => {
     e?.preventDefault();
@@ -28,6 +30,7 @@ export default function ConverterPage() {
     setReel(null);
     setMp4Bytes(null);
     setPreviewUrl(null);
+    setMp3Error('');
     try {
       const data = await api.fetchReelForConverter(linkInput.trim());
       setReel(data);
@@ -57,6 +60,31 @@ export default function ConverterPage() {
       alert(`Download failed: ${err.message}`);
     } finally {
       setDownloadingMp4(false);
+    }
+  };
+
+  const handleConvertMp3 = async () => {
+    setConvertingMp3(true);
+    setMp3Error('');
+    try {
+      // Server does the conversion via ConvertHub (~5-15 sec).
+      const { mp3_url, filename } = await api.convertReelToMp3(linkInput.trim());
+      // Browser fetches the MP3 from ConvertHub's CDN and triggers a download.
+      const res = await fetch(mp3_url);
+      if (!res.ok) throw new Error(`Could not download MP3 (${res.status})`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename || `${reel.suggested_filename}.mp3`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      setMp3Error(err.message || 'MP3 conversion failed');
+    } finally {
+      setConvertingMp3(false);
     }
   };
 
@@ -130,12 +158,27 @@ export default function ConverterPage() {
             <button
               className="btn btn-primary"
               onClick={handleDownloadMp4}
-              disabled={downloadingMp4}
+              disabled={downloadingMp4 || convertingMp3}
             >
               {downloadingMp4 ? <Loader2 size={14} className="spin" /> : <FileVideo size={14} />}
               {downloadingMp4 ? 'Preparing...' : 'Download MP4'}
             </button>
+            <button
+              className="btn btn-primary"
+              onClick={handleConvertMp3}
+              disabled={convertingMp3 || downloadingMp4}
+              title="Extract audio as MP3 (takes ~5-15 sec)"
+            >
+              {convertingMp3 ? <Loader2 size={14} className="spin" /> : <Music size={14} />}
+              {convertingMp3 ? 'Converting...' : 'Download MP3'}
+            </button>
           </div>
+
+          {mp3Error && (
+            <div className="converter-error">
+              <AlertCircle size={14} /> {mp3Error}
+            </div>
+          )}
 
           {previewUrl && (
             <div className="converter-preview-player">
