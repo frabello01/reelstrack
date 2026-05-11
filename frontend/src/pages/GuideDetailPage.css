@@ -1,0 +1,87 @@
+.guide-detail {
+  padding: 24px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.guide-detail-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.back-btn {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.6);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.back-btn:hover { color: white; }
+
+.guide-detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.save-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.save-indicator.saving { color: rgba(255,255,255,0.5); }
+.save-indicator.saved { color: #4ade80; }
+.save-indicator.error { color: #f87171; }
+
+.danger-hover:hover {
+  color: #f87171;
+  border-color: rgba(248,113,113,0.4);
+}
+
+.guide-title-input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: white;
+  font-family: 'Syne', sans-serif;
+  font-size: 32px;
+  font-weight: 700;
+  padding: 8px 0;
+  margin-bottom: 16px;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s;
+  box-sizing: border-box;
+}
+.guide-title-input:focus { border-bottom-color: rgba(167,139,250,0.3); }
+.guide-title-input::placeholder { color: rgba(255,255,255,0.25); }
+
+.guide-detail-error {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #f87171;
+  font-size: 13px;
+  padding: 8px 12px;
+  background: rgba(248,113,113,0.08);
+  border: 1px solid rgba(248,113,113,0.25);
+  border-radius: 6px;
+  margin-top: 12px;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin { animation: spin 1s linear infinite; }
+
+@media (max-width: 600px) {
+  .guide-detail { padding: 16px; }
+  .guide-title-input { font-size: 24px; }
+}

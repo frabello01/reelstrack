@@ -16,6 +16,8 @@ import TalentDetailPage from './pages/TalentDetailPage';
 import ConverterPage from './pages/ConverterPage';
 import SettingsPage from './pages/SettingsPage';
 import MyDayPage from './pages/MyDayPage';
+import GuidesPage from './pages/GuidesPage';
+import GuideDetailPage from './pages/GuideDetailPage';
 import Layout from './components/Layout';
 import './index.css';
 
@@ -52,6 +54,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="my-creators/:id" element={<TalentDetailPage />} />
             <Route path="converter" element={<ConverterPage />} />
             <Route path="my-day" element={<MyDayPage />} />
+            <Route path="guides" element={<GuidesPage />} />
+            <Route path="guides/:id" element={<GuideDetailPage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>
         </Routes>

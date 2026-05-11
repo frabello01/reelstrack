@@ -14,6 +14,7 @@ const talentsRouter = require('./routes/talents');
 const converterRouter = require('./routes/converter');
 const settingsRouter = require('./routes/settings');
 const dailyTasksRouter = require('./routes/dailyTasks');
+const guidesRouter = require('./routes/guides');
 const { runMyAccountsFetch } = require('./services/myAccountsService');
 const { generateDailyTasks, cleanupOldDailyTasks } = require('./services/dailyTasksService');
 
@@ -64,6 +65,7 @@ app.use('/api/talents', talentsRouter);
 app.use('/api/converter', converterRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/daily-tasks', dailyTasksRouter);
+app.use('/api/guides', guidesRouter);
 
 // Competitor reels fetch is now MANUAL only.
 // Use the "Fetch Now" button on the dashboard (whole list) or the 🔄 button

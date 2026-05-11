@@ -166,4 +166,13 @@ export const api = {
     request(`/api/daily-tasks/today/${taskId}`, { method: 'PATCH', body: JSON.stringify({ is_done }) }),
   toggleProfileDailyTasks: (profileId, enabled) =>
     request(`/api/daily-tasks/profiles/${profileId}/toggle`, { method: 'PATCH', body: JSON.stringify({ enabled }) }),
+
+  // Guides (knowledge base / SOPs)
+  getGuides: (search) => request(`/api/guides${search ? `?search=${encodeURIComponent(search)}` : ''}`),
+  getGuide: (id) => request(`/api/guides/${id}`),
+  createGuide: (body) => request('/api/guides', { method: 'POST', body: JSON.stringify(body) }),
+  updateGuide: (id, body) => request(`/api/guides/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteGuide: (id) => request(`/api/guides/${id}`, { method: 'DELETE' }),
+  uploadGuideImage: (id, image_data_url) =>
+    request(`/api/guides/${id}/image`, { method: 'POST', body: JSON.stringify({ image_data_url }) }),
 };
