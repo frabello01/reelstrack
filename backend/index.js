@@ -14,7 +14,6 @@ const talentsRouter = require('./routes/talents');
 const converterRouter = require('./routes/converter');
 const settingsRouter = require('./routes/settings');
 const dailyTasksRouter = require('./routes/dailyTasks');
-const { runDailyFetch } = require('./services/fetchService');
 const { runMyAccountsFetch } = require('./services/myAccountsService');
 const { generateDailyTasks, cleanupOldDailyTasks } = require('./services/dailyTasksService');
 
@@ -66,16 +65,10 @@ app.use('/api/converter', converterRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/daily-tasks', dailyTasksRouter);
 
-// Daily cron: runs every day at 6:00 AM UTC
-cron.schedule('0 6 * * *', async () => {
-  console.log('[CRON] Starting daily fetch job...');
-  try {
-    await runDailyFetch();
-    console.log('[CRON] Daily fetch complete.');
-  } catch (err) {
-    console.error('[CRON] Daily fetch failed:', err.message);
-  }
-});
+// Competitor reels fetch is now MANUAL only.
+// Use the "Fetch Now" button on the dashboard (whole list) or the 🔄 button
+// next to each creator (single creator) to trigger fetches on demand.
+// This avoids burning HikerAPI credits on days the app isn't being used.
 
 // My-accounts cron: runs every day at 5:00 AM UTC (1 hour before competitor fetch)
 // Snapshots followers + reels for each account. Idempotent — safe to run multiple times per day.
