@@ -61,6 +61,14 @@ export default function GuideEditor({ content, onChange, onImageUpload, editable
     }
   }, [editor, content]);
 
+  // Sync editable prop changes — useEditor only reads this once at mount
+  useEffect(() => {
+    if (!editor) return;
+    if (editor.isEditable !== editable) {
+      editor.setEditable(editable);
+    }
+  }, [editor, editable]);
+
   if (!editor) return null;
 
   const handleAddImage = async () => {

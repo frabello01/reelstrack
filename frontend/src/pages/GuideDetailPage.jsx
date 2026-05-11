@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Trash2, CheckCircle2, Loader2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Trash2, CheckCircle2, Loader2, AlertCircle, Pencil, Check, FileText } from 'lucide-react';
 import { api } from '../lib/api';
 import GuideEditor from '../components/GuideEditor';
 import './GuideDetailPage.css';
@@ -14,6 +14,20 @@ function useDebouncedCallback(fn, delay) {
   };
 }
 
+// Detect if the article is genuinely empty (no content or just empty paragraphs)
+function isEmptyContent(content) {
+  if (!content) return true;
+  if (!content.content || content.content.length === 0) return true;
+  // A doc with one empty paragraph is still "empty"
+  if (content.content.length === 1) {
+    const node = content.content[0];
+    if (node.type === 'paragraph' && (!node.content || node.content.length === 0)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export default function GuideDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -21,9 +35,12 @@ export default function GuideDetailPage() {
   const [loading, setLoading] = useState(true);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState(null);
-  const [contentText, setContentText] = useState('');
   const [saveState, setSaveState] = useState('idle'); // 'idle' | 'saving' | 'saved' | 'error'
   const [error, setError] = useState('');
+
+  // Edit mode is OFF by default. Brand-new articles (untitled, empty) auto-open
+  // in edit mode so users don't have to click Edit on something they just created.
+  const [editing, setEditing] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -33,7 +50,9 @@ export default function GuideDetailPage() {
         setArticle(a);
         setTitle(a.title || '');
         setContent(a.content);
-        setContentText(a.content_text || '');
+        // Auto-open editor if this looks like a fresh, untouched article
+        const isFresh = (a.title === 'Untitled article' || !a.title) && isEmptyContent(a.content);
+        if (isFresh) setEditing(true);
       })
       .catch((err) => !cancelled && setError(err.message))
       .finally(() => !cancelled && setLoading(false));
@@ -45,7 +64,6 @@ export default function GuideDetailPage() {
     try {
       await api.updateGuide(id, updates);
       setSaveState('saved');
-      // Drop back to idle after 1.5 sec so the indicator doesn't linger
       setTimeout(() => setSaveState((s) => (s === 'saved' ? 'idle' : s)), 1500);
     } catch (err) {
       setSaveState('error');
@@ -53,7 +71,6 @@ export default function GuideDetailPage() {
     }
   };
 
-  // Debounce typing to avoid hammering the API on every keystroke
   const debouncedSave = useDebouncedCallback(save, 1000);
 
   const handleTitleChange = (e) => {
@@ -64,12 +81,10 @@ export default function GuideDetailPage() {
 
   const handleContentChange = ({ content: newContent, content_text: newText }) => {
     setContent(newContent);
-    setContentText(newText);
     debouncedSave({ content: newContent, content_text: newText });
   };
 
   const handleImageUpload = async (file) => {
-    // Read as base64 data URL → POST to backend → backend uploads to Supabase Storage → returns URL
     const dataUrl = await new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result);
@@ -89,6 +104,8 @@ export default function GuideDetailPage() {
   if (loading) return <div className="loading"><div className="spinner" /></div>;
   if (error && !article) return <div className="guide-detail-error"><AlertCircle size={14} /> {error}</div>;
 
+  const empty = isEmptyContent(content);
+
   return (
     <div className="guide-detail">
       <div className="guide-detail-topbar">
@@ -97,27 +114,54 @@ export default function GuideDetailPage() {
         </button>
         <div className="guide-detail-actions">
           <SaveIndicator state={saveState} />
+          {editing ? (
+            <button className="btn btn-primary btn-sm" onClick={() => setEditing(false)}>
+              <Check size={13} /> Done
+            </button>
+          ) : (
+            <button className="btn btn-secondary btn-sm" onClick={() => setEditing(true)}>
+              <Pencil size={13} /> Edit
+            </button>
+          )}
           <button className="btn btn-ghost btn-sm danger-hover" onClick={handleDelete} title="Delete article">
             <Trash2 size={13} />
           </button>
         </div>
       </div>
 
-      <input
-        type="text"
-        className="guide-title-input"
-        value={title}
-        onChange={handleTitleChange}
-        placeholder="Untitled article"
-        spellCheck={false}
-      />
+      {editing ? (
+        <input
+          type="text"
+          className="guide-title-input"
+          value={title}
+          onChange={handleTitleChange}
+          placeholder="Untitled article"
+          spellCheck={false}
+          autoFocus={!title}
+        />
+      ) : (
+        <h1 className="guide-title-display" onClick={() => setEditing(true)} title="Click to edit">
+          {title || 'Untitled article'}
+        </h1>
+      )}
 
-      <GuideEditor
-        content={content}
-        onChange={handleContentChange}
-        onImageUpload={handleImageUpload}
-        placeholder="Start writing your SOP — type / for shortcuts, or use the toolbar above…"
-      />
+      {!editing && empty ? (
+        <div className="guide-empty-body" onClick={() => setEditing(true)}>
+          <FileText size={32} />
+          <p>This article is empty.</p>
+          <button className="btn btn-primary btn-sm">
+            <Pencil size={13} /> Start writing
+          </button>
+        </div>
+      ) : (
+        <GuideEditor
+          content={content}
+          onChange={handleContentChange}
+          onImageUpload={handleImageUpload}
+          editable={editing}
+          placeholder="Start writing your SOP — use the toolbar above for formatting…"
+        />
+      )}
 
       {error && <div className="guide-detail-error"><AlertCircle size={14} /> {error}</div>}
     </div>

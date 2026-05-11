@@ -85,3 +85,51 @@
   .guide-detail { padding: 16px; }
   .guide-title-input { font-size: 24px; }
 }
+
+/* View-mode title (click to edit) */
+.guide-title-display {
+  font-family: 'Syne', sans-serif;
+  font-size: 32px;
+  font-weight: 700;
+  color: white;
+  margin: 0 0 24px;
+  padding: 8px 0;
+  cursor: text;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s;
+}
+.guide-title-display:hover {
+  border-bottom-color: rgba(255,255,255,0.1);
+}
+
+/* Empty-state body (when article has no content yet) */
+.guide-empty-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 60px 24px;
+  background: rgba(255,255,255,0.02);
+  border: 1px dashed rgba(255,255,255,0.1);
+  border-radius: 10px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.guide-empty-body:hover {
+  background: rgba(255,255,255,0.04);
+  border-color: rgba(167,139,250,0.3);
+}
+.guide-empty-body svg {
+  color: rgba(167,139,250,0.4);
+  margin-bottom: 4px;
+}
+.guide-empty-body p {
+  color: rgba(255,255,255,0.55);
+  font-size: 14px;
+  margin: 0 0 8px;
+}
+
+@media (max-width: 600px) {
+  .guide-title-display { font-size: 24px; }
+}
