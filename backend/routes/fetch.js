@@ -3,6 +3,31 @@ const router = express.Router();
 const { runDailyFetch } = require('../services/fetchService');
 const supabase = require('../lib/supabase');
 
+// POST /api/fetch/creator/:creatorId - trigger a fetch for a single creator.
+// Forces by default (bypasses 24h cap) since the user explicitly asked for this
+// one — otherwise clicking it shortly after the daily cron would do nothing.
+router.post('/creator/:creatorId', async (req, res) => {
+  const creatorId = req.params.creatorId;
+  if (!creatorId) return res.status(400).json({ error: 'creatorId is required' });
+
+  // Verify the creator exists
+  const { data: creator } = await supabase
+    .from('creators')
+    .select('id, username')
+    .eq('id', creatorId)
+    .maybeSingle();
+  if (!creator) return res.status(404).json({ error: 'Creator not found' });
+
+  res.json({ message: 'Fetch started', creator: creator.username });
+
+  try {
+    await runDailyFetch([creatorId], { force: true });
+    console.log(`[FetchRoute] Single-creator fetch complete: @${creator.username}`);
+  } catch (err) {
+    console.error(`[FetchRoute] Single-creator fetch failed for @${creator.username}:`, err.message);
+  }
+});
+
 // POST /api/fetch/run - trigger a manual fetch (all creators or specific list)
 // Body: { list_id?: string, force?: boolean }
 //   force=true bypasses the 24-hour-per-creator cap (use sparingly)

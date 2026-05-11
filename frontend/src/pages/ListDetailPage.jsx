@@ -13,6 +13,7 @@ export default function ListDetailPage() {
   const [newUsername, setNewUsername] = useState('');
   const [adding, setAdding] = useState(false);
   const [fetching, setFetching] = useState(false);
+  const [fetchingCreator, setFetchingCreator] = useState(null); // creatorId or null
   const [error, setError] = useState('');
 
   const load = async () => {
@@ -69,6 +70,41 @@ export default function ListDetailPage() {
       await api.triggerFetch(id);
     } finally {
       setTimeout(() => setFetching(false), 2000);
+    }
+  };
+
+  // Fetch a single creator. Polls until last_fetched_at changes or 60 sec timeout.
+  const handleFetchSingleCreator = async (creatorId) => {
+    if (fetchingCreator) return; // guard
+    setFetchingCreator(creatorId);
+    try {
+      // Snapshot the current last_fetched_at so we can detect change
+      const extractCreators = (l) => (l?.list_creators || []).map((lc) => lc.creators).filter(Boolean);
+      const before = extractCreators(list).find((c) => c.id === creatorId)?.last_fetched_at || '';
+      await api.triggerCreatorFetch(creatorId);
+
+      // Poll the list every 4s and see if this creator's last_fetched_at changed
+      let attempts = 0;
+      const interval = setInterval(async () => {
+        attempts++;
+        try {
+          const fresh = await api.getList(id);
+          const updated = extractCreators(fresh).find((c) => c.id === creatorId)?.last_fetched_at || '';
+          if (updated !== before || attempts >= 15) {
+            clearInterval(interval);
+            setList(fresh);
+            setFetchingCreator(null);
+          }
+        } catch {
+          if (attempts >= 15) {
+            clearInterval(interval);
+            setFetchingCreator(null);
+          }
+        }
+      }, 4000);
+    } catch (err) {
+      alert(`Fetch failed: ${err.message}`);
+      setFetchingCreator(null);
     }
   };
 
@@ -151,7 +187,19 @@ export default function ListDetailPage() {
                   : 'Never'
                 }
               </div>
-              <div className="table-cell">
+              <div className="table-cell row-actions">
+                <button
+                  className="btn btn-secondary btn-sm icon-btn"
+                  onClick={() => handleFetchSingleCreator(creator.id)}
+                  disabled={fetchingCreator === creator.id || !!fetchingCreator}
+                  title={fetchingCreator === creator.id
+                    ? 'Fetching this creator…'
+                    : fetchingCreator
+                      ? 'Another fetch is in progress'
+                      : 'Fetch this creator only (uses ~3-5 HikerAPI credits)'}
+                >
+                  <RefreshCw size={13} className={fetchingCreator === creator.id ? 'spin' : ''} />
+                </button>
                 <button className="btn btn-danger btn-sm icon-btn" onClick={() => handleRemove(creator.id)}>
                   <Trash2 size={13} />
                 </button>

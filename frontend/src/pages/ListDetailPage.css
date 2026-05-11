@@ -129,3 +129,11 @@
   background: rgba(255, 255, 255, 0.05);
   color: rgba(255, 255, 255, 0.4);
 }
+
+/* Row-level action buttons (fetch single + remove) */
+.row-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-end;
+}

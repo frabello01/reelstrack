@@ -61,6 +61,8 @@ export const api = {
   // Fetch
   triggerFetch: (list_id) =>
     request('/api/fetch/run', { method: 'POST', body: JSON.stringify({ list_id }) }),
+  triggerCreatorFetch: (creatorId) =>
+    request(`/api/fetch/creator/${creatorId}`, { method: 'POST' }),
   getFetchJobs: () => request('/api/fetch/jobs'),
   getActiveFetch: () => request('/api/fetch/active'),
 
