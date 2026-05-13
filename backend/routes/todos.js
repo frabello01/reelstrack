@@ -81,7 +81,7 @@ router.get('/:id', async (req, res) => {
   const { data: items } = await supabase
     .from('todo_list_reels')
     .select(`
-      id, is_done, added_at, done_at, public_note, private_note, priority,
+      id, is_done, is_hidden, added_at, done_at, public_note, private_note, priority,
       reels (
         id, instagram_id, url, thumbnail_url, caption, is_manual, is_uploaded,
         views, likes, comments, posted_at,
@@ -309,6 +309,21 @@ router.patch('/:id/reels/:reelId/priority', async (req, res) => {
   const { data, error } = await supabase
     .from('todo_list_reels')
     .update({ priority: p })
+    .eq('todo_list_id', req.params.id)
+    .eq('reel_id', req.params.reelId)
+    .select()
+    .single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+// PATCH toggle hidden state. Hidden reels are still in the list but tucked away
+// in the Hidden section AND never shown on the public share page.
+router.patch('/:id/reels/:reelId/hidden', async (req, res) => {
+  const { is_hidden } = req.body;
+  const { data, error } = await supabase
+    .from('todo_list_reels')
+    .update({ is_hidden: !!is_hidden })
     .eq('todo_list_id', req.params.id)
     .eq('reel_id', req.params.reelId)
     .select()
@@ -614,6 +629,7 @@ router.get('/public/:token', async (req, res) => {
   if (!list) return res.status(404).json({ error: 'List not found' });
 
   // IMPORTANT: select only public_note, never private_note
+  // Also: hidden reels are NEVER shown on the public share page
   const { data: items } = await supabase
     .from('todo_list_reels')
     .select(`
@@ -626,6 +642,7 @@ router.get('/public/:token', async (req, res) => {
       )
     `)
     .eq('todo_list_id', list.id)
+    .eq('is_hidden', false)
     .order('priority', { ascending: false })
     .order('added_at', { ascending: false });
 

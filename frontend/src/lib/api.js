@@ -84,6 +84,8 @@ export const api = {
     request(`/api/todos/${todoId}/reels/${reelId}/note`, { method: 'PATCH', body: JSON.stringify({ public_note, private_note }) }),
   updateReelPriority: (todoId, reelId, priority) =>
     request(`/api/todos/${todoId}/reels/${reelId}/priority`, { method: 'PATCH', body: JSON.stringify({ priority }) }),
+  toggleReelHidden: (todoId, reelId, is_hidden) =>
+    request(`/api/todos/${todoId}/reels/${reelId}/hidden`, { method: 'PATCH', body: JSON.stringify({ is_hidden }) }),
   moveReel: (sourceId, reelId, target_list_id) =>
     request(`/api/todos/${sourceId}/reels/${reelId}/move`, { method: 'POST', body: JSON.stringify({ target_list_id }) }),
   copyReel: (sourceId, reelId, target_list_id) =>

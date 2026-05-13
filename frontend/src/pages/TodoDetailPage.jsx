@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, ExternalLink, Trash2, Eye, Heart, Share2, Link2,
+  ArrowLeft, ExternalLink, Trash2, Eye, EyeOff, Heart, Share2, Link2,
   StickyNote, Lock, Check, X, Plus, Save, AlertCircle, Loader2,
   RefreshCw, Play, Download, MoreVertical, Move, Copy, Flame, Upload, Video
 } from 'lucide-react';
@@ -176,6 +176,21 @@ export default function TodoDetailPage() {
     }
   };
 
+  // Toggle hidden state. Optimistic update.
+  const handleToggleHidden = async (reelId, currentlyHidden) => {
+    const newHidden = !currentlyHidden;
+    setList((l) => ({
+      ...l,
+      items: l.items.map((it) => it.reels?.id === reelId ? { ...it, is_hidden: newHidden } : it),
+    }));
+    try {
+      await api.toggleReelHidden(id, reelId, newHidden);
+    } catch (err) {
+      alert(`Failed: ${err.message}`);
+      load();
+    }
+  };
+
   // Move a reel to another list. Removes from current list.
   const handleMove = async (reelId, targetListId) => {
     setOpenMenuFor(null);
@@ -235,20 +250,38 @@ export default function TodoDetailPage() {
     }
   };
 
-  const handleDownload = (reel) => {
+  const handleDownload = async (reel) => {
     if (!reel?.backup_video_url) return;
-    // Use a temporary anchor to force download
-    const a = document.createElement('a');
-    a.href = reel.backup_video_url;
     const filename = reel.creators?.username
       ? `${reel.creators.username}-${reel.id.slice(0, 8)}.mp4`
       : `reel-${reel.id.slice(0, 8)}.mp4`;
-    a.download = filename;
-    a.target = '_blank';
-    a.rel = 'noopener noreferrer';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    try {
+      // Fetch the bytes ourselves and create a blob URL.
+      // This bypasses Supabase Storage's missing Content-Disposition headers
+      // (which would otherwise cause the browser to play the video inline).
+      const res = await fetch(reel.backup_video_url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      // Fallback: direct anchor download without target=_blank.
+      // The browser may still inline-play if Content-Disposition isn't set,
+      // but it works as a last resort.
+      console.warn('[download] blob fetch failed, falling back to direct link:', err.message);
+      const a = document.createElement('a');
+      a.href = reel.backup_video_url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
   };
 
   if (loading) return <div className="loading"><div className="spinner" /></div>;
@@ -362,26 +395,29 @@ export default function TodoDetailPage() {
           <p>No reels saved yet. Add reels from the dashboard using the bookmark icon, or paste an Instagram link above.</p>
         </div>
       ) : (
-        <div className="todo-items">
-          {(() => {
-            // Build a stable rank: based on the order reels were ADDED (newest = #1).
-            // The visible list order may shuffle when priority changes, but the rank
-            // shown next to each reel stays tied to insertion order.
-            const byAddedDesc = [...list.items].sort((a, b) =>
-              new Date(b.added_at) - new Date(a.added_at)
-            );
-            const rankByReelId = new Map();
-            byAddedDesc.forEach((it, i) => {
-              if (it.reels?.id) rankByReelId.set(it.reels.id, i + 1);
-            });
-            return list.items.map((item) => {
+        (() => {
+          // Build a stable rank: based on the order reels were ADDED (newest = #1).
+          // The visible list order may shuffle when priority changes, but the rank
+          // shown next to each reel stays tied to insertion order.
+          const byAddedDesc = [...list.items].sort((a, b) =>
+            new Date(b.added_at) - new Date(a.added_at)
+          );
+          const rankByReelId = new Map();
+          byAddedDesc.forEach((it, i) => {
+            if (it.reels?.id) rankByReelId.set(it.reels.id, i + 1);
+          });
+
+          const activeItems = list.items.filter((it) => !it.is_hidden);
+          const hiddenItems = list.items.filter((it) => it.is_hidden);
+
+          const renderItem = (item) => {
             const reel = item.reels;
             const hasBackup = reel?.backup_status === 'done' && reel?.backup_video_url;
             const isEditingPublic = editingNote?.reelId === reel?.id && editingNote?.kind === 'public';
             const isEditingPrivate = editingNote?.reelId === reel?.id && editingNote?.kind === 'private';
             const stableRank = rankByReelId.get(reel?.id) ?? '?';
             return (
-              <div key={item.id} className={`todo-item ${item.is_done ? 'done' : ''}`}>
+              <div key={item.id} className={`todo-item ${item.is_done ? 'done' : ''} ${item.is_hidden ? 'is-hidden' : ''}`}>
                 <div className="todo-item-main">
                   <input
                     type="checkbox"
@@ -452,6 +488,14 @@ export default function TodoDetailPage() {
                         <ExternalLink size={14} />
                       </a>
                     )}
+                    <button
+                      className="todo-item-action-btn"
+                      onClick={() => handleToggleHidden(reel.id, item.is_hidden)}
+                      title={item.is_hidden ? 'Move back to Active' : 'Hide (move to Hidden section)'}
+                      aria-label={item.is_hidden ? 'Unhide' : 'Hide'}
+                    >
+                      {item.is_hidden ? <Eye size={14} /> : <EyeOff size={14} />}
+                    </button>
                     <div className="reel-menu-wrap">
                       <button
                         className="todo-item-action-btn"
@@ -553,9 +597,34 @@ export default function TodoDetailPage() {
                 </div>
               </div>
             );
-            });
-          })()}
-        </div>
+          };
+
+          return (
+            <>
+              <div className="todo-items">
+                {activeItems.length === 0 ? (
+                  <div className="empty-state-inline">
+                    <p>No active reels — all reels in this list have been hidden.</p>
+                  </div>
+                ) : (
+                  activeItems.map(renderItem)
+                )}
+              </div>
+
+              {hiddenItems.length > 0 && (
+                <details className="hidden-section">
+                  <summary>
+                    <EyeOff size={14} />
+                    <span>Hidden ({hiddenItems.length})</span>
+                  </summary>
+                  <div className="todo-items todo-items-hidden">
+                    {hiddenItems.map(renderItem)}
+                  </div>
+                </details>
+              )}
+            </>
+          );
+        })()
       )}
 
       {/* Video modal */}

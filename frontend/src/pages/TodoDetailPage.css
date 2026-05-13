@@ -476,3 +476,62 @@
   background: linear-gradient(90deg, #a78bfa, #60a5fa);
   transition: width 0.2s;
 }
+
+/* ===== Hidden section (collapsible details/summary) ===== */
+.hidden-section {
+  margin-top: 18px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  padding-top: 18px;
+}
+.hidden-section > summary {
+  cursor: pointer;
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  color: rgba(255,255,255,0.7);
+  font-size: 13px;
+  font-weight: 500;
+  user-select: none;
+  transition: all 0.15s;
+}
+.hidden-section > summary::-webkit-details-marker { display: none; }
+.hidden-section > summary:hover {
+  background: rgba(255,255,255,0.06);
+  color: white;
+}
+.hidden-section > summary::after {
+  content: '▸';
+  margin-left: 4px;
+  color: rgba(255,255,255,0.4);
+  font-size: 10px;
+  transition: transform 0.15s;
+}
+.hidden-section[open] > summary::after {
+  transform: rotate(90deg);
+}
+
+.todo-items-hidden {
+  margin-top: 12px;
+  opacity: 0.7;
+}
+.todo-items-hidden .todo-item.is-hidden {
+  background: rgba(255,255,255,0.015);
+}
+.todo-items-hidden .todo-item.is-hidden:hover { opacity: 1; }
+
+/* Inline empty state when all reels in a list are hidden */
+.empty-state-inline {
+  padding: 20px;
+  text-align: center;
+  background: rgba(255,255,255,0.02);
+  border: 1px dashed rgba(255,255,255,0.08);
+  border-radius: 8px;
+  color: rgba(255,255,255,0.5);
+  font-size: 13px;
+}
+.empty-state-inline p { margin: 0; }
