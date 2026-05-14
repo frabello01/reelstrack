@@ -177,4 +177,13 @@ export const api = {
   deleteGuide: (id) => request(`/api/guides/${id}`, { method: 'DELETE' }),
   uploadGuideImage: (id, image_data_url) =>
     request(`/api/guides/${id}/image`, { method: 'POST', body: JSON.stringify({ image_data_url }) }),
+
+  // Lessons (e-learning)
+  getLessons: (search) => request(`/api/lessons${search ? `?search=${encodeURIComponent(search)}` : ''}`),
+  getLesson: (id) => request(`/api/lessons/${id}`),
+  createLesson: (body) => request('/api/lessons', { method: 'POST', body: JSON.stringify(body) }),
+  updateLesson: (id, body) => request(`/api/lessons/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteLesson: (id) => request(`/api/lessons/${id}`, { method: 'DELETE' }),
+  uploadLessonThumbnail: (id, image_data_url) =>
+    request(`/api/lessons/${id}/thumbnail`, { method: 'POST', body: JSON.stringify({ image_data_url }) }),
 };

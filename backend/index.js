@@ -15,6 +15,7 @@ const converterRouter = require('./routes/converter');
 const settingsRouter = require('./routes/settings');
 const dailyTasksRouter = require('./routes/dailyTasks');
 const guidesRouter = require('./routes/guides');
+const lessonsRouter = require('./routes/lessons');
 const { runMyAccountsFetch } = require('./services/myAccountsService');
 const { generateDailyTasks, cleanupOldDailyTasks } = require('./services/dailyTasksService');
 
@@ -66,6 +67,7 @@ app.use('/api/converter', converterRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/daily-tasks', dailyTasksRouter);
 app.use('/api/guides', guidesRouter);
+app.use('/api/lessons', lessonsRouter);
 
 // Competitor reels fetch is now MANUAL only.
 // Use the "Fetch Now" button on the dashboard (whole list) or the 🔄 button

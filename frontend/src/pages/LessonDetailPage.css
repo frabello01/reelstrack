@@ -1,0 +1,203 @@
+.lesson-detail {
+  padding: 24px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.lesson-detail-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.back-btn {
+  background: none; border: none;
+  color: rgba(255,255,255,0.6);
+  display: inline-flex; align-items: center; gap: 6px;
+  cursor: pointer; font-size: 13px;
+}
+.back-btn:hover { color: white; }
+.lesson-detail-actions {
+  display: flex; align-items: center; gap: 8px;
+}
+.danger-hover:hover {
+  color: #f87171;
+  border-color: rgba(248,113,113,0.4);
+}
+
+/* ===== Title ===== */
+.lesson-title {
+  margin: 0 0 8px;
+  color: white;
+  font-family: 'Syne', sans-serif;
+  font-size: 28px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: text;
+  line-height: 1.2;
+}
+.lesson-title-pencil {
+  color: rgba(255,255,255,0.3);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.lesson-title:hover .lesson-title-pencil { opacity: 1; }
+.lesson-title-edit {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.lesson-title-input {
+  flex: 1;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid rgba(167,139,250,0.4);
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: white;
+  font-family: 'Syne', sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+  outline: none;
+}
+
+.lesson-done-stamp {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: #4ade80;
+  margin-bottom: 16px;
+}
+
+/* ===== Player ===== */
+.lesson-player {
+  position: relative;
+  background: #000;
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 18px;
+  aspect-ratio: 16 / 9;
+}
+.lesson-player iframe {
+  width: 100% !important;
+  height: 100% !important;
+  border: 0;
+  position: absolute;
+  inset: 0;
+}
+.lesson-player-error {
+  padding: 24px;
+  color: #f87171;
+  font-size: 13px;
+  text-align: center;
+}
+
+/* ===== Description ===== */
+.lesson-desc-section { margin-bottom: 22px; }
+.lesson-desc {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 8px;
+  padding: 12px 14px;
+  color: rgba(255,255,255,0.85);
+  font-size: 14px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  cursor: pointer;
+  position: relative;
+}
+.lesson-desc:hover { background: rgba(255,255,255,0.05); }
+.lesson-desc-edit-hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 10px;
+  color: rgba(255,255,255,0.35);
+  font-style: italic;
+}
+.lesson-desc-add {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 10px;
+  background: rgba(255,255,255,0.02);
+  border: 1px dashed rgba(255,255,255,0.15);
+  border-radius: 6px;
+  color: rgba(255,255,255,0.5);
+  font-size: 12px;
+  cursor: pointer;
+}
+.lesson-desc-add:hover { color: white; border-color: rgba(167,139,250,0.4); }
+.lesson-desc-edit textarea {
+  width: 100%;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid rgba(167,139,250,0.4);
+  border-radius: 6px;
+  padding: 10px 12px;
+  color: white;
+  font-size: 14px;
+  font-family: inherit;
+  line-height: 1.5;
+  outline: none;
+  resize: vertical;
+  box-sizing: border-box;
+}
+.lesson-desc-actions {
+  display: flex; gap: 6px;
+  margin-top: 6px;
+}
+
+/* ===== Thumbnail section ===== */
+.lesson-thumb-section {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+.lesson-thumb-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.55);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 8px;
+}
+.lesson-thumb-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.lesson-thumb-preview {
+  width: 120px;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 6px;
+  background: #000;
+}
+.lesson-thumb-empty {
+  width: 120px;
+  aspect-ratio: 16 / 9;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,0.03);
+  border: 1px dashed rgba(255,255,255,0.15);
+  border-radius: 6px;
+  color: rgba(255,255,255,0.4);
+  font-size: 11px;
+}
+
+.lesson-detail-error {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin: 24px;
+  color: #f87171; font-size: 13px;
+  padding: 10px 14px;
+  background: rgba(248,113,113,0.08);
+  border: 1px solid rgba(248,113,113,0.25);
+  border-radius: 6px;
+}
+
+@media (max-width: 600px) {
+  .lesson-detail { padding: 16px; }
+  .lesson-title { font-size: 22px; }
+}
