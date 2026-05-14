@@ -396,14 +396,15 @@ export default function TodoDetailPage() {
         </div>
       ) : (
         (() => {
-          // Build a stable rank: based on the order reels were ADDED (newest = #1).
+          // Build a stable rank: based on the order reels were ADDED (oldest = #1).
+          // Adding a new reel gives it the next highest number; existing numbering stays put.
           // The visible list order may shuffle when priority changes, but the rank
           // shown next to each reel stays tied to insertion order.
-          const byAddedDesc = [...list.items].sort((a, b) =>
-            new Date(b.added_at) - new Date(a.added_at)
+          const byAddedAsc = [...list.items].sort((a, b) =>
+            new Date(a.added_at) - new Date(b.added_at)
           );
           const rankByReelId = new Map();
-          byAddedDesc.forEach((it, i) => {
+          byAddedAsc.forEach((it, i) => {
             if (it.reels?.id) rankByReelId.set(it.reels.id, i + 1);
           });
 

@@ -91,7 +91,7 @@ router.get('/:id', async (req, res) => {
     `)
     .eq('todo_list_id', req.params.id)
     .order('priority', { ascending: false })
-    .order('added_at', { ascending: false });
+    .order('added_at', { ascending: true });
 
   res.json({ ...list, items: items || [] });
 });
@@ -644,7 +644,7 @@ router.get('/public/:token', async (req, res) => {
     .eq('todo_list_id', list.id)
     .eq('is_hidden', false)
     .order('priority', { ascending: false })
-    .order('added_at', { ascending: false });
+    .order('added_at', { ascending: true });
 
   res.json({
     id: list.id,
