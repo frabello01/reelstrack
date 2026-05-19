@@ -55,17 +55,26 @@ async function hfFetch(path, options = {}) {
 
 const CANDIDATES = {
   listSoulIds: [
+    // Likely POST-based list endpoints
+    '/v1/soul-ids/list',
     '/v1/soul-ids',
-    '/v1/soul_ids',
     '/v1/text2image/soul/soul-ids',
     '/v1/text2image/soul/custom-references',
+    '/v1/text2image/soul/custom-references/list',
     '/v1/custom-references',
+    '/v1/custom-references/list',
+    '/v1/soul/characters',
+    '/v1/soul/list',
+    '/v1/characters',
+    '/v1/characters/list',
   ],
   soulStyles: [
     '/v1/text2image/soul/styles',
+    '/v1/text2image/soul/styles/list',
     '/v1/soul/styles',
     '/v1/styles',
     '/v1/soul-styles',
+    '/v1/text2image/soul/style-ids',
   ],
   generateSoul: [
     '/v1/text2image/soul',          // documented in SDK README
@@ -78,20 +87,43 @@ const CANDIDATES = {
 
 let _cache = {
   listSoulIds: null,
+  listSoulIdsMethod: null,        // 'GET' or 'POST' — captured during discovery
   soulStyles: null,
+  soulStylesMethod: null,
   generateSoul: null,
   requestStatus: null,
   discoveredAt: null,
   probeResults: {},
 };
 
-async function probeOne(path) {
+async function probeWithMethod(path, method, body) {
   try {
-    const { ok, status } = await hfFetch(path, { method: 'GET' });
-    return { path, status, ok, exists: ok || status === 401 || status === 402 || status === 403 };
+    const { ok, status } = await hfFetch(path, { method, body });
+    return {
+      path,
+      method,
+      status,
+      ok,
+      // 200=found, 400=found but bad body (still means path is real),
+      // 401/402=found but auth/credit issue, 422=found but invalid input
+      exists: ok || [400, 401, 402, 422].includes(status),
+    };
   } catch (err) {
-    return { path, error: err.message, exists: false };
+    return { path, method, error: err.message, exists: false };
   }
+}
+
+async function probeOne(path) {
+  // Try GET first (cheap), then POST with empty body if GET says 405
+  const getResult = await probeWithMethod(path, 'GET');
+  if (getResult.exists) return getResult;
+
+  if (getResult.status === 405) {
+    // Method not allowed — try POST
+    const postResult = await probeWithMethod(path, 'POST', {});
+    return postResult;
+  }
+  return getResult;
 }
 
 async function discoverEndpoints() {
@@ -106,12 +138,12 @@ async function discoverEndpoints() {
       _cache.probeResults[path] = result;
       if (result.exists && !_cache[key]) {
         _cache[key] = path;
-        console.log(`[higgsfield]   ${key} -> ${path} (status ${result.status})`);
+        _cache[`${key}Method`] = result.method;
+        console.log(`[higgsfield]   ${key} -> ${result.method} ${path} (status ${result.status})`);
         break;
       }
     }
   }
-  // generateSoul is only one candidate — assume it's right
   _cache.generateSoul = CANDIDATES.generateSoul[0];
   _cache.discoveredAt = Date.now();
   return _cache;
@@ -189,9 +221,9 @@ router.get('/status', async (req, res) => {
   try {
     await discoverEndpoints();
     out.endpoints = {
-      listSoulIds: _cache.listSoulIds,
-      soulStyles: _cache.soulStyles,
-      generateSoul: _cache.generateSoul,
+      listSoulIds: _cache.listSoulIds ? `${_cache.listSoulIdsMethod || 'GET'} ${_cache.listSoulIds}` : null,
+      soulStyles: _cache.soulStyles ? `${_cache.soulStylesMethod || 'GET'} ${_cache.soulStyles}` : null,
+      generateSoul: `POST ${_cache.generateSoul}`,
     };
     out.probe_results = _cache.probeResults;
   } catch (err) {
@@ -210,18 +242,34 @@ router.get('/characters', async (req, res) => {
         characters: [],
       });
     }
-    // Try with pagination params; if that fails, retry without
-    let { ok, status, body } = await hfFetch(`${cache.listSoulIds}?page=1&page_size=100`);
-    if (!ok) {
-      ({ ok, status, body } = await hfFetch(cache.listSoulIds));
+    const method = cache.listSoulIdsMethod || 'GET';
+    let result;
+    if (method === 'POST') {
+      // POST list — try with a body containing common pagination keys
+      result = await hfFetch(cache.listSoulIds, {
+        method: 'POST',
+        body: { page: 1, page_size: 100, limit: 100, per_page: 100 },
+      });
+      if (!result.ok) {
+        // Retry with empty body
+        result = await hfFetch(cache.listSoulIds, { method: 'POST', body: {} });
+      }
+    } else {
+      result = await hfFetch(`${cache.listSoulIds}?page=1&page_size=100`);
+      if (!result.ok) {
+        result = await hfFetch(cache.listSoulIds);
+      }
     }
-    if (!ok) {
-      return res.status(status || 502).json({
-        error: `Higgsfield returned ${status}`,
-        details: body,
+    if (!result.ok) {
+      return res.status(result.status || 502).json({
+        error: `Higgsfield returned ${result.status}`,
+        details: result.body,
+        endpoint_used: cache.listSoulIds,
+        method_used: method,
       });
     }
-    // Normalize the response — different APIs use different keys
+    // Normalize the response
+    const body = result.body;
     const items = body?.items || body?.data || body?.soul_ids || body?.results || (Array.isArray(body) ? body : []);
     const characters = items.map((s) => ({
       id: s.id || s.soul_id || s.reference_id,
@@ -230,7 +278,7 @@ router.get('/characters', async (req, res) => {
       thumbnail_url: s.thumbnail_url || s.preview_image_url || s.image_url || null,
       created_at: s.created_at || s.createdAt,
     })).filter((c) => c.id);
-    res.json({ characters, raw_count: items.length });
+    res.json({ characters, raw_count: items.length, _debug: { endpoint: cache.listSoulIds, method } });
   } catch (err) {
     console.error('[higgsfield] characters failed:', err.message);
     res.status(500).json({ error: err.message });
@@ -242,11 +290,17 @@ router.get('/styles', async (req, res) => {
   try {
     const cache = await discoverEndpoints();
     if (!cache.soulStyles) {
-      // Styles are optional — just return empty
       return res.json({ styles: [], note: 'Could not auto-discover the styles endpoint' });
     }
-    const { ok, status, body } = await hfFetch(cache.soulStyles);
-    if (!ok) return res.json({ styles: [], status });
+    const method = cache.soulStylesMethod || 'GET';
+    let result;
+    if (method === 'POST') {
+      result = await hfFetch(cache.soulStyles, { method: 'POST', body: {} });
+    } else {
+      result = await hfFetch(cache.soulStyles);
+    }
+    if (!result.ok) return res.json({ styles: [], status: result.status });
+    const body = result.body;
     const items = body?.items || body?.data || body?.styles || (Array.isArray(body) ? body : []);
     const styles = items.map((s) => ({
       id: s.id,
