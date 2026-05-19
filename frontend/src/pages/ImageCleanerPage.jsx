@@ -32,7 +32,6 @@ export default function ImageCleanerPage() {
   const fileInputRef = useRef(null);
   const [models, setModels] = useState([]);
   const [configured, setConfigured] = useState(false);
-  const [modelId, setModelId] = useState('dreamshaper-v8');
   const [strength, setStrength] = useState(0.04);
   const [steps, setSteps] = useState(50);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -114,7 +113,7 @@ export default function ImageCleanerPage() {
     try {
       const body = onlyMetadata
         ? { image_data_url: inputDataUrl, only_metadata: true }
-        : { image_data_url: inputDataUrl, model_id: modelId, strength, steps };
+        : { image_data_url: inputDataUrl, strength, steps };
       const response = await api.cleanImage(body);
       setOutputDataUrl(response.cleaned_data_url);
       setOutputMode(response.mode);
@@ -153,8 +152,8 @@ export default function ImageCleanerPage() {
         <div className="image-cleaner-notice">
           <AlertCircle size={14} />
           <span>
-            Replicate isn't configured yet. Add <code>REPLICATE_API_TOKEN</code> on Render
-            to enable diffusion cleaning. "Metadata only" mode works without it.
+            Modal isn't configured yet. Deploy <code>modal_app.py</code> then add <code>MODAL_ENDPOINT_URL</code>
+            on Render to enable AI cleaning. "Metadata only" mode works without it.
           </span>
         </div>
       )}
@@ -238,12 +237,10 @@ export default function ImageCleanerPage() {
           {/* Settings & actions */}
           <div className="cleaner-settings">
             <div className="cleaner-setting-row">
-              <label>Model:</label>
-              <select value={modelId} onChange={(e) => setModelId(e.target.value)} disabled={processing}>
-                {models.map((m) => (
-                  <option key={m.id} value={m.id}>{m.label}</option>
-                ))}
-              </select>
+              <label>Engine:</label>
+              <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13 }}>
+                {models[0]?.label || 'noai-watermark (Dreamshaper-8 on Modal GPU)'}
+              </span>
             </div>
 
             <button
@@ -297,7 +294,7 @@ export default function ImageCleanerPage() {
                 className="btn btn-primary"
                 onClick={() => handleClean(false)}
                 disabled={processing || !configured}
-                title={!configured ? 'Replicate not configured' : 'Run diffusion + metadata strip'}
+                title={!configured ? 'Modal not configured' : 'Run noai-watermark + metadata strip'}
               >
                 {processing ? <Loader2 size={13} className="spin" /> : <Wand2 size={13} />}
                 {processing ? 'Cleaning…' : 'Clean image (diffusion)'}
@@ -306,7 +303,7 @@ export default function ImageCleanerPage() {
                 className="btn btn-secondary"
                 onClick={() => handleClean(true)}
                 disabled={processing}
-                title="Strip metadata only — fast, free, no Replicate"
+                title="Strip metadata only — fast, free, no Modal call"
               >
                 <ShieldCheck size={13} /> Metadata only (free)
               </button>
@@ -327,7 +324,7 @@ export default function ImageCleanerPage() {
           <span>
             Cleaned successfully{' '}
             {outputMode === 'diffusion' ? (
-              <>via diffusion (cost ~$0.003) plus metadata strip.</>
+              <>via noai-watermark on Modal GPU (cost ~$0.01) plus metadata strip.</>
             ) : (
               <>via metadata strip (free).</>
             )}

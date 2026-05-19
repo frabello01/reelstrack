@@ -2,74 +2,28 @@ const express = require('express');
 const router = express.Router();
 const sharp = require('sharp');
 
-const REPLICATE_API_TOKEN = process.env.REPLICATE_API_TOKEN;
-const REPLICATE_BASE = 'https://api.replicate.com/v1';
-
-// Max dimension (longest side) we send to Replicate. SD 1.5 is trained at
-// 512×512 and memory usage scales quadratically — sending a 4000px image
-// causes CUDA OOM. 1024px is a sane middle ground that still produces a
-// high-quality cleaned image suitable for IG/web use.
-const REPLICATE_MAX_DIM = 1024;
-
-// Pre-vetted img2img models on Replicate. Each entry maps a friendly id
-// (what the frontend sends) to a Replicate model + the latest known version hash.
-// If Replicate updates a model, just bump the version hash here.
-//
-// We pull the version dynamically below to avoid stale hashes, but having a
-// fallback locked in means the feature keeps working even if Replicate's
-// public API is briefly flaky.
-//
-// IMPORTANT: Dreamshaper V8 is the model that noai-watermark uses by default
-// (Lykon/dreamshaper-8). It's a fine-tuned SD 1.5 checkpoint that produces
-// noticeably better results than vanilla SD 1.5 for img2img watermark cleaning.
-const MODELS = {
-  'dreamshaper-v8': {
-    owner: 'asiryan',
-    name: 'dreamshaper-v8',
-    label: 'Dreamshaper V8 (recommended — matches noai-watermark)',
-    // Tuning that mirrors noai-watermark defaults
-    defaultStrength: 0.04,
-    defaultSteps: 50,
-    prompt: 'high quality, detailed, photorealistic',
-  },
-  'realistic-vision': {
-    owner: 'asiryan',
-    name: 'realistic-vision-v6.0-b1',
-    label: 'Realistic Vision (alternative for photos)',
-    defaultStrength: 0.04,
-    defaultSteps: 50,
-    prompt: 'high quality, detailed, photorealistic',
-  },
-};
+const MODAL_ENDPOINT_URL = process.env.MODAL_ENDPOINT_URL;
 
 // Cap input image size to keep cost + speed sane and prevent abuse
 const MAX_INPUT_BYTES = 8 * 1024 * 1024; // 8 MB
 
-// Helper: download bytes from a URL into a Buffer
-async function downloadToBuffer(url) {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Download failed (${res.status}) from ${url}`);
-  const ab = await res.arrayBuffer();
-  return Buffer.from(ab);
-}
+// Modal can handle larger images than vanilla Replicate SD models, but
+// huge images still cost more GPU time and don't meaningfully change
+// SynthID removal effectiveness. 2048 is a safe cap.
+const MODAL_MAX_DIM = 2048;
 
-// Resize an image so its longest side is at most `maxDim`. Returns the
-// resized buffer + a flag indicating whether resize was needed.
-// SD models also need dimensions divisible by 8, so we snap to multiples of 8.
-async function resizeForReplicate(inputBuf, maxDim = REPLICATE_MAX_DIM) {
+// Resize an image so its longest side is at most `maxDim`. Preserves aspect
+// ratio. SD models also like dimensions divisible by 8, so we snap to that.
+async function resizeIfNeeded(inputBuf, maxDim) {
   const meta = await sharp(inputBuf, { failOn: 'none' }).metadata();
   const w = meta.width || 0;
   const h = meta.height || 0;
-  if (!w || !h) {
-    throw new Error('Could not read image dimensions');
-  }
+  if (!w || !h) throw new Error('Could not read image dimensions');
 
-  // If already small enough, just snap to multiple of 8 if needed
   if (w <= maxDim && h <= maxDim && w % 8 === 0 && h % 8 === 0) {
     return { buffer: inputBuf, resized: false, originalDims: { w, h }, newDims: { w, h } };
   }
 
-  // Scale down proportionally so longest side = maxDim, then snap to multiple of 8
   const scale = Math.min(maxDim / w, maxDim / h, 1);
   const newW = Math.max(8, Math.floor((w * scale) / 8) * 8);
   const newH = Math.max(8, Math.floor((h * scale) / 8) * 8);
@@ -87,86 +41,17 @@ async function resizeForReplicate(inputBuf, maxDim = REPLICATE_MAX_DIM) {
   };
 }
 
-// Helper: poll a Replicate prediction until it's succeeded/failed/canceled.
-// Replicate predictions have an `urls.get` field — fetch it every 2s.
-async function pollPrediction(predictionUrl, { timeoutMs = 180000, intervalMs = 2000 } = {}) {
-  const start = Date.now();
-  let lastStatus = null;
-  while (Date.now() - start < timeoutMs) {
-    const res = await fetch(predictionUrl, {
-      headers: { Authorization: `Token ${REPLICATE_API_TOKEN}` },
-    });
-    if (!res.ok) {
-      const body = await res.text().catch(() => '');
-      throw new Error(`Replicate poll failed (${res.status}): ${body.slice(0, 200)}`);
-    }
-    const data = await res.json();
-    lastStatus = data.status;
-    if (data.status === 'succeeded') return data;
-    if (data.status === 'failed' || data.status === 'canceled') {
-      // Surface the actual Replicate error so we can show something useful
-      const replicateError = data.error || `Replicate prediction ${data.status}`;
-      const err = new Error(replicateError);
-      err.replicateLogs = data.logs;
-      throw err;
-    }
-    await new Promise((r) => setTimeout(r, intervalMs));
-  }
-  throw new Error(`Replicate prediction timed out (3 min). Last status: ${lastStatus || 'unknown'}`);
-}
-
-// Translate raw Replicate errors into actionable advice for the user
-function humanizeReplicateError(rawError) {
-  if (!rawError) return 'Unknown error';
-  const e = String(rawError).toLowerCase();
-  if (e.includes('out of memory') || e.includes('cuda') || e.includes('oom')) {
-    return 'The Replicate GPU ran out of memory for that image. Try again — the backend now auto-resizes large images, so a retry should work.';
-  }
-  if (e.includes('timed out') || e.includes('timeout')) {
-    return 'Replicate took too long to respond. The model may be cold-starting (first request after idle) — try again in 30 seconds.';
-  }
-  if (e.includes('insufficient') || e.includes('billing') || e.includes('credit')) {
-    return 'Out of Replicate credits. Top up at replicate.com → Account → Billing.';
-  }
-  if (e.includes('unauthorized') || e.includes('401') || e.includes('invalid token')) {
-    return 'Replicate token is invalid. Check REPLICATE_API_TOKEN on Render.';
-  }
-  return rawError.length > 200 ? rawError.slice(0, 200) + '…' : rawError;
-}
-
-// Get the latest version hash for a model so we don't have to hardcode them
-async function getLatestModelVersion(owner, name) {
-  const res = await fetch(`${REPLICATE_BASE}/models/${owner}/${name}`, {
-    headers: { Authorization: `Token ${REPLICATE_API_TOKEN}` },
-  });
-  if (!res.ok) throw new Error(`Could not look up model ${owner}/${name}: ${res.status}`);
-  const data = await res.json();
-  if (!data.latest_version?.id) {
-    throw new Error(`Model ${owner}/${name} has no latest version`);
-  }
-  return data.latest_version.id;
-}
-
-// ============================================================
-// METADATA STRIPPING
-// ============================================================
-// Uses sharp's `.withMetadata(false)` (default) to drop EXIF/IPTC/XMP, and
-// .toFormat() forces a re-encode which discards PNG text chunks (which is
-// where Stable Diffusion WebUI / ComfyUI / C2PA store their AI provenance).
-//
-// We default to outputting PNG so we don't introduce JPEG compression on
-// images that were originally PNGs.
+// Strip all metadata from an image. Sharp's default behavior drops EXIF/IPTC/XMP,
+// and re-encoding discards PNG text chunks (which is where Stable Diffusion WebUI,
+// ComfyUI, and C2PA store AI provenance).
 async function stripAllMetadata(inputBuffer, format = 'png') {
-  const pipeline = sharp(inputBuffer, { failOn: 'none' }).rotate(); // auto-orient first, then drop EXIF
-
-  // No `.withMetadata(...)` call = all metadata dropped (this is sharp's default behavior)
+  const pipeline = sharp(inputBuffer, { failOn: 'none' }).rotate();
   if (format === 'jpeg' || format === 'jpg') {
     return await pipeline.jpeg({ quality: 95, mozjpeg: true }).toBuffer();
   }
   if (format === 'webp') {
     return await pipeline.webp({ quality: 95 }).toBuffer();
   }
-  // Default: PNG, compression level 9 (smallest), no metadata
   return await pipeline.png({ compressionLevel: 9 }).toBuffer();
 }
 
@@ -174,29 +59,28 @@ async function stripAllMetadata(inputBuffer, format = 'png') {
 // ROUTES
 // ============================================================
 
-// GET available models (frontend uses this to populate the dropdown)
 router.get('/models', (req, res) => {
-  const list = Object.entries(MODELS).map(([id, m]) => ({
-    id,
-    label: m.label,
-    defaultStrength: m.defaultStrength,
-    defaultSteps: m.defaultSteps,
-  }));
-  res.json({ models: list, configured: !!REPLICATE_API_TOKEN });
+  res.json({
+    configured: !!MODAL_ENDPOINT_URL,
+    models: [
+      {
+        id: 'noai-watermark',
+        label: 'noai-watermark (Dreamshaper-8 on Modal GPU)',
+        defaultStrength: 0.04,
+        defaultSteps: 50,
+      },
+    ],
+  });
 });
 
 // POST /api/image-cleaner/clean
 // Body:
 //   image_data_url: 'data:image/png;base64,...'
-//   model_id?: 'sd-1.5' (default) | 'realistic-vision'
-//   strength?: 0.04 (default)
-//   steps?: 50 (default)
-//   only_metadata?: boolean — if true, skip the diffusion pass and just strip metadata (fast, free)
-//
-// Response:
-//   { cleaned_data_url: 'data:image/png;base64,...', mode: 'diffusion'|'metadata-only' }
+//   strength?: 0.04
+//   steps?: 50
+//   only_metadata?: boolean — if true, skip diffusion, just strip metadata (free + instant)
 router.post('/clean', async (req, res) => {
-  const { image_data_url, model_id = 'sd-1.5', strength, steps, only_metadata = false } = req.body || {};
+  const { image_data_url, strength = 0.04, steps = 50, only_metadata = false } = req.body || {};
 
   if (!image_data_url) return res.status(400).json({ error: 'image_data_url is required' });
   const match = String(image_data_url).match(/^data:(image\/[^;]+);base64,(.+)$/);
@@ -205,14 +89,16 @@ router.post('/clean', async (req, res) => {
   const inputBuf = Buffer.from(base64Data, 'base64');
   if (inputBuf.length === 0) return res.status(400).json({ error: 'Image is empty' });
   if (inputBuf.length > MAX_INPUT_BYTES) {
-    return res.status(400).json({ error: `Image too large: ${(inputBuf.length / 1024 / 1024).toFixed(1)} MB (max ${MAX_INPUT_BYTES / 1024 / 1024} MB)` });
+    return res.status(400).json({
+      error: `Image too large: ${(inputBuf.length / 1024 / 1024).toFixed(1)} MB (max ${MAX_INPUT_BYTES / 1024 / 1024} MB)`,
+    });
   }
 
   const outputFormat = mimeType.includes('jpeg') || mimeType.includes('jpg') ? 'jpeg'
                      : mimeType.includes('webp') ? 'webp'
                      : 'png';
 
-  // ---------- METADATA-ONLY MODE (free, fast, no Replicate) ----------
+  // ---------- METADATA-ONLY MODE (free, fast, no Modal call) ----------
   if (only_metadata) {
     try {
       const stripped = await stripAllMetadata(inputBuf, outputFormat);
@@ -224,103 +110,109 @@ router.post('/clean', async (req, res) => {
     }
   }
 
-  // ---------- DIFFUSION MODE (uses Replicate) ----------
-  if (!REPLICATE_API_TOKEN) {
-    return res.status(503).json({ error: 'AI cleaning is not configured (missing REPLICATE_API_TOKEN). You can still use "Metadata only" mode.' });
-  }
-
-  const modelCfg = MODELS[model_id];
-  if (!modelCfg) {
-    return res.status(400).json({ error: `Unknown model_id: ${model_id}. Available: ${Object.keys(MODELS).join(', ')}` });
-  }
-  const useStrength = typeof strength === 'number' ? Math.max(0, Math.min(1, strength)) : modelCfg.defaultStrength;
-  const useSteps = Number.isInteger(steps) ? Math.max(1, Math.min(150, steps)) : modelCfg.defaultSteps;
-
-  let cleanedBuf;
-  let resizeInfo = null;
-  try {
-    // 0. RESIZE: scale down to <= 1024px on longest side so the GPU doesn't OOM.
-    // SD 1.5 is trained at 512×512 and memory usage is O(n²) in resolution.
-    // A 2000+px image triggers CUDA OOM. 1024px is the sweet spot.
-    resizeInfo = await resizeForReplicate(inputBuf, REPLICATE_MAX_DIM);
-    const replicateInputBuf = resizeInfo.buffer;
-    const replicateInputDataUrl = `data:image/png;base64,${replicateInputBuf.toString('base64')}`;
-
-    if (resizeInfo.resized) {
-      console.log(`[image-cleaner] resized ${resizeInfo.originalDims.w}×${resizeInfo.originalDims.h} → ${resizeInfo.newDims.w}×${resizeInfo.newDims.h}`);
-    }
-
-    // 1. Resolve the latest model version on Replicate
-    const versionId = await getLatestModelVersion(modelCfg.owner, modelCfg.name);
-
-    // 2. Submit an img2img prediction. Replicate accepts base64 data URLs as
-    //    input.image, so we never expose a public URL of the user's image.
-    //
-    // Asiryan's SD model family (dreamshaper-v8, realistic-vision-v6.0-b1)
-    // expects these input field names: `image`, `prompt`, `strength` (NOT
-    // prompt_strength), `num_inference_steps`, `guidance_scale`. The model
-    // auto-detects img2img mode when an image is provided.
-    const submitRes = await fetch(`${REPLICATE_BASE}/predictions`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Token ${REPLICATE_API_TOKEN}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        version: versionId,
-        input: {
-          image: replicateInputDataUrl,
-          prompt: modelCfg.prompt,
-          strength: useStrength,
-          num_inference_steps: useSteps,
-          guidance_scale: 7.5,
-        },
-      }),
+  // ---------- DIFFUSION MODE (calls Modal) ----------
+  if (!MODAL_ENDPOINT_URL) {
+    return res.status(503).json({
+      error: 'AI cleaning is not configured (missing MODAL_ENDPOINT_URL). Deploy modal_app.py first, then add the URL to Render env vars.',
     });
-    if (!submitRes.ok) {
-      const body = await submitRes.text().catch(() => '');
-      console.error('[image-cleaner] Replicate submit failed:', submitRes.status, body.slice(0, 500));
-      let msg = 'Replicate rejected the request.';
-      try { msg = JSON.parse(body).detail || msg; } catch {}
-      return res.status(submitRes.status).json({ error: humanizeReplicateError(msg) });
-    }
-    const prediction = await submitRes.json();
-
-    // 3. Poll until done
-    const final = await pollPrediction(prediction.urls.get);
-
-    // Replicate's output for img2img is usually an array of URLs (one per image)
-    const outputUrls = Array.isArray(final.output) ? final.output : (final.output ? [final.output] : []);
-    if (outputUrls.length === 0) {
-      return res.status(500).json({ error: 'Replicate returned no output' });
-    }
-
-    // 4. Download the cleaned image bytes
-    cleanedBuf = await downloadToBuffer(outputUrls[0]);
-  } catch (err) {
-    console.error('[image-cleaner] diffusion failed:', err.message);
-    return res.status(500).json({ error: humanizeReplicateError(err.message) });
   }
 
-  // 5. Strip metadata from the cleaned image (some models add their own)
-  let final;
+  // Resize before sending to keep Modal cost down
+  let resizeInfo;
   try {
-    final = await stripAllMetadata(cleanedBuf, outputFormat);
+    resizeInfo = await resizeIfNeeded(inputBuf, MODAL_MAX_DIM);
   } catch (err) {
-    // If sharp fails (e.g. weird format from Replicate), fall back to raw bytes
-    console.warn('[image-cleaner] metadata strip on output failed, returning raw bytes:', err.message);
-    final = cleanedBuf;
+    return res.status(400).json({ error: `Resize failed: ${err.message}` });
   }
 
-  const cleanedDataUrl = `data:${mimeType};base64,${final.toString('base64')}`;
+  const modalInputB64 = resizeInfo.buffer.toString('base64');
+  if (resizeInfo.resized) {
+    console.log(`[image-cleaner] resized ${resizeInfo.originalDims.w}×${resizeInfo.originalDims.h} → ${resizeInfo.newDims.w}×${resizeInfo.newDims.h}`);
+  }
+
+  // Call Modal endpoint with a generous timeout. Cold start may take 30-60s,
+  // hot processing is ~10-20s, so 5 min is more than safe.
+  const useStrength = Math.max(0, Math.min(1, Number(strength) || 0.04));
+  const useSteps = Math.max(10, Math.min(100, parseInt(steps, 10) || 50));
+
+  console.log(`[image-cleaner] calling Modal: strength=${useStrength}, steps=${useSteps}`);
+  const startedAt = Date.now();
+
+  let modalRes;
+  try {
+    // AbortController gives us a real timeout (5 min)
+    const controller = new AbortController();
+    const timeoutHandle = setTimeout(() => controller.abort(), 5 * 60 * 1000);
+
+    modalRes = await fetch(MODAL_ENDPOINT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        image_b64: modalInputB64,
+        strength: useStrength,
+        steps: useSteps,
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutHandle);
+  } catch (err) {
+    const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+    console.error(`[image-cleaner] Modal call failed after ${elapsed}s:`, err.message);
+    if (err.name === 'AbortError') {
+      return res.status(504).json({ error: `Modal took longer than 5 min (likely a deep cold start). Try again in 30 seconds.` });
+    }
+    return res.status(502).json({ error: `Could not reach Modal endpoint: ${err.message}` });
+  }
+
+  if (!modalRes.ok) {
+    const body = await modalRes.text().catch(() => '');
+    console.error(`[image-cleaner] Modal returned ${modalRes.status}:`, body.slice(0, 500));
+    let msg = `Modal error (HTTP ${modalRes.status})`;
+    try {
+      const parsed = JSON.parse(body);
+      msg = parsed.detail || parsed.error || msg;
+    } catch {}
+    return res.status(modalRes.status).json({ error: msg });
+  }
+
+  let payload;
+  try {
+    payload = await modalRes.json();
+  } catch (err) {
+    return res.status(502).json({ error: `Modal returned non-JSON response: ${err.message}` });
+  }
+
+  const cleanedB64 = payload.cleaned_b64;
+  if (!cleanedB64) {
+    return res.status(502).json({ error: 'Modal response missing cleaned_b64' });
+  }
+
+  const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+  console.log(`[image-cleaner] Modal done in ${elapsed}s (worker: ${payload.elapsed_seconds}s)`);
+
+  // Strip any residual metadata from Modal's output, just to be safe.
+  // noai-watermark already strips AI metadata, but this guards against
+  // anything else slipping through.
+  const modalOutputBuf = Buffer.from(cleanedB64, 'base64');
+  let finalBuf;
+  try {
+    finalBuf = await stripAllMetadata(modalOutputBuf, outputFormat);
+  } catch (err) {
+    console.warn('[image-cleaner] final metadata strip failed, returning Modal output as-is:', err.message);
+    finalBuf = modalOutputBuf;
+  }
+
+  const cleanedDataUrl = `data:${mimeType};base64,${finalBuf.toString('base64')}`;
   res.json({
     cleaned_data_url: cleanedDataUrl,
     mode: 'diffusion',
     strength: useStrength,
     steps: useSteps,
-    resized: resizeInfo?.resized || false,
-    original_dims: resizeInfo?.originalDims || null,
-    new_dims: resizeInfo?.newDims || null,
+    elapsed_seconds: elapsed,
+    worker_seconds: payload.elapsed_seconds,
+    resized: resizeInfo.resized,
+    original_dims: resizeInfo.originalDims,
+    new_dims: resizeInfo.newDims,
   });
 });
 
