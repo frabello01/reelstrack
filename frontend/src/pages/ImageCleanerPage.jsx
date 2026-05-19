@@ -32,7 +32,7 @@ export default function ImageCleanerPage() {
   const fileInputRef = useRef(null);
   const [models, setModels] = useState([]);
   const [configured, setConfigured] = useState(false);
-  const [modelId, setModelId] = useState('sd-1.5');
+  const [modelId, setModelId] = useState('dreamshaper-v8');
   const [strength, setStrength] = useState(0.04);
   const [steps, setSteps] = useState(50);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -41,6 +41,7 @@ export default function ImageCleanerPage() {
   const [inputDataUrl, setInputDataUrl] = useState(null);
   const [outputDataUrl, setOutputDataUrl] = useState(null);
   const [outputMode, setOutputMode] = useState(null); // 'metadata-only' | 'diffusion'
+  const [resizeNotice, setResizeNotice] = useState(null); // { from, to } when image was resized
   const [isDragging, setIsDragging] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState('');
@@ -59,6 +60,7 @@ export default function ImageCleanerPage() {
     setInputDataUrl(null);
     setOutputDataUrl(null);
     setOutputMode(null);
+    setResizeNotice(null);
     setError('');
   };
 
@@ -67,6 +69,7 @@ export default function ImageCleanerPage() {
     setError('');
     setOutputDataUrl(null);
     setOutputMode(null);
+    setResizeNotice(null);
 
     if (!file.type.startsWith('image/')) {
       return setError('Please choose an image file (PNG, JPG, or WebP).');
@@ -107,13 +110,20 @@ export default function ImageCleanerPage() {
     setError('');
     setOutputDataUrl(null);
     setOutputMode(null);
+    setResizeNotice(null);
     try {
       const body = onlyMetadata
         ? { image_data_url: inputDataUrl, only_metadata: true }
         : { image_data_url: inputDataUrl, model_id: modelId, strength, steps };
-      const { cleaned_data_url, mode } = await api.cleanImage(body);
-      setOutputDataUrl(cleaned_data_url);
-      setOutputMode(mode);
+      const response = await api.cleanImage(body);
+      setOutputDataUrl(response.cleaned_data_url);
+      setOutputMode(response.mode);
+      if (response.resized && response.original_dims && response.new_dims) {
+        setResizeNotice({
+          from: `${response.original_dims.w}×${response.original_dims.h}`,
+          to: `${response.new_dims.w}×${response.new_dims.h}`,
+        });
+      }
     } catch (err) {
       setError(err.message || 'Cleaning failed');
     } finally {
@@ -320,6 +330,13 @@ export default function ImageCleanerPage() {
               <>via diffusion (cost ~$0.003) plus metadata strip.</>
             ) : (
               <>via metadata strip (free).</>
+            )}
+            {resizeNotice && (
+              <>
+                {' '}Image was resized from <strong>{resizeNotice.from}</strong> to{' '}
+                <strong>{resizeNotice.to}</strong> before diffusion (SD models work
+                best at ≤1024px).
+              </>
             )}
           </span>
         </div>

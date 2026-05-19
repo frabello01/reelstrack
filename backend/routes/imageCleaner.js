@@ -5,6 +5,12 @@ const sharp = require('sharp');
 const REPLICATE_API_TOKEN = process.env.REPLICATE_API_TOKEN;
 const REPLICATE_BASE = 'https://api.replicate.com/v1';
 
+// Max dimension (longest side) we send to Replicate. SD 1.5 is trained at
+// 512×512 and memory usage scales quadratically — sending a 4000px image
+// causes CUDA OOM. 1024px is a sane middle ground that still produces a
+// high-quality cleaned image suitable for IG/web use.
+const REPLICATE_MAX_DIM = 1024;
+
 // Pre-vetted img2img models on Replicate. Each entry maps a friendly id
 // (what the frontend sends) to a Replicate model + the latest known version hash.
 // If Replicate updates a model, just bump the version hash here.
@@ -12,21 +18,24 @@ const REPLICATE_BASE = 'https://api.replicate.com/v1';
 // We pull the version dynamically below to avoid stale hashes, but having a
 // fallback locked in means the feature keeps working even if Replicate's
 // public API is briefly flaky.
+//
+// IMPORTANT: Dreamshaper V8 is the model that noai-watermark uses by default
+// (Lykon/dreamshaper-8). It's a fine-tuned SD 1.5 checkpoint that produces
+// noticeably better results than vanilla SD 1.5 for img2img watermark cleaning.
 const MODELS = {
-  'sd-1.5': {
-    owner: 'stability-ai',
-    name: 'stable-diffusion-img2img',
-    label: 'Stable Diffusion 1.5 (fast, cheap)',
+  'dreamshaper-v8': {
+    owner: 'asiryan',
+    name: 'dreamshaper-v8',
+    label: 'Dreamshaper V8 (recommended — matches noai-watermark)',
     // Tuning that mirrors noai-watermark defaults
     defaultStrength: 0.04,
     defaultSteps: 50,
-    // SD 1.5 needs a prompt; we use a neutral one
     prompt: 'high quality, detailed, photorealistic',
   },
   'realistic-vision': {
     owner: 'asiryan',
     name: 'realistic-vision-v6.0-b1',
-    label: 'Realistic Vision (best for photos)',
+    label: 'Realistic Vision (alternative for photos)',
     defaultStrength: 0.04,
     defaultSteps: 50,
     prompt: 'high quality, detailed, photorealistic',
@@ -44,10 +53,45 @@ async function downloadToBuffer(url) {
   return Buffer.from(ab);
 }
 
+// Resize an image so its longest side is at most `maxDim`. Returns the
+// resized buffer + a flag indicating whether resize was needed.
+// SD models also need dimensions divisible by 8, so we snap to multiples of 8.
+async function resizeForReplicate(inputBuf, maxDim = REPLICATE_MAX_DIM) {
+  const meta = await sharp(inputBuf, { failOn: 'none' }).metadata();
+  const w = meta.width || 0;
+  const h = meta.height || 0;
+  if (!w || !h) {
+    throw new Error('Could not read image dimensions');
+  }
+
+  // If already small enough, just snap to multiple of 8 if needed
+  if (w <= maxDim && h <= maxDim && w % 8 === 0 && h % 8 === 0) {
+    return { buffer: inputBuf, resized: false, originalDims: { w, h }, newDims: { w, h } };
+  }
+
+  // Scale down proportionally so longest side = maxDim, then snap to multiple of 8
+  const scale = Math.min(maxDim / w, maxDim / h, 1);
+  const newW = Math.max(8, Math.floor((w * scale) / 8) * 8);
+  const newH = Math.max(8, Math.floor((h * scale) / 8) * 8);
+
+  const resized = await sharp(inputBuf, { failOn: 'none' })
+    .resize(newW, newH, { fit: 'fill' })
+    .png({ compressionLevel: 6 })
+    .toBuffer();
+
+  return {
+    buffer: resized,
+    resized: true,
+    originalDims: { w, h },
+    newDims: { w: newW, h: newH },
+  };
+}
+
 // Helper: poll a Replicate prediction until it's succeeded/failed/canceled.
 // Replicate predictions have an `urls.get` field — fetch it every 2s.
-async function pollPrediction(predictionUrl, { timeoutMs = 120000, intervalMs = 2000 } = {}) {
+async function pollPrediction(predictionUrl, { timeoutMs = 180000, intervalMs = 2000 } = {}) {
   const start = Date.now();
+  let lastStatus = null;
   while (Date.now() - start < timeoutMs) {
     const res = await fetch(predictionUrl, {
       headers: { Authorization: `Token ${REPLICATE_API_TOKEN}` },
@@ -57,13 +101,37 @@ async function pollPrediction(predictionUrl, { timeoutMs = 120000, intervalMs = 
       throw new Error(`Replicate poll failed (${res.status}): ${body.slice(0, 200)}`);
     }
     const data = await res.json();
+    lastStatus = data.status;
     if (data.status === 'succeeded') return data;
     if (data.status === 'failed' || data.status === 'canceled') {
-      throw new Error(data.error || `Replicate prediction ${data.status}`);
+      // Surface the actual Replicate error so we can show something useful
+      const replicateError = data.error || `Replicate prediction ${data.status}`;
+      const err = new Error(replicateError);
+      err.replicateLogs = data.logs;
+      throw err;
     }
     await new Promise((r) => setTimeout(r, intervalMs));
   }
-  throw new Error('Replicate prediction timed out (2 min)');
+  throw new Error(`Replicate prediction timed out (3 min). Last status: ${lastStatus || 'unknown'}`);
+}
+
+// Translate raw Replicate errors into actionable advice for the user
+function humanizeReplicateError(rawError) {
+  if (!rawError) return 'Unknown error';
+  const e = String(rawError).toLowerCase();
+  if (e.includes('out of memory') || e.includes('cuda') || e.includes('oom')) {
+    return 'The Replicate GPU ran out of memory for that image. Try again — the backend now auto-resizes large images, so a retry should work.';
+  }
+  if (e.includes('timed out') || e.includes('timeout')) {
+    return 'Replicate took too long to respond. The model may be cold-starting (first request after idle) — try again in 30 seconds.';
+  }
+  if (e.includes('insufficient') || e.includes('billing') || e.includes('credit')) {
+    return 'Out of Replicate credits. Top up at replicate.com → Account → Billing.';
+  }
+  if (e.includes('unauthorized') || e.includes('401') || e.includes('invalid token')) {
+    return 'Replicate token is invalid. Check REPLICATE_API_TOKEN on Render.';
+  }
+  return rawError.length > 200 ? rawError.slice(0, 200) + '…' : rawError;
 }
 
 // Get the latest version hash for a model so we don't have to hardcode them
@@ -169,12 +237,29 @@ router.post('/clean', async (req, res) => {
   const useSteps = Number.isInteger(steps) ? Math.max(1, Math.min(150, steps)) : modelCfg.defaultSteps;
 
   let cleanedBuf;
+  let resizeInfo = null;
   try {
+    // 0. RESIZE: scale down to <= 1024px on longest side so the GPU doesn't OOM.
+    // SD 1.5 is trained at 512×512 and memory usage is O(n²) in resolution.
+    // A 2000+px image triggers CUDA OOM. 1024px is the sweet spot.
+    resizeInfo = await resizeForReplicate(inputBuf, REPLICATE_MAX_DIM);
+    const replicateInputBuf = resizeInfo.buffer;
+    const replicateInputDataUrl = `data:image/png;base64,${replicateInputBuf.toString('base64')}`;
+
+    if (resizeInfo.resized) {
+      console.log(`[image-cleaner] resized ${resizeInfo.originalDims.w}×${resizeInfo.originalDims.h} → ${resizeInfo.newDims.w}×${resizeInfo.newDims.h}`);
+    }
+
     // 1. Resolve the latest model version on Replicate
     const versionId = await getLatestModelVersion(modelCfg.owner, modelCfg.name);
 
     // 2. Submit an img2img prediction. Replicate accepts base64 data URLs as
     //    input.image, so we never expose a public URL of the user's image.
+    //
+    // Asiryan's SD model family (dreamshaper-v8, realistic-vision-v6.0-b1)
+    // expects these input field names: `image`, `prompt`, `strength` (NOT
+    // prompt_strength), `num_inference_steps`, `guidance_scale`. The model
+    // auto-detects img2img mode when an image is provided.
     const submitRes = await fetch(`${REPLICATE_BASE}/predictions`, {
       method: 'POST',
       headers: {
@@ -184,14 +269,11 @@ router.post('/clean', async (req, res) => {
       body: JSON.stringify({
         version: versionId,
         input: {
-          image: image_data_url,
+          image: replicateInputDataUrl,
           prompt: modelCfg.prompt,
-          // SD-img2img input names. Most SD-img2img models on Replicate use:
-          // `prompt_strength` (a.k.a. denoising strength) and `num_inference_steps`.
-          prompt_strength: useStrength,
+          strength: useStrength,
           num_inference_steps: useSteps,
           guidance_scale: 7.5,
-          // Don't pass `negative_prompt` — some models reject unknown inputs.
         },
       }),
     });
@@ -200,7 +282,7 @@ router.post('/clean', async (req, res) => {
       console.error('[image-cleaner] Replicate submit failed:', submitRes.status, body.slice(0, 500));
       let msg = 'Replicate rejected the request.';
       try { msg = JSON.parse(body).detail || msg; } catch {}
-      return res.status(submitRes.status).json({ error: msg });
+      return res.status(submitRes.status).json({ error: humanizeReplicateError(msg) });
     }
     const prediction = await submitRes.json();
 
@@ -217,7 +299,7 @@ router.post('/clean', async (req, res) => {
     cleanedBuf = await downloadToBuffer(outputUrls[0]);
   } catch (err) {
     console.error('[image-cleaner] diffusion failed:', err.message);
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: humanizeReplicateError(err.message) });
   }
 
   // 5. Strip metadata from the cleaned image (some models add their own)
@@ -231,7 +313,15 @@ router.post('/clean', async (req, res) => {
   }
 
   const cleanedDataUrl = `data:${mimeType};base64,${final.toString('base64')}`;
-  res.json({ cleaned_data_url: cleanedDataUrl, mode: 'diffusion', strength: useStrength, steps: useSteps });
+  res.json({
+    cleaned_data_url: cleanedDataUrl,
+    mode: 'diffusion',
+    strength: useStrength,
+    steps: useSteps,
+    resized: resizeInfo?.resized || false,
+    original_dims: resizeInfo?.originalDims || null,
+    new_dims: resizeInfo?.newDims || null,
+  });
 });
 
 module.exports = router;
