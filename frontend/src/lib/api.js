@@ -186,4 +186,9 @@ export const api = {
   deleteLesson: (id) => request(`/api/lessons/${id}`, { method: 'DELETE' }),
   uploadLessonThumbnail: (id, image_data_url) =>
     request(`/api/lessons/${id}/thumbnail`, { method: 'POST', body: JSON.stringify({ image_data_url }) }),
+
+  // AI Image Cleaner
+  getImageCleanerModels: () => request('/api/image-cleaner/models'),
+  cleanImage: (body) =>
+    request('/api/image-cleaner/clean', { method: 'POST', body: JSON.stringify(body) }),
 };

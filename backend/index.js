@@ -16,6 +16,7 @@ const settingsRouter = require('./routes/settings');
 const dailyTasksRouter = require('./routes/dailyTasks');
 const guidesRouter = require('./routes/guides');
 const lessonsRouter = require('./routes/lessons');
+const imageCleanerRouter = require('./routes/imageCleaner');
 const { runMyAccountsFetch } = require('./services/myAccountsService');
 const { generateDailyTasks, cleanupOldDailyTasks } = require('./services/dailyTasksService');
 
@@ -42,7 +43,7 @@ app.use(cors({
   },
   credentials: true,
 }));
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '15mb' }));
 
 // Health check endpoint — exempt from rate limiting (used by UptimeRobot to keep the dyno awake)
 app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date() }));
@@ -68,6 +69,7 @@ app.use('/api/settings', settingsRouter);
 app.use('/api/daily-tasks', dailyTasksRouter);
 app.use('/api/guides', guidesRouter);
 app.use('/api/lessons', lessonsRouter);
+app.use('/api/image-cleaner', imageCleanerRouter);
 
 // Competitor reels fetch is now MANUAL only.
 // Use the "Fetch Now" button on the dashboard (whole list) or the 🔄 button
