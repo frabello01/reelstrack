@@ -21,6 +21,7 @@ import GuideDetailPage from './pages/GuideDetailPage';
 import LessonsPage from './pages/LessonsPage';
 import LessonDetailPage from './pages/LessonDetailPage';
 import ImageCleanerPage from './pages/ImageCleanerPage';
+import CharactersPage from './pages/CharactersPage';
 import Layout from './components/Layout';
 import './index.css';
 
@@ -62,6 +63,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="lessons" element={<LessonsPage />} />
             <Route path="lessons/:id" element={<LessonDetailPage />} />
             <Route path="image-cleaner" element={<ImageCleanerPage />} />
+            <Route path="characters" element={<CharactersPage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>
         </Routes>

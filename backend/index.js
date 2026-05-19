@@ -17,6 +17,7 @@ const dailyTasksRouter = require('./routes/dailyTasks');
 const guidesRouter = require('./routes/guides');
 const lessonsRouter = require('./routes/lessons');
 const imageCleanerRouter = require('./routes/imageCleaner');
+const higgsfieldRouter = require('./routes/higgsfield');
 const { runMyAccountsFetch } = require('./services/myAccountsService');
 const { generateDailyTasks, cleanupOldDailyTasks } = require('./services/dailyTasksService');
 
@@ -70,6 +71,7 @@ app.use('/api/daily-tasks', dailyTasksRouter);
 app.use('/api/guides', guidesRouter);
 app.use('/api/lessons', lessonsRouter);
 app.use('/api/image-cleaner', imageCleanerRouter);
+app.use('/api/higgsfield', higgsfieldRouter);
 
 // Competitor reels fetch is now MANUAL only.
 // Use the "Fetch Now" button on the dashboard (whole list) or the 🔄 button

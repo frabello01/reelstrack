@@ -191,4 +191,17 @@ export const api = {
   getImageCleanerModels: () => request('/api/image-cleaner/models'),
   cleanImage: (body) =>
     request('/api/image-cleaner/clean', { method: 'POST', body: JSON.stringify(body) }),
+
+  // Higgsfield Characters
+  getHiggsfieldStatus: () => request('/api/higgsfield/status'),
+  getHiggsfieldCharacters: () => request('/api/higgsfield/characters'),
+  getHiggsfieldStyles: () => request('/api/higgsfield/styles'),
+  generateCharacterImage: (body) =>
+    request('/api/higgsfield/generate', { method: 'POST', body: JSON.stringify(body) }),
+  getCharacterGenerations: (soul_id) => {
+    const q = soul_id ? `?soul_id=${encodeURIComponent(soul_id)}` : '';
+    return request(`/api/higgsfield/generations${q}`);
+  },
+  deleteCharacterGeneration: (id) =>
+    request(`/api/higgsfield/generations/${id}`, { method: 'DELETE' }),
 };
