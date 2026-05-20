@@ -5,6 +5,7 @@ import {
   Info, Upload, Clock, GraduationCap
 } from 'lucide-react';
 import { api } from '../lib/api';
+import { supabase } from '../lib/supabase';
 import './CharactersPage.css';
 
 const ASPECT_RATIO_OPTIONS = [
@@ -544,16 +545,51 @@ function TrainCharacterModal({ onClose, onTrained }) {
     if (photos.length < 10) return setError(`Need at least 10 photos (you have ${photos.length})`);
 
     setStep('uploading');
-    setProgress(`Uploading ${photos.length} photos to your server…`);
+    setProgress(`Uploading 0/${photos.length} photos…`);
 
     try {
-      const payload = {
+      // Upload each photo DIRECTLY to Supabase Storage from the browser.
+      // This bypasses Render's request-size limit entirely.
+      const folder = `training/${Date.now()}-${name.trim().replace(/[^a-z0-9]/gi, '-').toLowerCase().slice(0, 40)}`;
+      const uploadedUrls = [];
+
+      // Upload in parallel batches of 5 for speed without overwhelming the connection
+      const BATCH_SIZE = 5;
+      for (let batchStart = 0; batchStart < photos.length; batchStart += BATCH_SIZE) {
+        const batch = photos.slice(batchStart, batchStart + BATCH_SIZE);
+        const batchResults = await Promise.all(
+          batch.map(async (photo, idx) => {
+            const i = batchStart + idx;
+            const ext = photo.file.type.includes('png') ? 'png'
+                       : photo.file.type.includes('webp') ? 'webp'
+                       : 'jpg';
+            const path = `${folder}/${String(i + 1).padStart(3, '0')}.${ext}`;
+            const { error: upErr } = await supabase.storage
+              .from('training-photos')
+              .upload(path, photo.file, {
+                contentType: photo.file.type || 'image/jpeg',
+                cacheControl: '604800',
+                upsert: false,
+              });
+            if (upErr) throw new Error(`Upload ${i + 1} failed: ${upErr.message}`);
+
+            const { data: pub } = supabase.storage.from('training-photos').getPublicUrl(path);
+            if (!pub?.publicUrl) throw new Error(`No public URL for photo ${i + 1}`);
+            return pub.publicUrl;
+          })
+        );
+        uploadedUrls.push(...batchResults);
+        setProgress(`Uploaded ${uploadedUrls.length}/${photos.length} photos…`);
+      }
+
+      // All uploaded — now tell the backend to submit URLs to Higgsfield
+      setProgress(`Submitting to Higgsfield for training…`);
+      const response = await api.trainHiggsfieldCharacter({
         name: name.trim(),
-        photos: photos.map((p) => ({ data_url: p.dataUrl })),
-      };
-      const response = await api.trainHiggsfieldCharacter(payload);
+        image_urls: uploadedUrls,
+      });
       setResult(response);
-      setProgress('Training submitted to Higgsfield. This takes ~3-5 minutes.');
+      setProgress('Training submitted. Higgsfield will train your character in ~3-5 min.');
       setStep('done');
     } catch (err) {
       setError(err.message || 'Training failed');

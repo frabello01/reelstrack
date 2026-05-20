@@ -44,7 +44,7 @@ app.use(cors({
   },
   credentials: true,
 }));
-app.use(express.json({ limit: '100mb' }));
+app.use(express.json({ limit: '15mb' }));
 
 // Health check endpoint — exempt from rate limiting (used by UptimeRobot to keep the dyno awake)
 app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date() }));

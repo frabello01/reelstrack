@@ -278,76 +278,38 @@ router.post('/api-characters', async (req, res) => {
   }
 });
 
-// POST /api/higgsfield/train-character — full training flow:
-// 1) Accept photos (base64), upload to Supabase Storage
-// 2) Get their public URLs
-// 3) Submit URLs to Higgsfield's /v1/custom-references
-// 4) Return the new Soul ID + status
-//
-// Body: { name: string, photos: [{ data_url: "data:image/jpeg;base64,..." }] }
-const TRAINING_BUCKET = 'training-photos';
+// POST /api/higgsfield/train-character
+// Body: { name: string, image_urls: string[] }
+// (The browser uploads photos directly to Supabase Storage first,
+//  then sends only the URLs here.)
 router.post('/train-character', async (req, res) => {
-  const { name, photos } = req.body || {};
+  const { name, image_urls } = req.body || {};
   if (!name?.trim()) return res.status(400).json({ error: 'name is required' });
-  if (!Array.isArray(photos) || photos.length === 0) {
-    return res.status(400).json({ error: 'photos array is required' });
+  if (!Array.isArray(image_urls) || image_urls.length === 0) {
+    return res.status(400).json({ error: 'image_urls array is required' });
   }
-  if (photos.length < 10) {
-    return res.status(400).json({ error: `Need at least 10 photos for good training (you sent ${photos.length})` });
+  if (image_urls.length < 10) {
+    return res.status(400).json({ error: `Need at least 10 photos for good training (you sent ${image_urls.length})` });
   }
-  if (photos.length > 100) {
+  if (image_urls.length > 100) {
     return res.status(400).json({ error: 'Max 100 photos' });
   }
   if (!KEY_ID || !KEY_SECRET) {
     return res.status(503).json({ error: 'Higgsfield env vars not set' });
   }
 
-  console.log(`[higgsfield] train-character: name="${name}", ${photos.length} photos`);
-
-  // Step 1: Upload each photo to Supabase Storage
-  const folder = `training/${Date.now()}-${name.trim().replace(/[^a-z0-9]/gi, '-').toLowerCase().slice(0, 40)}`;
-  const uploadedUrls = [];
-  for (let i = 0; i < photos.length; i++) {
-    const photo = photos[i];
-    let dataUrl = photo?.data_url || photo;
-    if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) {
-      return res.status(400).json({ error: `Photo ${i + 1} is not a valid data URL` });
+  // Validate URLs
+  for (let i = 0; i < image_urls.length; i++) {
+    const url = image_urls[i];
+    if (typeof url !== 'string' || !url.startsWith('http')) {
+      return res.status(400).json({ error: `image_urls[${i}] must be a valid http(s) URL` });
     }
-    // Parse "data:image/jpeg;base64,XXXX"
-    const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
-    if (!match) return res.status(400).json({ error: `Photo ${i + 1} has invalid format` });
-    const contentType = match[1];
-    const base64 = match[2];
-    const buf = Buffer.from(base64, 'base64');
-
-    if (buf.length > 10 * 1024 * 1024) {
-      return res.status(400).json({ error: `Photo ${i + 1} is over 10MB — please resize before uploading` });
-    }
-
-    const ext = contentType.includes('png') ? 'png' : contentType.includes('webp') ? 'webp' : 'jpg';
-    const path = `${folder}/${String(i + 1).padStart(3, '0')}.${ext}`;
-
-    const { error: upErr } = await supabase.storage
-      .from(TRAINING_BUCKET)
-      .upload(path, buf, { contentType, cacheControl: '604800', upsert: false });
-    if (upErr) {
-      console.error(`[higgsfield] upload ${i + 1} failed:`, upErr.message);
-      return res.status(500).json({
-        error: `Failed to upload photo ${i + 1}: ${upErr.message}. Make sure the "training-photos" Supabase bucket exists and is public.`,
-      });
-    }
-
-    const { data: pub } = supabase.storage.from(TRAINING_BUCKET).getPublicUrl(path);
-    if (!pub?.publicUrl) {
-      return res.status(500).json({ error: `Could not get public URL for photo ${i + 1}` });
-    }
-    uploadedUrls.push(pub.publicUrl);
   }
 
-  console.log(`[higgsfield] uploaded ${uploadedUrls.length} photos to ${folder}`);
+  console.log(`[higgsfield] train-character: name="${name}", ${image_urls.length} pre-uploaded URLs`);
 
-  // Step 2: Submit to Higgsfield
-  const input_images = uploadedUrls.map((url) => ({ type: 'image_url', image_url: url }));
+  // Submit to Higgsfield
+  const input_images = image_urls.map((url) => ({ type: 'image_url', image_url: url }));
   const { ok, status, body } = await hfFetch('/v1/custom-references', {
     method: 'POST',
     body: {
@@ -360,27 +322,24 @@ router.post('/train-character', async (req, res) => {
     return res.status(status || 502).json({
       error: extractErrorMessage(body, status),
       details: body,
-      uploaded_urls: uploadedUrls,
     });
   }
 
   console.log(`[higgsfield] training submitted: id=${body.id}, status=${body.status}`);
 
-  // Step 3: Also save a row in our local `characters` table so the new soul ID
-  //         shows up in the picker immediately. Status updates as training progresses.
+  // Save to local registry so it appears in the grid immediately
   const { data: charRow, error: charErr } = await supabase
     .from('characters')
     .insert({
       soul_id: body.id,
       name: body.name || name.trim(),
       thumbnail_url: body.thumbnail_url || null,
-      notes: `Training started ${new Date().toISOString().slice(0, 10)} — ${uploadedUrls.length} photos`,
+      notes: `Training started ${new Date().toISOString().slice(0, 10)} — ${image_urls.length} photos`,
     })
     .select()
     .single();
   if (charErr) {
     console.warn('[higgsfield] could not save to local registry:', charErr.message);
-    // Not fatal — the Soul ID exists on Higgsfield, user can still use it
   }
 
   res.json({
@@ -390,7 +349,7 @@ router.post('/train-character', async (req, res) => {
     thumbnail_url: body.thumbnail_url,
     created_at: body.created_at,
     in_progress_at: body.in_progress_at,
-    photos_uploaded: uploadedUrls.length,
+    photos_uploaded: image_urls.length,
     local_character: charRow ? {
       internal_id: charRow.id,
       id: charRow.soul_id,
