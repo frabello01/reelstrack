@@ -212,7 +212,7 @@ export const api = {
   cleanImage: (body) =>
     request('/api/image-cleaner/clean', { method: 'POST', body: JSON.stringify(body) }),
 
-  // Higgsfield Characters
+  // Higgsfield Characters — local registry
   getHiggsfieldStatus: () => request('/api/higgsfield/status'),
   getHiggsfieldCharacters: () => request('/api/higgsfield/characters'),
   addHiggsfieldCharacter: (body) =>
@@ -221,6 +221,13 @@ export const api = {
     request(`/api/higgsfield/characters/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   deleteHiggsfieldCharacter: (id) =>
     request(`/api/higgsfield/characters/${id}`, { method: 'DELETE' }),
+
+  // Higgsfield Characters — real API (Soul IDs trained via Higgsfield)
+  getHiggsfieldApiCharacters: () => request('/api/higgsfield/api-characters'),
+  getHiggsfieldCharacterStatus: (id) => request(`/api/higgsfield/api-characters/${id}`),
+  trainHiggsfieldCharacter: (body) =>
+    request('/api/higgsfield/train-character', { method: 'POST', body: JSON.stringify(body) }),
+
   getHiggsfieldStyles: () => request('/api/higgsfield/styles'),
   generateCharacterImage: (body) =>
     request('/api/higgsfield/generate', { method: 'POST', body: JSON.stringify(body) }),

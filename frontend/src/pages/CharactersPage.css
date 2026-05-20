@@ -667,3 +667,143 @@
   gap: 8px;
   margin-top: 4px;
 }
+
+/* ===== Training modal additions ===== */
+.char-modal-wide { max-width: 700px; }
+
+.char-add-btn-secondary {
+  background: rgba(255,255,255,0.04);
+  border-color: rgba(255,255,255,0.12);
+  color: rgba(255,255,255,0.7);
+}
+.char-add-btn-secondary:hover {
+  background: rgba(255,255,255,0.08);
+  color: white;
+}
+
+/* Status badge on character tile */
+.char-tile-status {
+  position: absolute;
+  bottom: 28px;
+  left: 4px;
+  right: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #0d0d10;
+  background: #fbbf24;
+  padding: 3px 8px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  z-index: 4;
+}
+
+.char-tile-wrap.not-ready .char-tile {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+/* Training dropzone */
+.train-dropzone {
+  border: 2px dashed rgba(167,139,250,0.3);
+  border-radius: 10px;
+  background: rgba(167,139,250,0.04);
+  padding: 28px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.15s;
+  color: rgba(255,255,255,0.75);
+}
+.train-dropzone:hover {
+  border-color: rgba(167,139,250,0.6);
+  background: rgba(167,139,250,0.08);
+}
+.train-dropzone svg {
+  color: rgba(167,139,250,0.6);
+  margin-bottom: 8px;
+}
+.train-dropzone strong {
+  display: block;
+  color: white;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+.train-dropzone p {
+  margin: 0;
+  font-size: 11px;
+  color: rgba(255,255,255,0.5);
+  line-height: 1.5;
+}
+
+/* Photo preview grid */
+.train-photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+  gap: 6px;
+  margin-top: 10px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.train-photo-thumb {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 5px;
+  overflow: hidden;
+  background: #000;
+}
+.train-photo-thumb img {
+  width: 100%; height: 100%; object-fit: cover;
+}
+.train-photo-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.8);
+  border: none;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.train-photo-remove:hover { background: #f87171; }
+
+/* Training in progress / done */
+.train-progress {
+  text-align: center;
+  padding: 28px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.train-progress h4 {
+  margin: 4px 0;
+  color: white;
+  font-family: 'Syne', sans-serif;
+  font-size: 17px;
+}
+.train-progress p {
+  margin: 0;
+  color: rgba(255,255,255,0.75);
+  line-height: 1.5;
+  font-size: 13px;
+  max-width: 440px;
+}
+.train-progress code {
+  background: rgba(0,0,0,0.4);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  color: #c4b5fd;
+}
