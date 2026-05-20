@@ -86,7 +86,8 @@ export default function CharactersPage() {
   const [aspectRatio, setAspectRatio] = useState('9:16');
   const [resolution, setResolution] = useState('1080p');
   const [batchSize, setBatchSize] = useState(1);
-  const [enhancePrompt, setEnhancePrompt] = useState(false);
+  const [enhancePrompt, setEnhancePrompt] = useState(true);          // UI default
+  const [referenceStrength, setReferenceStrength] = useState(1.0);   // UI default
   const [seed, setSeed] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -188,6 +189,7 @@ export default function CharactersPage() {
         resolution,
         batch_size: batchSize,
         enhance_prompt: enhancePrompt,
+        custom_reference_strength: referenceStrength,
       };
       if (seed) body.seed = parseInt(seed, 10);
 
@@ -387,15 +389,19 @@ export default function CharactersPage() {
             <div className="char-form-row">
               <div className="char-form-cell">
                 <label>
-                  <input
-                    type="checkbox"
-                    checked={enhancePrompt}
-                    onChange={(e) => setEnhancePrompt(e.target.checked)}
-                    disabled={generating}
-                    style={{ marginRight: 6 }}
-                  />
-                  Enhance prompt (let Higgsfield rewrite it)
+                  Character likeness: <strong>{referenceStrength.toFixed(2)}</strong>
+                  {referenceStrength >= 0.9 && <span style={{ color: '#4ade80', marginLeft: 6 }}>strong</span>}
+                  {referenceStrength < 0.7 && <span style={{ color: '#fbbf24', marginLeft: 6 }}>loose</span>}
                 </label>
+                <input
+                  type="range"
+                  min="0.3"
+                  max="1.0"
+                  step="0.05"
+                  value={referenceStrength}
+                  onChange={(e) => setReferenceStrength(parseFloat(e.target.value))}
+                  disabled={generating}
+                />
               </div>
               <div className="char-form-cell">
                 <label>Seed (optional)</label>
@@ -408,9 +414,26 @@ export default function CharactersPage() {
                 />
               </div>
             </div>
+            <div className="char-form-row">
+              <div className="char-form-cell" style={{ gridColumn: '1 / -1' }}>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={enhancePrompt}
+                    onChange={(e) => setEnhancePrompt(e.target.checked)}
+                    disabled={generating}
+                    style={{ marginRight: 6 }}
+                  />
+                  Enhance prompt (recommended — Higgsfield rewrites your prompt for better results)
+                </label>
+              </div>
+            </div>
             <p className="char-hint">
-              <strong>Enhance prompt</strong>: Higgsfield rewrites your prompt to add detail. Off by default.
-              <br />
+              <strong>Character likeness</strong>: <code>1.0</code> = strictly faithful to trained character (matches the Higgsfield UI default).
+              Lower values give the model more freedom but reduce resemblance. If your character looks off, push this back up to 1.0.
+              <br/>
+              <strong>Enhance prompt</strong>: ON by default — Higgsfield expands your prompt with detail. Turn off only if you want literal interpretation.
+              <br/>
               <strong>Seed</strong>: pin a number for reproducible results. Leave blank for variation.
             </p>
           </div>

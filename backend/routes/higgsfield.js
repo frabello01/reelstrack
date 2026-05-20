@@ -390,7 +390,9 @@ router.post('/generate', async (req, res) => {
     aspect_ratio = '9:16',
     resolution = '1080p',
     batch_size = 1,
-    enhance_prompt = false,
+    enhance_prompt = true,                  // UI default is true
+    custom_reference_strength = 1.0,        // UI default is high
+    style_id,                                // optional style preset
     seed,
   } = req.body || {};
 
@@ -399,19 +401,19 @@ router.post('/generate', async (req, res) => {
   if (!KEY_ID || !KEY_SECRET) return res.status(503).json({ error: 'Higgsfield env vars not set' });
 
   const safeBatch = Math.max(1, Math.min(4, parseInt(batch_size, 10) || 1));
+  const safeStrength = Math.max(0, Math.min(1, parseFloat(custom_reference_strength) || 1.0));
 
-  // Pre-create row so we have an ID to attach storage paths to
-  // Note: existing schema uses `quality` + `size` columns; we map the new fields onto them.
   const { data: gen, error: insertErr } = await supabase
     .from('higgsfield_generations')
     .insert({
       soul_id,
       soul_name: soul_name || null,
+      style_id: style_id || null,
       prompt: prompt.trim(),
-      quality: resolution,           // maps "1080p" / "720p" into legacy `quality` column
-      size: aspect_ratio,            // maps "9:16" etc into legacy `size` column
+      quality: resolution,
+      size: aspect_ratio,
       batch_size: safeBatch,
-      custom_reference_strength: 1.0,
+      custom_reference_strength: safeStrength,
       seed: seed ? parseInt(seed, 10) : null,
       status: 'pending',
     })
@@ -419,7 +421,7 @@ router.post('/generate', async (req, res) => {
     .single();
   if (insertErr) return res.status(500).json({ error: `DB error: ${insertErr.message}` });
 
-  // The body for Higgsfield — FLAT, no params wrapper
+  // Body sent to Higgsfield — now includes strength, style, enhance
   const reqBody = {
     prompt: prompt.trim(),
     batch_size: safeBatch,
@@ -427,7 +429,9 @@ router.post('/generate', async (req, res) => {
     aspect_ratio,
     enhance_prompt: !!enhance_prompt,
     custom_reference_id: soul_id,
+    custom_reference_strength: safeStrength,
   };
+  if (style_id) reqBody.style_id = style_id;
   if (gen.seed !== null && gen.seed !== undefined) reqBody.seed = gen.seed;
 
   const startedAt = Date.now();
