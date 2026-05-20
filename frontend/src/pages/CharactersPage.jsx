@@ -7,23 +7,16 @@ import {
 import { api } from '../lib/api';
 import './CharactersPage.css';
 
-const SIZE_OPTIONS = [
-  // Portrait (vertical) — best for IG feed & Stories
-  { value: '1152x2048', label: 'Stories 9:16 (1152×2048)', description: 'Vertical for stories/reels' },
-  { value: '1536x2048', label: 'Portrait 3:4 (1536×2048)', description: 'IG feed portrait' },
-  { value: '1120x1680', label: 'Portrait 2:3 (1120×1680)', description: 'Classic portrait' },
-  { value: '1088x1632', label: 'Portrait 2:3 (1088×1632)', description: 'Lighter portrait' },
-  // Square
-  { value: '1536x1536', label: 'Square 1:1 (1536×1536)', description: 'Profile pics, posts' },
-  { value: '2048x2048', label: 'Square HQ 1:1 (2048×2048)', description: 'High-quality square' },
-  // Landscape (horizontal)
-  { value: '2048x1536', label: 'Landscape 4:3 (2048×1536)', description: 'Wide shots' },
-  { value: '2048x1152', label: 'Landscape 16:9 (2048×1152)', description: 'Cinematic horizontal' },
-  { value: '1680x1120', label: 'Landscape 3:2 (1680×1120)', description: 'Classic horizontal' },
+const ASPECT_RATIO_OPTIONS = [
+  { value: '9:16', label: 'Stories 9:16 (vertical)' },
+  { value: '3:4', label: 'Portrait 3:4 (IG feed)' },
+  { value: '1:1', label: 'Square 1:1' },
+  { value: '4:3', label: 'Landscape 4:3' },
+  { value: '16:9', label: 'Cinematic 16:9' },
 ];
 
-const QUALITY_OPTIONS = [
-  { value: '1080p', label: 'HD (1080p — best quality)' },
+const RESOLUTION_OPTIONS = [
+  { value: '1080p', label: 'HD (1080p — best)' },
   { value: '720p', label: 'Standard (720p — faster)' },
 ];
 
@@ -62,10 +55,10 @@ export default function CharactersPage() {
   // Form state
   const [selectedSoul, setSelectedSoul] = useState(null);
   const [prompt, setPrompt] = useState('');
-  const [size, setSize] = useState('1536x2048');
-  const [quality, setQuality] = useState('1080p');
+  const [aspectRatio, setAspectRatio] = useState('9:16');
+  const [resolution, setResolution] = useState('1080p');
   const [batchSize, setBatchSize] = useState(1);
-  const [strength, setStrength] = useState(1.0);
+  const [enhancePrompt, setEnhancePrompt] = useState(false);
   const [seed, setSeed] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -120,10 +113,10 @@ export default function CharactersPage() {
         soul_id: selectedSoul.id,
         soul_name: selectedSoul.name,
         prompt: prompt.trim(),
-        size,
-        quality,
+        aspect_ratio: aspectRatio,
+        resolution,
         batch_size: batchSize,
-        strength,
+        enhance_prompt: enhancePrompt,
       };
       if (seed) body.seed = parseInt(seed, 10);
 
@@ -275,17 +268,17 @@ export default function CharactersPage() {
         {/* Quick settings */}
         <div className="char-form-row">
           <div className="char-form-cell">
-            <label>Size</label>
-            <select value={size} onChange={(e) => setSize(e.target.value)} disabled={generating}>
-              {SIZE_OPTIONS.map((s) => (
+            <label>Aspect ratio</label>
+            <select value={aspectRatio} onChange={(e) => setAspectRatio(e.target.value)} disabled={generating}>
+              {ASPECT_RATIO_OPTIONS.map((s) => (
                 <option key={s.value} value={s.value}>{s.label}</option>
               ))}
             </select>
           </div>
           <div className="char-form-cell">
-            <label>Quality</label>
-            <select value={quality} onChange={(e) => setQuality(e.target.value)} disabled={generating}>
-              {QUALITY_OPTIONS.map((q) => (
+            <label>Resolution</label>
+            <select value={resolution} onChange={(e) => setResolution(e.target.value)} disabled={generating}>
+              {RESOLUTION_OPTIONS.map((q) => (
                 <option key={q.value} value={q.value}>{q.label}</option>
               ))}
             </select>
@@ -313,16 +306,16 @@ export default function CharactersPage() {
           <div className="char-advanced">
             <div className="char-form-row">
               <div className="char-form-cell">
-                <label>Character likeness strength: <strong>{strength.toFixed(2)}</strong></label>
-                <input
-                  type="range"
-                  min="0.5"
-                  max="1.0"
-                  step="0.05"
-                  value={strength}
-                  onChange={(e) => setStrength(parseFloat(e.target.value))}
-                  disabled={generating}
-                />
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={enhancePrompt}
+                    onChange={(e) => setEnhancePrompt(e.target.checked)}
+                    disabled={generating}
+                    style={{ marginRight: 6 }}
+                  />
+                  Enhance prompt (let Higgsfield rewrite it)
+                </label>
               </div>
               <div className="char-form-cell">
                 <label>Seed (optional)</label>
@@ -336,8 +329,9 @@ export default function CharactersPage() {
               </div>
             </div>
             <p className="char-hint">
-              Higher strength = more faithful to the trained character. Lower strength gives the model more freedom.
-              Use a specific seed to reproduce the same image; leave blank for variation.
+              <strong>Enhance prompt</strong>: Higgsfield rewrites your prompt to add detail. Off by default to keep your intent exact.
+              <br/>
+              <strong>Seed</strong>: pin a number to reproduce the same image; leave blank for variation.
             </p>
           </div>
         )}

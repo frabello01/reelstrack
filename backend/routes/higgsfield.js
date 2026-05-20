@@ -5,21 +5,21 @@ const supabase = require('../lib/supabase');
 const KEY_ID = process.env.HIGGSFIELD_KEY_ID;
 const KEY_SECRET = process.env.HIGGSFIELD_KEY_SECRET;
 const BASE_URL = process.env.HIGGSFIELD_BASE_URL || 'https://platform.higgsfield.ai';
+const MODEL_ID = process.env.HIGGSFIELD_MODEL_ID || 'higgsfield-ai/soul/v2/standard';
 const GENERATED_BUCKET = 'generated-images';
 
-// UUID validation — Higgsfield Soul IDs are standard UUIDs
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // ============================================================
-// HTTP CLIENT
+// HTTP CLIENT — uses hf-api-key + hf-secret headers (NOT Authorization)
 // ============================================================
 function authHeaders() {
   if (!KEY_ID || !KEY_SECRET) {
     throw new Error('Higgsfield is not configured — set HIGGSFIELD_KEY_ID and HIGGSFIELD_KEY_SECRET on Render');
   }
   return {
-    Authorization: `Key ${KEY_ID}:${KEY_SECRET}`,
-    'User-Agent': 'higgsfield-server-js/2.0',
+    'hf-api-key': KEY_ID,
+    'hf-secret': KEY_SECRET,
     'Content-Type': 'application/json',
     Accept: 'application/json',
   };
@@ -42,10 +42,23 @@ async function hfFetch(path, options = {}) {
   return { ok: res.ok, status: res.status, body: parsed };
 }
 
+function extractErrorMessage(body, status) {
+  if (typeof body?.error === 'string') return body.error;
+  if (typeof body?.message === 'string') return body.message;
+  if (typeof body?.detail === 'string') return body.detail;
+  if (Array.isArray(body?.detail)) {
+    return body.detail.map((d) => {
+      const loc = Array.isArray(d.loc) ? d.loc.join('.') : '';
+      return `${loc}: ${d.msg || JSON.stringify(d)}`;
+    }).join('; ');
+  }
+  if (body) return JSON.stringify(body).slice(0, 500);
+  return `HTTP ${status}`;
+}
+
 // ============================================================
 // HELPERS
 // ============================================================
-
 async function mirrorImageToStorage(remoteUrl, generationId, index) {
   const res = await fetch(remoteUrl);
   if (!res.ok) throw new Error(`Could not download from Higgsfield (${res.status})`);
@@ -64,30 +77,23 @@ async function mirrorImageToStorage(remoteUrl, generationId, index) {
   return pub.publicUrl;
 }
 
-// Poll a request until terminal status (or timeout)
-async function pollRequest(requestId, { maxMs = 5 * 60 * 1000, intervalMs = 2000 } = {}) {
+// Poll the documented status endpoint: GET /requests/{request_id}/status
+async function pollRequest(requestId, statusUrl, { maxMs = 5 * 60 * 1000, intervalMs = 2000 } = {}) {
   const started = Date.now();
-  const statusPaths = [
-    `/v1/requests/${requestId}/status`,
-    `/requests/${requestId}/status`,
-  ];
+  // Prefer the status_url Higgsfield gave us, fall back to constructed path
+  const path = statusUrl
+    ? statusUrl.replace(BASE_URL, '')
+    : `/requests/${requestId}/status`;
 
   while (Date.now() - started < maxMs) {
-    let lastError = null;
-    for (const path of statusPaths) {
-      const { ok, status, body } = await hfFetch(path);
-      if (ok && body) {
-        const s = String(body.status || '').toLowerCase();
-        if (['completed', 'failed', 'nsfw', 'cancelled', 'canceled'].includes(s)) {
-          return body;
-        }
-        break;
-      } else {
-        lastError = `${path}: ${status}`;
+    const { ok, status, body } = await hfFetch(path);
+    if (ok && body) {
+      const s = String(body.status || '').toLowerCase();
+      if (['completed', 'failed', 'nsfw', 'cancelled', 'canceled'].includes(s)) {
+        return body;
       }
-    }
-    if (lastError && Date.now() - started > 10_000) {
-      throw new Error(`Status polling failed: ${lastError}`);
+    } else if (Date.now() - started > 10_000) {
+      throw new Error(`Status polling failed: HTTP ${status}`);
     }
     await new Promise((r) => setTimeout(r, intervalMs));
   }
@@ -95,29 +101,27 @@ async function pollRequest(requestId, { maxMs = 5 * 60 * 1000, intervalMs = 2000
 }
 
 // ============================================================
-// STATUS — simple check, no probing
+// STATUS
 // ============================================================
 router.get('/status', (req, res) => {
   res.json({
     configured: !!(KEY_ID && KEY_SECRET),
     base_url: BASE_URL,
-    generation_endpoint: 'POST /v1/text2image/soul',
+    model_id: MODEL_ID,
+    endpoint: `POST ${BASE_URL}/${MODEL_ID}`,
     note: 'Characters are managed manually in our DB. Use the + Add character button to register a Soul ID.',
   });
 });
 
 // ============================================================
-// CHARACTERS — CRUD on our local registry
+// CHARACTERS — local DB registry
 // ============================================================
-
-// GET /api/higgsfield/characters — list registered characters
 router.get('/characters', async (req, res) => {
   const includeArchived = req.query.archived === 'true';
   let query = supabase.from('characters').select('*').order('created_at', { ascending: false });
   if (!includeArchived) query = query.eq('is_archived', false);
   const { data, error } = await query;
   if (error) return res.status(500).json({ error: error.message });
-  // Normalize for the frontend (id = soul_id, internal_id = row id)
   const characters = (data || []).map((c) => ({
     id: c.soul_id,
     internal_id: c.id,
@@ -130,7 +134,6 @@ router.get('/characters', async (req, res) => {
   res.json({ characters });
 });
 
-// POST /api/higgsfield/characters — register a new character
 router.post('/characters', async (req, res) => {
   const { soul_id, name, thumbnail_url, notes } = req.body || {};
   if (!soul_id?.trim()) return res.status(400).json({ error: 'soul_id is required' });
@@ -155,9 +158,7 @@ router.post('/characters', async (req, res) => {
     .single();
 
   if (error) {
-    if (error.code === '23505') {
-      return res.status(409).json({ error: 'This Soul ID is already registered' });
-    }
+    if (error.code === '23505') return res.status(409).json({ error: 'This Soul ID is already registered' });
     return res.status(500).json({ error: error.message });
   }
 
@@ -171,7 +172,6 @@ router.post('/characters', async (req, res) => {
   });
 });
 
-// PATCH /api/higgsfield/characters/:internal_id — update a character
 router.patch('/characters/:internal_id', async (req, res) => {
   const { name, thumbnail_url, notes, is_archived } = req.body || {};
   const update = { updated_at: new Date().toISOString() };
@@ -198,35 +198,44 @@ router.patch('/characters/:internal_id', async (req, res) => {
   });
 });
 
-// DELETE /api/higgsfield/characters/:internal_id
 router.delete('/characters/:internal_id', async (req, res) => {
-  const { error } = await supabase
-    .from('characters')
-    .delete()
-    .eq('id', req.params.internal_id);
+  const { error } = await supabase.from('characters').delete().eq('id', req.params.internal_id);
   if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
 });
 
-// GET /api/higgsfield/styles — stub, returns empty list (manual mode skips style auto-discovery)
 router.get('/styles', (req, res) => {
+  // Styles endpoint not used in v2/standard; UI does free-form prompting instead.
   res.json({ styles: [] });
 });
 
 // ============================================================
-// GENERATE — confirmed endpoint
+// GENERATE — Soul 2.0 with custom_reference_id
 // ============================================================
+//
+// Endpoint:  POST https://platform.higgsfield.ai/higgsfield-ai/soul/v2/standard
+// Body shape (flat, no params wrapper):
+//   {
+//     prompt: string,
+//     batch_size: 1..4,
+//     resolution: "720p" | "1080p",
+//     aspect_ratio: "9:16" | "3:4" | "1:1" | "4:3" | "16:9" | etc.,
+//     enhance_prompt: boolean,
+//     custom_reference_id: UUID (the trained Soul ID)
+//   }
+//
+// Response: { status: "queued", request_id, status_url, cancel_url }
+// Then poll status_url until { status: "completed", images: [{url}] }
+//
 router.post('/generate', async (req, res) => {
   const {
     soul_id,
     soul_name,
     prompt,
-    style_id,
-    style_name,
-    quality = '1080p',
-    size = '1536x2048',
+    aspect_ratio = '9:16',
+    resolution = '1080p',
     batch_size = 1,
-    strength = 1.0,
+    enhance_prompt = false,
     seed,
   } = req.body || {};
 
@@ -235,20 +244,19 @@ router.post('/generate', async (req, res) => {
   if (!KEY_ID || !KEY_SECRET) return res.status(503).json({ error: 'Higgsfield env vars not set' });
 
   const safeBatch = Math.max(1, Math.min(4, parseInt(batch_size, 10) || 1));
-  const safeStrength = Math.max(0, Math.min(1, parseFloat(strength) || 1.0));
 
+  // Pre-create row so we have an ID to attach storage paths to
+  // Note: existing schema uses `quality` + `size` columns; we map the new fields onto them.
   const { data: gen, error: insertErr } = await supabase
     .from('higgsfield_generations')
     .insert({
       soul_id,
       soul_name: soul_name || null,
-      style_id: style_id || null,
-      style_name: style_name || null,
       prompt: prompt.trim(),
-      quality,
-      size,
+      quality: resolution,           // maps "1080p" / "720p" into legacy `quality` column
+      size: aspect_ratio,            // maps "9:16" etc into legacy `size` column
       batch_size: safeBatch,
-      custom_reference_strength: safeStrength,
+      custom_reference_strength: 1.0,
       seed: seed ? parseInt(seed, 10) : null,
       status: 'pending',
     })
@@ -256,48 +264,34 @@ router.post('/generate', async (req, res) => {
     .single();
   if (insertErr) return res.status(500).json({ error: `DB error: ${insertErr.message}` });
 
+  // The body for Higgsfield — FLAT, no params wrapper
   const reqBody = {
-    params: {
-      prompt: prompt.trim(),
-      custom_reference_id: soul_id,
-      custom_reference_strength: safeStrength,
-      width_and_height: size,
-      quality,
-      batch_size: safeBatch,
-    },
+    prompt: prompt.trim(),
+    batch_size: safeBatch,
+    resolution,
+    aspect_ratio,
+    enhance_prompt: !!enhance_prompt,
+    custom_reference_id: soul_id,
   };
-  if (style_id) reqBody.params.style_id = style_id;
-  if (gen.seed !== null && gen.seed !== undefined) reqBody.params.seed = gen.seed;
+  if (gen.seed !== null && gen.seed !== undefined) reqBody.seed = gen.seed;
 
   const startedAt = Date.now();
 
+  // Submit to the correct endpoint: POST /{model_id}
   let submission;
   try {
-    console.log(`[higgsfield] submit: soul=${soul_id}, quality=${quality}, size=${size}, batch=${safeBatch}`);
-    const { ok, status, body } = await hfFetch('/v1/text2image/soul', { method: 'POST', body: reqBody });
+    console.log(`[higgsfield] submit ${MODEL_ID}: soul=${soul_id}, aspect=${aspect_ratio}, res=${resolution}, batch=${safeBatch}`);
+    const { ok, status, body } = await hfFetch(`/${MODEL_ID}`, { method: 'POST', body: reqBody });
     if (!ok) {
-      // Extract a string error from whatever shape Higgsfield returned
-      let msg;
-      if (typeof body?.error === 'string') msg = body.error;
-      else if (typeof body?.message === 'string') msg = body.message;
-      else if (typeof body?.detail === 'string') msg = body.detail;
-      else if (Array.isArray(body?.detail)) {
-        // FastAPI validation errors: [{ loc: [...], msg: "...", type: "..." }]
-        msg = body.detail.map(d => {
-          const loc = Array.isArray(d.loc) ? d.loc.join('.') : '';
-          return `${loc}: ${d.msg || JSON.stringify(d)}`;
-        }).join('; ');
-      }
-      else if (body) msg = JSON.stringify(body).slice(0, 500);
-      else msg = `HTTP ${status}`;
-
-      console.error(`[higgsfield] generation request failed (${status}):`, msg);
+      const msg = extractErrorMessage(body, status);
+      console.error(`[higgsfield] submit failed (${status}):`, msg);
       await supabase.from('higgsfield_generations')
         .update({ status: 'failed', error_message: msg, completed_at: new Date().toISOString() })
         .eq('id', gen.id);
       return res.status(status || 502).json({ error: msg, generation_id: gen.id, details: body });
     }
     submission = body;
+    console.log('[higgsfield] queued:', submission?.request_id);
   } catch (err) {
     await supabase.from('higgsfield_generations')
       .update({ status: 'failed', error_message: err.message, completed_at: new Date().toISOString() })
@@ -305,13 +299,15 @@ router.post('/generate', async (req, res) => {
     return res.status(500).json({ error: err.message, generation_id: gen.id });
   }
 
-  let final = submission;
+  // Poll until done — use status_url Higgsfield gave us
   const requestId = submission?.request_id || submission?.id;
+  const statusUrl = submission?.status_url;
   const submissionStatus = String(submission?.status || '').toLowerCase();
 
+  let final = submission;
   if (submissionStatus !== 'completed' && requestId) {
     try {
-      final = await pollRequest(requestId);
+      final = await pollRequest(requestId, statusUrl);
     } catch (err) {
       await supabase.from('higgsfield_generations')
         .update({ status: 'failed', error_message: err.message, higgsfield_request_id: requestId, completed_at: new Date().toISOString() })
@@ -332,22 +328,10 @@ router.post('/generate', async (req, res) => {
     return res.status(500).json({ error: errMsg, generation_id: gen.id, raw: final });
   }
 
-  // Extract image URLs
+  // Extract images: docs show { images: [{ url: "..." }] }
   const originalUrls = [];
   if (Array.isArray(final?.images)) {
     for (const img of final.images) if (img?.url) originalUrls.push(img.url);
-  }
-  if (Array.isArray(final?.results)) {
-    for (const r of final.results) {
-      const u = r?.raw?.url || r?.url;
-      if (u) originalUrls.push(u);
-    }
-  }
-  if (Array.isArray(final?.jobs)) {
-    for (const j of final.jobs) {
-      const u = j?.results?.raw?.url || j?.result?.url;
-      if (u) originalUrls.push(u);
-    }
   }
   if (originalUrls.length === 0 && final?.url) originalUrls.push(final.url);
 
@@ -358,6 +342,7 @@ router.post('/generate', async (req, res) => {
     return res.status(500).json({ error: 'Higgsfield returned no images', generation_id: gen.id, raw: final });
   }
 
+  // Mirror to Supabase Storage
   let storedUrls;
   try {
     storedUrls = await Promise.all(originalUrls.map((url, i) => mirrorImageToStorage(url, gen.id, i)));
@@ -385,7 +370,7 @@ router.post('/generate', async (req, res) => {
 });
 
 // ============================================================
-// GENERATIONS GALLERY
+// GALLERY
 // ============================================================
 router.get('/generations', async (req, res) => {
   const limit = Math.min(100, parseInt(req.query.limit, 10) || 30);
