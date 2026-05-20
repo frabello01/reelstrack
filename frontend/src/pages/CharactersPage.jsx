@@ -8,15 +8,23 @@ import { api } from '../lib/api';
 import './CharactersPage.css';
 
 const SIZE_OPTIONS = [
-  { value: '1536x2048', label: 'Portrait 3:4 (1536×2048)', description: 'Best for IG feed' },
-  { value: '1080x1920', label: 'Stories 9:16 (1080×1920)', description: 'Vertical for stories/reels' },
-  { value: '1536x1536', label: 'Square 1:1 (1536×1536)', description: 'Profile pics' },
+  // Portrait (vertical) — best for IG feed & Stories
+  { value: '1152x2048', label: 'Stories 9:16 (1152×2048)', description: 'Vertical for stories/reels' },
+  { value: '1536x2048', label: 'Portrait 3:4 (1536×2048)', description: 'IG feed portrait' },
+  { value: '1120x1680', label: 'Portrait 2:3 (1120×1680)', description: 'Classic portrait' },
+  { value: '1088x1632', label: 'Portrait 2:3 (1088×1632)', description: 'Lighter portrait' },
+  // Square
+  { value: '1536x1536', label: 'Square 1:1 (1536×1536)', description: 'Profile pics, posts' },
+  { value: '2048x2048', label: 'Square HQ 1:1 (2048×2048)', description: 'High-quality square' },
+  // Landscape (horizontal)
   { value: '2048x1536', label: 'Landscape 4:3 (2048×1536)', description: 'Wide shots' },
+  { value: '2048x1152', label: 'Landscape 16:9 (2048×1152)', description: 'Cinematic horizontal' },
+  { value: '1680x1120', label: 'Landscape 3:2 (1680×1120)', description: 'Classic horizontal' },
 ];
 
 const QUALITY_OPTIONS = [
-  { value: 'high', label: 'HD (best quality)' },
-  { value: 'medium', label: 'Standard (faster)' },
+  { value: '1080p', label: 'HD (1080p — best quality)' },
+  { value: '720p', label: 'Standard (720p — faster)' },
 ];
 
 const BATCH_OPTIONS = [1, 2, 4];
@@ -55,7 +63,7 @@ export default function CharactersPage() {
   const [selectedSoul, setSelectedSoul] = useState(null);
   const [prompt, setPrompt] = useState('');
   const [size, setSize] = useState('1536x2048');
-  const [quality, setQuality] = useState('high');
+  const [quality, setQuality] = useState('1080p');
   const [batchSize, setBatchSize] = useState(1);
   const [strength, setStrength] = useState(1.0);
   const [seed, setSeed] = useState('');

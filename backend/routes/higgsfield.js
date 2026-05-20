@@ -223,7 +223,7 @@ router.post('/generate', async (req, res) => {
     prompt,
     style_id,
     style_name,
-    quality = 'high',
+    quality = '1080p',
     size = '1536x2048',
     batch_size = 1,
     strength = 1.0,
