@@ -257,15 +257,17 @@ router.post('/generate', async (req, res) => {
   if (insertErr) return res.status(500).json({ error: `DB error: ${insertErr.message}` });
 
   const reqBody = {
-    prompt: prompt.trim(),
-    custom_reference_id: soul_id,
-    custom_reference_strength: safeStrength,
-    width_and_height: size,
-    quality,
-    batch_size: safeBatch,
+    params: {
+      prompt: prompt.trim(),
+      custom_reference_id: soul_id,
+      custom_reference_strength: safeStrength,
+      width_and_height: size,
+      quality,
+      batch_size: safeBatch,
+    },
   };
-  if (style_id) reqBody.style_id = style_id;
-  if (gen.seed !== null && gen.seed !== undefined) reqBody.seed = gen.seed;
+  if (style_id) reqBody.params.style_id = style_id;
+  if (gen.seed !== null && gen.seed !== undefined) reqBody.params.seed = gen.seed;
 
   const startedAt = Date.now();
 
