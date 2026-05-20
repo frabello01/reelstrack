@@ -274,9 +274,24 @@ router.post('/generate', async (req, res) => {
     console.log(`[higgsfield] submit: soul=${soul_id}, quality=${quality}, size=${size}, batch=${safeBatch}`);
     const { ok, status, body } = await hfFetch('/v1/text2image/soul', { method: 'POST', body: reqBody });
     if (!ok) {
-      const msg = body?.error || body?.message || body?.detail || `HTTP ${status}`;
+      // Extract a string error from whatever shape Higgsfield returned
+      let msg;
+      if (typeof body?.error === 'string') msg = body.error;
+      else if (typeof body?.message === 'string') msg = body.message;
+      else if (typeof body?.detail === 'string') msg = body.detail;
+      else if (Array.isArray(body?.detail)) {
+        // FastAPI validation errors: [{ loc: [...], msg: "...", type: "..." }]
+        msg = body.detail.map(d => {
+          const loc = Array.isArray(d.loc) ? d.loc.join('.') : '';
+          return `${loc}: ${d.msg || JSON.stringify(d)}`;
+        }).join('; ');
+      }
+      else if (body) msg = JSON.stringify(body).slice(0, 500);
+      else msg = `HTTP ${status}`;
+
+      console.error(`[higgsfield] generation request failed (${status}):`, msg);
       await supabase.from('higgsfield_generations')
-        .update({ status: 'failed', error_message: typeof msg === 'string' ? msg : JSON.stringify(msg), completed_at: new Date().toISOString() })
+        .update({ status: 'failed', error_message: msg, completed_at: new Date().toISOString() })
         .eq('id', gen.id);
       return res.status(status || 502).json({ error: msg, generation_id: gen.id, details: body });
     }

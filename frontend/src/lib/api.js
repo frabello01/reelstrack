@@ -15,9 +15,29 @@ async function request(path, options = {}) {
   }
   const elapsed = Date.now() - t0;
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: 'Unknown error' }));
-    console.error(`[api] HTTP ${res.status} ${path} (${elapsed}ms):`, err.error);
-    throw new Error(err.error || `Request failed: ${res.status}`);
+    const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+    // Stringify the error properly — server might return:
+    //   { error: "string" }                            → use as-is
+    //   { error: { message, code, ... } }              → extract .message
+    //   { error: "string", details: {...} }            → append details
+    //   anything else                                  → JSON stringify
+    let msg;
+    if (typeof err.error === 'string') {
+      msg = err.error;
+    } else if (err.error && typeof err.error === 'object') {
+      msg = err.error.message || err.error.detail || JSON.stringify(err.error);
+    } else {
+      msg = `HTTP ${res.status}`;
+    }
+    // Append details if present (often has the real reason)
+    if (err.details) {
+      const detailStr = typeof err.details === 'string'
+        ? err.details
+        : (err.details.message || err.details.detail || JSON.stringify(err.details));
+      msg += ` — ${detailStr}`;
+    }
+    console.error(`[api] HTTP ${res.status} ${path} (${elapsed}ms):`, err);
+    throw new Error(msg);
   }
   const data = await res.json();
   // Debug: log empty responses so we can spot when the backend returns [] mysteriously
