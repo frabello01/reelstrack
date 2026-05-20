@@ -195,6 +195,12 @@ export const api = {
   // Higgsfield Characters
   getHiggsfieldStatus: () => request('/api/higgsfield/status'),
   getHiggsfieldCharacters: () => request('/api/higgsfield/characters'),
+  addHiggsfieldCharacter: (body) =>
+    request('/api/higgsfield/characters', { method: 'POST', body: JSON.stringify(body) }),
+  updateHiggsfieldCharacter: (id, body) =>
+    request(`/api/higgsfield/characters/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteHiggsfieldCharacter: (id) =>
+    request(`/api/higgsfield/characters/${id}`, { method: 'DELETE' }),
   getHiggsfieldStyles: () => request('/api/higgsfield/styles'),
   generateCharacterImage: (body) =>
     request('/api/higgsfield/generate', { method: 'POST', body: JSON.stringify(body) }),

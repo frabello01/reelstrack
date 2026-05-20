@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import {
-  Sparkles, Users, RefreshCw, Wand2, Download, Trash2, Loader2, AlertCircle,
-  CheckCircle2, X, Palette, ChevronDown, ChevronUp, ImageIcon
+  Sparkles, Users, Plus, Wand2, Download, Trash2, Loader2, AlertCircle,
+  CheckCircle2, X, ChevronDown, ChevronUp, ImageIcon, Edit2, ExternalLink,
+  Archive, RotateCcw, Info
 } from 'lucide-react';
 import { api } from '../lib/api';
 import './CharactersPage.css';
@@ -33,23 +34,26 @@ function downloadFromUrl(url, filename) {
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(objUrl), 1000);
     })
-    .catch(() => {
-      // Fallback: open in new tab
-      window.open(url, '_blank');
-    });
+    .catch(() => window.open(url, '_blank'));
+}
+
+// Try to pull a UUID out of a pasted string (e.g. if user pastes a full URL)
+function extractUuid(input) {
+  if (!input) return '';
+  const match = String(input).match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+  return match ? match[0] : input.trim();
 }
 
 export default function CharactersPage() {
   const [configured, setConfigured] = useState(false);
   const [characters, setCharacters] = useState([]);
-  const [styles, setStyles] = useState([]);
   const [loadingChars, setLoadingChars] = useState(true);
-  const [loadingStyles, setLoadingStyles] = useState(true);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [editingChar, setEditingChar] = useState(null);
 
   // Form state
   const [selectedSoul, setSelectedSoul] = useState(null);
   const [prompt, setPrompt] = useState('');
-  const [selectedStyle, setSelectedStyle] = useState(null);
   const [size, setSize] = useState('1536x2048');
   const [quality, setQuality] = useState('high');
   const [batchSize, setBatchSize] = useState(1);
@@ -57,17 +61,12 @@ export default function CharactersPage() {
   const [seed, setSeed] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
 
-  // Generation state
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState('');
 
-  // Gallery state
   const [generations, setGenerations] = useState([]);
-  const [galleryFilter, setGalleryFilter] = useState('all'); // 'all' | a soul_id
+  const [galleryFilter, setGalleryFilter] = useState('all');
 
-  // ============================================================
-  // INITIAL LOAD
-  // ============================================================
   useEffect(() => {
     api.getHiggsfieldStatus()
       .then((s) => setConfigured(!!s.configured))
@@ -77,7 +76,6 @@ export default function CharactersPage() {
   useEffect(() => {
     if (!configured) return;
     loadCharacters();
-    loadStyles();
     loadGenerations();
   }, [configured]);
 
@@ -87,22 +85,9 @@ export default function CharactersPage() {
       const { characters } = await api.getHiggsfieldCharacters();
       setCharacters(characters || []);
     } catch (err) {
-      console.error('[characters] load failed:', err.message);
       setError(`Could not load characters: ${err.message}`);
     } finally {
       setLoadingChars(false);
-    }
-  };
-
-  const loadStyles = async () => {
-    setLoadingStyles(true);
-    try {
-      const { styles } = await api.getHiggsfieldStyles();
-      setStyles(styles || []);
-    } catch (err) {
-      console.warn('[characters] could not load styles:', err.message);
-    } finally {
-      setLoadingStyles(false);
     }
   };
 
@@ -111,17 +96,13 @@ export default function CharactersPage() {
       const data = await api.getCharacterGenerations(soulFilter === 'all' ? null : soulFilter);
       setGenerations(data || []);
     } catch (err) {
-      console.warn('[characters] could not load gallery:', err.message);
+      console.warn('[characters] gallery load failed:', err.message);
     }
   };
 
-  // ============================================================
-  // GENERATE
-  // ============================================================
   const handleGenerate = async (e) => {
     e?.preventDefault();
     setError('');
-
     if (!selectedSoul) return setError('Pick a character first.');
     if (!prompt.trim()) return setError('Write a prompt.');
 
@@ -136,14 +117,9 @@ export default function CharactersPage() {
         batch_size: batchSize,
         strength,
       };
-      if (selectedStyle) {
-        body.style_id = selectedStyle.id;
-        body.style_name = selectedStyle.name;
-      }
       if (seed) body.seed = parseInt(seed, 10);
 
       const newGen = await api.generateCharacterImage(body);
-      // Prepend the new generation to the gallery
       setGenerations((g) => [newGen, ...g]);
     } catch (err) {
       setError(err.message || 'Generation failed');
@@ -152,10 +128,7 @@ export default function CharactersPage() {
     }
   };
 
-  // ============================================================
-  // DELETE
-  // ============================================================
-  const handleDelete = async (gen) => {
+  const handleDeleteGen = async (gen) => {
     if (!confirm(`Delete this generation? "${gen.prompt.slice(0, 60)}…"`)) return;
     try {
       await api.deleteCharacterGeneration(gen.id);
@@ -165,9 +138,17 @@ export default function CharactersPage() {
     }
   };
 
-  // ============================================================
-  // RENDER
-  // ============================================================
+  const handleDeleteChar = async (char) => {
+    if (!confirm(`Remove "${char.name}" from your characters? Past generations remain in the gallery.`)) return;
+    try {
+      await api.deleteHiggsfieldCharacter(char.internal_id);
+      setCharacters((cs) => cs.filter((c) => c.internal_id !== char.internal_id));
+      if (selectedSoul?.id === char.id) setSelectedSoul(null);
+    } catch (err) {
+      alert(`Delete failed: ${err.message}`);
+    }
+  };
+
   if (!configured) {
     return (
       <div className="characters-page">
@@ -207,46 +188,65 @@ export default function CharactersPage() {
             <Users size={14} /> Character
             <button
               type="button"
-              className="char-refresh-btn"
-              onClick={loadCharacters}
-              disabled={loadingChars}
-              title="Refresh from Higgsfield"
+              className="char-add-btn"
+              onClick={() => { setEditingChar(null); setShowAddModal(true); }}
+              title="Add a new character"
             >
-              <RefreshCw size={12} className={loadingChars ? 'spin' : ''} />
+              <Plus size={12} /> Add character
             </button>
           </div>
           {loadingChars ? (
-            <div className="char-loading-inline"><Loader2 size={16} className="spin" /> Loading characters…</div>
+            <div className="char-loading-inline"><Loader2 size={16} className="spin" /> Loading…</div>
           ) : characters.length === 0 ? (
             <div className="char-empty-inline">
-              No trained characters found.{' '}
-              <a href="https://higgsfield.ai/character" target="_blank" rel="noopener noreferrer">
-                Train one on Higgsfield
-              </a>{' '}
-              then click refresh.
+              <Info size={14} />
+              <div>
+                <strong>No characters yet.</strong>{' '}
+                Click <em>+ Add character</em> above to register your first Higgsfield Soul ID.
+              </div>
             </div>
           ) : (
             <div className="char-grid">
               {characters.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  className={`char-tile ${selectedSoul?.id === c.id ? 'selected' : ''}`}
-                  onClick={() => setSelectedSoul(c)}
-                  title={c.name}
+                <div
+                  key={c.internal_id}
+                  className={`char-tile-wrap ${selectedSoul?.id === c.id ? 'selected' : ''}`}
                 >
-                  {c.thumbnail_url ? (
-                    <img src={c.thumbnail_url} alt={c.name} />
-                  ) : (
-                    <div className="char-tile-placeholder">
-                      <Users size={20} />
-                    </div>
-                  )}
-                  <div className="char-tile-name">{c.name}</div>
-                  {selectedSoul?.id === c.id && (
-                    <div className="char-tile-check"><CheckCircle2 size={14} /></div>
-                  )}
-                </button>
+                  <button
+                    type="button"
+                    className="char-tile"
+                    onClick={() => setSelectedSoul(c)}
+                    title={c.name}
+                  >
+                    {c.thumbnail_url ? (
+                      <img src={c.thumbnail_url} alt={c.name} onError={(e) => { e.target.style.display = 'none'; }} />
+                    ) : (
+                      <div className="char-tile-placeholder">
+                        <Users size={20} />
+                      </div>
+                    )}
+                    <div className="char-tile-name">{c.name}</div>
+                    {selectedSoul?.id === c.id && (
+                      <div className="char-tile-check"><CheckCircle2 size={14} /></div>
+                    )}
+                  </button>
+                  <div className="char-tile-controls">
+                    <button
+                      type="button"
+                      onClick={() => { setEditingChar(c); setShowAddModal(true); }}
+                      title="Edit"
+                    >
+                      <Edit2 size={11} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteChar(c)}
+                      title="Remove"
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  </div>
+                </div>
               ))}
             </div>
           )}
@@ -257,43 +257,14 @@ export default function CharactersPage() {
           <div className="char-form-label">Prompt</div>
           <textarea
             className="char-prompt-input"
-            placeholder='e.g. "Sitting at a cafe in Milan, warm afternoon light, wearing a beige trench coat, looking at the camera, candid portrait"'
+            placeholder='e.g. "Sitting at a Milan cafe, warm afternoon light, beige trench coat, candid portrait"'
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             rows={3}
           />
         </div>
 
-        {/* Style preset (optional) */}
-        {styles.length > 0 && (
-          <div className="char-form-section">
-            <div className="char-form-label">
-              <Palette size={14} /> Style preset (optional)
-            </div>
-            <div className="char-style-row">
-              <button
-                type="button"
-                className={`char-style-chip ${!selectedStyle ? 'selected' : ''}`}
-                onClick={() => setSelectedStyle(null)}
-              >
-                None
-              </button>
-              {styles.slice(0, 24).map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  className={`char-style-chip ${selectedStyle?.id === s.id ? 'selected' : ''}`}
-                  onClick={() => setSelectedStyle(s)}
-                  title={s.name}
-                >
-                  {s.name}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Quick settings: size, quality, batch */}
+        {/* Quick settings */}
         <div className="char-form-row">
           <div className="char-form-cell">
             <label>Size</label>
@@ -321,7 +292,6 @@ export default function CharactersPage() {
           </div>
         </div>
 
-        {/* Advanced settings */}
         <button
           type="button"
           className="char-advanced-toggle"
@@ -364,14 +334,12 @@ export default function CharactersPage() {
           </div>
         )}
 
-        {/* Error */}
         {error && (
           <div className="char-error">
             <AlertCircle size={14} /> {error}
           </div>
         )}
 
-        {/* Generate button */}
         <button
           className="btn btn-primary char-generate-btn"
           onClick={handleGenerate}
@@ -400,7 +368,7 @@ export default function CharactersPage() {
             >
               <option value="all">All characters</option>
               {characters.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
+                <option key={c.internal_id} value={c.id}>{c.name}</option>
               ))}
             </select>
           )}
@@ -409,20 +377,174 @@ export default function CharactersPage() {
         {generations.length === 0 ? (
           <div className="char-gallery-empty">
             <Sparkles size={32} />
-            <p>No generations yet. Pick a character and write a prompt above to start.</p>
+            <p>No generations yet. {characters.length === 0 ? 'Add a character to start.' : 'Pick a character and write a prompt above.'}</p>
           </div>
         ) : (
           <div className="char-gallery">
             {generations.map((gen) => (
-              <GenerationCard key={gen.id} gen={gen} onDelete={() => handleDelete(gen)} />
+              <GenerationCard key={gen.id} gen={gen} onDelete={() => handleDeleteGen(gen)} />
             ))}
           </div>
         )}
+      </div>
+
+      {/* Add/Edit Modal */}
+      {showAddModal && (
+        <CharacterModal
+          character={editingChar}
+          onClose={() => { setShowAddModal(false); setEditingChar(null); }}
+          onSaved={(saved) => {
+            if (editingChar) {
+              setCharacters((cs) => cs.map((c) => (c.internal_id === saved.internal_id ? saved : c)));
+              if (selectedSoul?.internal_id === saved.internal_id) setSelectedSoul(saved);
+            } else {
+              setCharacters((cs) => [saved, ...cs]);
+            }
+            setShowAddModal(false);
+            setEditingChar(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// Add/Edit Character Modal
+// ============================================================
+function CharacterModal({ character, onClose, onSaved }) {
+  const isEdit = !!character;
+  const [name, setName] = useState(character?.name || '');
+  const [soulId, setSoulId] = useState(character?.id || '');
+  const [thumbnail, setThumbnail] = useState(character?.thumbnail_url || '');
+  const [notes, setNotes] = useState(character?.notes || '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSoulIdChange = (e) => {
+    const value = e.target.value;
+    // If the user pasted a URL, try to extract the UUID
+    setSoulId(extractUuid(value));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (!name.trim()) return setError('Name is required');
+    if (!soulId.trim()) return setError('Soul ID is required');
+
+    setSaving(true);
+    try {
+      const body = {
+        name: name.trim(),
+        thumbnail_url: thumbnail.trim() || null,
+        notes: notes.trim() || null,
+      };
+      let saved;
+      if (isEdit) {
+        saved = await api.updateHiggsfieldCharacter(character.internal_id, body);
+      } else {
+        saved = await api.addHiggsfieldCharacter({ ...body, soul_id: soulId.trim() });
+      }
+      onSaved(saved);
+    } catch (err) {
+      setError(err.message || 'Save failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="char-modal-backdrop" onClick={onClose}>
+      <div className="char-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="char-modal-header">
+          <h3>{isEdit ? 'Edit character' : 'Add character'}</h3>
+          <button className="char-modal-close" onClick={onClose}><X size={16} /></button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="char-modal-body">
+          <div className="char-modal-field">
+            <label>Display name *</label>
+            <input
+              type="text"
+              placeholder="e.g. Sofia, Mia, Olivia"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              autoFocus
+            />
+          </div>
+
+          <div className="char-modal-field">
+            <label>
+              Soul ID (UUID) *
+              {isEdit && <span className="char-modal-locked"> — can't be changed after creation</span>}
+            </label>
+            <input
+              type="text"
+              placeholder="abc12345-67de-89fa-bc01-234567890def"
+              value={soulId}
+              onChange={handleSoulIdChange}
+              disabled={isEdit}
+              className="char-modal-uuid-input"
+            />
+            <div className="char-modal-help">
+              <Info size={11} />
+              <div>
+                <strong>How to find it:</strong> open your character on{' '}
+                <a href="https://higgsfield.ai/character" target="_blank" rel="noopener noreferrer">
+                  higgsfield.ai/character <ExternalLink size={10} />
+                </a>. The UUID is in the page URL after <code>/character/</code>. You can also paste the
+                full URL here — we'll auto-extract the UUID.
+              </div>
+            </div>
+          </div>
+
+          <div className="char-modal-field">
+            <label>Thumbnail URL (optional)</label>
+            <input
+              type="text"
+              placeholder="https://… (any image URL — Higgsfield character preview works)"
+              value={thumbnail}
+              onChange={(e) => setThumbnail(e.target.value)}
+            />
+            <div className="char-modal-help-mini">
+              Right-click a character preview on Higgsfield → Copy image address → paste here.
+            </div>
+          </div>
+
+          <div className="char-modal-field">
+            <label>Notes (optional)</label>
+            <input
+              type="text"
+              placeholder="e.g. blonde, 25-35, casual style"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+            />
+          </div>
+
+          {error && (
+            <div className="char-error">
+              <AlertCircle size={14} /> {error}
+            </div>
+          )}
+
+          <div className="char-modal-actions">
+            <button type="button" className="btn btn-secondary" onClick={onClose}>
+              Cancel
+            </button>
+            <button type="submit" className="btn btn-primary" disabled={saving}>
+              {saving ? <><Loader2 size={12} className="spin" /> Saving…</> : (isEdit ? 'Save changes' : 'Add character')}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
 }
 
+// ============================================================
+// Generation Card
+// ============================================================
 function GenerationCard({ gen, onDelete }) {
   const isMulti = gen.image_urls && gen.image_urls.length > 1;
   const [activeIdx, setActiveIdx] = useState(0);
@@ -472,7 +594,6 @@ function GenerationCard({ gen, onDelete }) {
       <div className="gen-card-body">
         <div className="gen-card-meta">
           <strong>{gen.soul_name || 'Character'}</strong>
-          {gen.style_name && <> · {gen.style_name}</>}
         </div>
         <div className="gen-card-prompt" title={gen.prompt}>
           "{gen.prompt}"
