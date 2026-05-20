@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Sparkles, Users, Plus, Wand2, Download, Trash2, Loader2, AlertCircle,
   CheckCircle2, X, ChevronDown, ChevronUp, ImageIcon, Edit2, ExternalLink,
-  Info, Upload, Clock, GraduationCap
+  Info, Upload, Clock, GraduationCap, Copy
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { supabase } from '../lib/supabase';
@@ -478,7 +478,14 @@ export default function CharactersPage() {
         ) : (
           <div className="char-gallery">
             {generations.map((gen) => (
-              <GenerationCard key={gen.id} gen={gen} onDelete={() => handleDeleteGen(gen)} />
+              <GenerationCard
+                key={gen.id}
+                gen={gen}
+                onDelete={() => handleDeleteGen(gen)}
+                onUpdate={(updated) =>
+                  setGenerations((g) => g.map((x) => (x.id === updated.id ? updated : x)))
+                }
+              />
             ))}
           </div>
         )}
@@ -875,14 +882,57 @@ function CharacterModal({ character, onClose, onSaved }) {
 // ============================================================
 // Generation Card
 // ============================================================
-function GenerationCard({ gen, onDelete }) {
-  const isMulti = gen.image_urls && gen.image_urls.length > 1;
+function GenerationCard({ gen, onDelete, onUpdate }) {
+  const urls = gen.image_urls || [];
+  const cleanedUrls = gen.cleaned_image_urls || [];
+  const isMulti = urls.length > 1;
   const [activeIdx, setActiveIdx] = useState(0);
+  const [showCleaned, setShowCleaned] = useState(false);
+  const [cleaning, setCleaning] = useState(false);
+  const [cleanError, setCleanError] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  const hasCleaned = cleanedUrls.length > 0;
 
   const handleDownload = (url, idx) => {
     const safeName = (gen.soul_name || 'character').replace(/[^a-z0-9]/gi, '-').toLowerCase();
-    const filename = `${safeName}-${gen.id.slice(0, 8)}-${idx + 1}.jpg`;
+    const suffix = showCleaned ? 'cleaned-' : '';
+    const filename = `${safeName}-${suffix}${gen.id.slice(0, 8)}-${idx + 1}.jpg`;
     downloadFromUrl(url, filename);
+  };
+
+  const handleCopyPrompt = async () => {
+    try {
+      await navigator.clipboard.writeText(gen.prompt || '');
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // fallback for older browsers / non-secure contexts
+      const ta = document.createElement('textarea');
+      ta.value = gen.prompt || '';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      } catch {}
+      document.body.removeChild(ta);
+    }
+  };
+
+  const handleClean = async () => {
+    setCleanError('');
+    setCleaning(true);
+    try {
+      const updated = await api.cleanCharacterGeneration(gen.id);
+      onUpdate?.(updated);
+      setShowCleaned(true);
+    } catch (err) {
+      setCleanError(err.message || 'Cleaning failed');
+    } finally {
+      setCleaning(false);
+    }
   };
 
   if (gen.status === 'failed' || gen.status === 'nsfw') {
@@ -899,29 +949,103 @@ function GenerationCard({ gen, onDelete }) {
     );
   }
 
-  const urls = gen.image_urls || [];
-  const currentUrl = urls[activeIdx];
+  const displayUrls = showCleaned && hasCleaned ? cleanedUrls : urls;
+  const currentUrl = displayUrls[activeIdx];
 
   return (
     <div className="gen-card">
       <div className="gen-card-img-wrap">
         {currentUrl && <img src={currentUrl} alt="" />}
+        {showCleaned && hasCleaned && (
+          <div className="gen-card-cleaned-badge" title="Showing cleaned version">
+            <Sparkles size={10} /> Cleaned
+          </div>
+        )}
         {isMulti && (
           <div className="gen-card-pager">
-            {urls.map((_, i) => (
+            {displayUrls.map((_, i) => (
               <button key={i} className={`gen-pager-dot ${activeIdx === i ? 'active' : ''}`} onClick={() => setActiveIdx(i)} aria-label={`Image ${i + 1}`} />
             ))}
           </div>
         )}
       </div>
       <div className="gen-card-body">
-        <div className="gen-card-meta"><strong>{gen.soul_name || 'Character'}</strong></div>
+        <div className="gen-card-meta">
+          <strong>{gen.soul_name || 'Character'}</strong>
+        </div>
         <div className="gen-card-prompt" title={gen.prompt}>"{gen.prompt}"</div>
+
+        {/* Toggle between original and cleaned, only if cleaned exists */}
+        {hasCleaned && (
+          <div className="gen-card-version-toggle">
+            <button
+              className={!showCleaned ? 'active' : ''}
+              onClick={() => setShowCleaned(false)}
+              type="button"
+            >
+              Original
+            </button>
+            <button
+              className={showCleaned ? 'active' : ''}
+              onClick={() => setShowCleaned(true)}
+              type="button"
+            >
+              <Sparkles size={10} /> Cleaned
+            </button>
+          </div>
+        )}
+
+        {cleanError && (
+          <div className="gen-card-clean-error">
+            <AlertCircle size={11} /> {cleanError}
+          </div>
+        )}
+
         <div className="gen-card-actions">
-          <button className="btn btn-secondary btn-sm" onClick={() => handleDownload(currentUrl, activeIdx)}>
+          <button
+            className="btn btn-secondary btn-sm gen-card-action"
+            onClick={() => handleDownload(currentUrl, activeIdx)}
+            title="Download this image"
+          >
             <Download size={12} /> Download
           </button>
-          <button className="gen-card-delete" onClick={onDelete} title="Delete">
+
+          {hasCleaned ? (
+            <button
+              className="btn btn-secondary btn-sm gen-card-action gen-card-action-cleaned-done"
+              disabled
+              title="This generation has been cleaned"
+            >
+              <CheckCircle2 size={12} /> Cleaned
+            </button>
+          ) : (
+            <button
+              className="btn btn-secondary btn-sm gen-card-action"
+              onClick={handleClean}
+              disabled={cleaning}
+              title="Clean watermarks + strip metadata"
+            >
+              {cleaning ? (
+                <><Loader2 size={12} className="spin" /> Cleaning…</>
+              ) : (
+                <><Sparkles size={12} /> Clean</>
+              )}
+            </button>
+          )}
+
+          <button
+            className="gen-card-icon-btn"
+            onClick={handleCopyPrompt}
+            title="Copy prompt to clipboard"
+          >
+            {copied ? <CheckCircle2 size={12} style={{ color: '#4ade80' }} /> : <Copy size={12} />}
+          </button>
+
+          <button
+            className="gen-card-delete"
+            onClick={onDelete}
+            title="Delete generation"
+          >
             <Trash2 size={12} />
           </button>
         </div>

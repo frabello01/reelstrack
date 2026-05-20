@@ -807,3 +807,104 @@
   font-size: 11px;
   color: #c4b5fd;
 }
+
+/* ===== Generation card additions: copy/clean buttons + version toggle ===== */
+
+.gen-card-action {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.gen-card-action-cleaned-done {
+  color: #4ade80 !important;
+  border-color: rgba(74,222,128,0.3) !important;
+  background: rgba(74,222,128,0.06) !important;
+  cursor: default !important;
+  opacity: 1 !important;
+}
+
+.gen-card-icon-btn {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.6);
+  width: 26px; height: 26px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+}
+.gen-card-icon-btn:hover {
+  color: white;
+  border-color: rgba(255,255,255,0.18);
+}
+
+.gen-card-actions {
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* Show cleaned vs original toggle */
+.gen-card-version-toggle {
+  display: flex;
+  background: rgba(0,0,0,0.3);
+  border-radius: 5px;
+  padding: 2px;
+  margin-top: 2px;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.gen-card-version-toggle button {
+  flex: 1;
+  background: transparent;
+  border: none;
+  padding: 4px 8px;
+  font-size: 10px;
+  color: rgba(255,255,255,0.55);
+  cursor: pointer;
+  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.gen-card-version-toggle button.active {
+  background: rgba(167,139,250,0.18);
+  color: #ddd6fe;
+}
+
+.gen-card-cleaned-badge {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: rgba(167,139,250,0.85);
+  color: white;
+  padding: 3px 7px;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.gen-card-clean-error {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #f87171;
+  background: rgba(248,113,113,0.08);
+  padding: 4px 6px;
+  border-radius: 4px;
+  margin-top: 2px;
+}

@@ -548,11 +548,12 @@ router.get('/generations', async (req, res) => {
 router.delete('/generations/:id', async (req, res) => {
   const { data: gen } = await supabase
     .from('higgsfield_generations')
-    .select('image_urls')
+    .select('image_urls,cleaned_image_urls')
     .eq('id', req.params.id)
     .maybeSingle();
-  if (gen?.image_urls?.length) {
-    const paths = gen.image_urls
+  if (gen?.image_urls?.length || gen?.cleaned_image_urls?.length) {
+    const all = [...(gen.image_urls || []), ...(gen.cleaned_image_urls || [])];
+    const paths = all
       .map((url) => {
         const m = String(url).match(/\/generated-images\/(.+)$/);
         return m ? m[1] : null;
@@ -566,6 +567,112 @@ router.delete('/generations/:id', async (req, res) => {
     .eq('id', req.params.id);
   if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
+});
+
+// ============================================================
+// POST /api/higgsfield/generations/:id/clean
+// Cleans every image of a generation through Modal (noai-watermark + metadata strip).
+// Saves the cleaned versions back to Supabase Storage and the row.
+// ============================================================
+router.post('/generations/:id/clean', async (req, res) => {
+  const { strength = 0.04, steps = 50 } = req.body || {};
+  const MODAL_ENDPOINT_URL = process.env.MODAL_ENDPOINT_URL;
+  if (!MODAL_ENDPOINT_URL) {
+    return res.status(503).json({ error: 'Image cleaning not configured (MODAL_ENDPOINT_URL missing on Render)' });
+  }
+
+  // Load the generation
+  const { data: gen, error: loadErr } = await supabase
+    .from('higgsfield_generations')
+    .select('*')
+    .eq('id', req.params.id)
+    .single();
+  if (loadErr || !gen) return res.status(404).json({ error: 'Generation not found' });
+
+  const urls = gen.image_urls || [];
+  if (urls.length === 0) return res.status(400).json({ error: 'No images on this generation' });
+
+  console.log(`[higgsfield] cleaning ${urls.length} image(s) for gen=${gen.id}`);
+  const startedAt = Date.now();
+
+  const cleanedUrls = [];
+  for (let i = 0; i < urls.length; i++) {
+    const url = urls[i];
+    try {
+      // 1) Download the original image
+      const imgRes = await fetch(url);
+      if (!imgRes.ok) throw new Error(`Could not fetch original (${imgRes.status})`);
+      const contentType = imgRes.headers.get('content-type') || 'image/jpeg';
+      const origBuf = Buffer.from(await imgRes.arrayBuffer());
+      const b64In = origBuf.toString('base64');
+
+      // 2) Call Modal endpoint (matches what /api/image-cleaner/clean does)
+      const controller = new AbortController();
+      const timeoutHandle = setTimeout(() => controller.abort(), 5 * 60 * 1000);
+      let modalRes;
+      try {
+        modalRes = await fetch(MODAL_ENDPOINT_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            image_b64: b64In,
+            strength: Math.max(0, Math.min(1, Number(strength) || 0.04)),
+            steps: Math.max(10, Math.min(100, parseInt(steps, 10) || 50)),
+          }),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeoutHandle);
+      }
+      if (!modalRes.ok) {
+        const body = await modalRes.text().catch(() => '');
+        throw new Error(`Modal returned ${modalRes.status}: ${body.slice(0, 200)}`);
+      }
+      const modalBody = await modalRes.json();
+      const cleanedB64 = modalBody?.cleaned_b64;
+      if (!cleanedB64) throw new Error('Modal returned no cleaned image');
+
+      const cleanedBuf = Buffer.from(cleanedB64, 'base64');
+
+      // 3) Upload to Supabase as a sibling of the original
+      const ext = contentType.includes('png') ? 'png' : 'jpg';
+      const path = `generations/${gen.id}/cleaned-${i}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from(GENERATED_BUCKET)
+        .upload(path, cleanedBuf, {
+          contentType,
+          cacheControl: '604800',
+          upsert: true,
+        });
+      if (upErr) throw new Error(`Storage upload failed: ${upErr.message}`);
+
+      const { data: pub } = supabase.storage.from(GENERATED_BUCKET).getPublicUrl(path);
+      if (!pub?.publicUrl) throw new Error('Could not get public URL');
+      cleanedUrls.push(pub.publicUrl);
+      console.log(`[higgsfield] cleaned ${i + 1}/${urls.length}`);
+    } catch (err) {
+      console.error(`[higgsfield] clean failed for image ${i + 1}:`, err.message);
+      return res.status(500).json({
+        error: `Cleaning failed on image ${i + 1}: ${err.message}`,
+        partial_cleaned_urls: cleanedUrls,
+      });
+    }
+  }
+
+  // Save back to row
+  const elapsed = (Date.now() - startedAt) / 1000;
+  const { data: updated, error: updateErr } = await supabase
+    .from('higgsfield_generations')
+    .update({ cleaned_image_urls: cleanedUrls })
+    .eq('id', gen.id)
+    .select()
+    .single();
+  if (updateErr) {
+    return res.status(500).json({ error: `DB update failed: ${updateErr.message}`, cleaned_image_urls: cleanedUrls });
+  }
+
+  console.log(`[higgsfield] cleaned ${urls.length} image(s) in ${elapsed.toFixed(1)}s`);
+  res.json(updated);
 });
 
 module.exports = router;

@@ -237,4 +237,9 @@ export const api = {
   },
   deleteCharacterGeneration: (id) =>
     request(`/api/higgsfield/generations/${id}`, { method: 'DELETE' }),
+  cleanCharacterGeneration: (id, body) =>
+    request(`/api/higgsfield/generations/${id}/clean`, {
+      method: 'POST',
+      body: JSON.stringify(body || {}),
+    }),
 };
