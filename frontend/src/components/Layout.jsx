@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { LayoutDashboard, ListVideo, LogOut, CheckSquare, Menu, X, BarChart3, Music, Sparkles, BookOpen, GraduationCap, Wand2, UserCircle2 } from 'lucide-react';
+import { LayoutDashboard, ListVideo, LogOut, CheckSquare, Menu, X, BarChart3, Music, Sparkles, BookOpen, GraduationCap, Wand2, UserCircle2, Layers } from 'lucide-react';
 import FetchProgress from './FetchProgress';
 import './Layout.css';
 
@@ -87,6 +87,10 @@ export default function Layout() {
           <NavLink to="/image-cleaner" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
             <Wand2 size={18} />
             Image Cleaner
+          </NavLink>
+          <NavLink to="/batch-cleaner" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+            <Layers size={18} />
+            Batch Cleaner
           </NavLink>
           <NavLink to="/characters" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
             <UserCircle2 size={18} />
