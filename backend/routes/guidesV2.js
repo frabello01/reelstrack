@@ -257,6 +257,45 @@ router.get('/items', async (req, res) => {
 });
 
 // ============================================================
+// IMPORTANT — route declaration order matters in Express.
+// Literal-path routes (e.g. /items/reorder) MUST be declared BEFORE
+// parameterized routes (e.g. /items/:type), otherwise the parameterized
+// pattern wins and `:type` ends up matching the literal segment.
+//
+// This is why the earlier version of this file returned
+// "type must be article or video" when the frontend POSTed to /items/reorder
+// — the request was hitting /items/:type with type='reorder'.
+// ============================================================
+
+// Bulk-reorder items within a category — MUST be before /items/:type below
+router.post('/items/reorder', async (req, res) => {
+  try {
+    const ordered = req.body?.ordered;
+    if (!Array.isArray(ordered) || ordered.length === 0) {
+      return res.status(400).json({ error: 'ordered must be a non-empty array' });
+    }
+    for (const o of ordered) {
+      if (!o || !VALID_TYPES.includes(o.type) || typeof o.id !== 'string') {
+        return res.status(400).json({ error: 'Each entry needs {type:"article"|"video", id:uuid}' });
+      }
+    }
+    const updates = await Promise.all(
+      ordered.map((o, idx) =>
+        supabase
+          .from(TABLE_FOR_TYPE[o.type])
+          .update({ sort_order: idx, updated_at: new Date().toISOString() })
+          .eq('id', o.id)
+      )
+    );
+    const errs = updates.map((r) => r.error).filter(Boolean);
+    if (errs.length) return res.status(500).json({ error: errs.map((e) => e.message).join('; ') });
+    res.json({ success: true, count: ordered.length });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
+// ============================================================
 // CREATE A NEW ARTICLE / VIDEO STUB (in optional category)
 // Solves the "/guides/new" UUID problem — backend creates the row
 // first, returns its real id, frontend then navigates to /guides/:id
@@ -351,34 +390,6 @@ router.post('/items/:type/:id/pin', async (req, res) => {
       .single();
     if (error) throw error;
     res.json(data);
-  } catch (err) {
-    res.status(err.statusCode || 500).json({ error: err.message });
-  }
-});
-
-// Bulk-reorder items within a category
-router.post('/items/reorder', async (req, res) => {
-  try {
-    const ordered = req.body?.ordered;
-    if (!Array.isArray(ordered) || ordered.length === 0) {
-      return res.status(400).json({ error: 'ordered must be a non-empty array' });
-    }
-    for (const o of ordered) {
-      if (!o || !VALID_TYPES.includes(o.type) || typeof o.id !== 'string') {
-        return res.status(400).json({ error: 'Each entry needs {type:"article"|"video", id:uuid}' });
-      }
-    }
-    const updates = await Promise.all(
-      ordered.map((o, idx) =>
-        supabase
-          .from(TABLE_FOR_TYPE[o.type])
-          .update({ sort_order: idx, updated_at: new Date().toISOString() })
-          .eq('id', o.id)
-      )
-    );
-    const errs = updates.map((r) => r.error).filter(Boolean);
-    if (errs.length) return res.status(500).json({ error: errs.map((e) => e.message).join('; ') });
-    res.json({ success: true, count: ordered.length });
   } catch (err) {
     res.status(err.statusCode || 500).json({ error: err.message });
   }

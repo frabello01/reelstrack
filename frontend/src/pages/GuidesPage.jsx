@@ -11,7 +11,6 @@ import './GuidesPage.css';
 // ============================================================
 // CONSTANTS
 // ============================================================
-const ALL_CATEGORY = { id: 'all', name: 'All', icon: '🗂️', color: '#a78bfa', sort_order: -1 };
 const UNCAT_CATEGORY = { id: 'uncategorized', name: 'Uncategorized', icon: '📋', color: '#71717a', sort_order: 9999 };
 
 const COLOR_PRESETS = [
@@ -29,7 +28,7 @@ export default function GuidesPage() {
 
   const [categories, setCategories] = useState([]);
   const [uncategorizedCount, setUncategorizedCount] = useState(0);
-  const [selectedCategoryId, setSelectedCategoryId] = useState('all');
+  const [selectedCategoryId, setSelectedCategoryId] = useState(null);
   const [items, setItems] = useState([]);
   const [loadingCats, setLoadingCats] = useState(true);
   const [loadingItems, setLoadingItems] = useState(false);
@@ -44,7 +43,9 @@ export default function GuidesPage() {
   const draggedItemRef = useRef(null);
 
   useEffect(() => { loadCategories(); }, []);
-  useEffect(() => { loadItems(selectedCategoryId); }, [selectedCategoryId]);
+  useEffect(() => {
+    if (selectedCategoryId) loadItems(selectedCategoryId);
+  }, [selectedCategoryId]);
 
   // Close the "new" dropdown on outside click
   useEffect(() => {
@@ -58,8 +59,14 @@ export default function GuidesPage() {
     setLoadingCats(true);
     try {
       const r = await api.getGuideCategories();
-      setCategories(r.categories || []);
+      const cats = r.categories || [];
+      setCategories(cats);
       setUncategorizedCount(r.uncategorized_count || 0);
+      // Auto-select first category on first load (no "All" option anymore)
+      if (!selectedCategoryId) {
+        if (cats.length > 0) setSelectedCategoryId(cats[0].id);
+        else if ((r.uncategorized_count || 0) > 0) setSelectedCategoryId('uncategorized');
+      }
     } catch (err) {
       setError(`Couldn't load categories: ${err.message}`);
     } finally {
@@ -102,9 +109,15 @@ export default function GuidesPage() {
     if (!confirm(`Delete category "${cat.name}"? Items in it become uncategorized (not deleted).`)) return;
     try {
       await api.deleteGuideCategory(cat.id);
-      setCategories((cs) => cs.filter((c) => c.id !== cat.id));
-      if (selectedCategoryId === cat.id) setSelectedCategoryId('all');
-      loadCategories(); // refresh counts
+      setCategories((cs) => {
+        const next = cs.filter((c) => c.id !== cat.id);
+        // If the deleted one was selected, jump to another
+        if (selectedCategoryId === cat.id) {
+          setSelectedCategoryId(next[0]?.id || 'uncategorized');
+        }
+        return next;
+      });
+      loadCategories(); // refresh counts (uncategorized went up)
     } catch (err) {
       alert(`Delete failed: ${err.message}`);
     }
@@ -231,13 +244,13 @@ export default function GuidesPage() {
   // PILLS
   // ============================================================
   const visiblePills = useMemo(() => {
-    const list = [ALL_CATEGORY, ...categories];
+    const list = [...categories];
     if (uncategorizedCount > 0) list.push({ ...UNCAT_CATEGORY, item_count: uncategorizedCount });
     return list;
   }, [categories, uncategorizedCount]);
 
   const selectedCategory = useMemo(() => {
-    return visiblePills.find((c) => c.id === selectedCategoryId) || ALL_CATEGORY;
+    return visiblePills.find((c) => c.id === selectedCategoryId) || visiblePills[0] || null;
   }, [visiblePills, selectedCategoryId]);
 
   // ============================================================
@@ -306,24 +319,33 @@ export default function GuidesPage() {
       <div className="gp-items-pane">
         <div className="gp-items-header">
           <h2>
-            <span className="gp-items-emoji">{selectedCategory.icon}</span>
-            {selectedCategory.name}
+            <span className="gp-items-emoji">{selectedCategory?.icon || '📁'}</span>
+            {selectedCategory?.name || 'No category selected'}
           </h2>
           <span className="gp-items-count">
             {loadingItems ? '…' : `${items.length} item${items.length === 1 ? '' : 's'}`}
           </span>
         </div>
 
-        {loadingItems ? (
+        {loadingItems || loadingCats ? (
           <div className="gp-loading-block"><Loader2 size={20} className="spin" /></div>
+        ) : visiblePills.length === 0 ? (
+          <div className="gp-empty">
+            <Sparkles size={28} />
+            <h3>No categories yet</h3>
+            <p>
+              Click <strong>+ New → New category</strong> at the top right to
+              create your first category. Then add articles or video tutorials
+              to it.
+            </p>
+          </div>
         ) : items.length === 0 ? (
           <div className="gp-empty">
             <Sparkles size={28} />
-            <h3>No items yet</h3>
+            <h3>No items in this category yet</h3>
             <p>
-              {selectedCategoryId === 'all'
-                ? 'Click + New to create your first article, video tutorial, or category.'
-                : `Add an article or video to "${selectedCategory.name}".`}
+              Click <strong>+ New</strong> at the top right to add an article
+              or video to "{selectedCategory?.name || 'this category'}".
             </p>
           </div>
         ) : (
@@ -412,7 +434,7 @@ function CategoryPill({ category, selected, onClick, onEdit, onDelete }) {
     return () => document.removeEventListener('click', handler);
   }, [menuOpen]);
 
-  const isVirtual = category.id === 'all' || category.id === 'uncategorized';
+  const isVirtual = category.id === 'uncategorized';
 
   return (
     <div

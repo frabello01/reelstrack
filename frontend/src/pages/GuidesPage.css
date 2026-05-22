@@ -83,24 +83,19 @@
 }
 
 /* ===== Pills row ===== */
+/* Note: we use flex-wrap (not horizontal scroll) on purpose — horizontal
+   scroll caused the pill 3-dot dropdown menus to be clipped by the
+   wrapper's overflow. For <30 categories, wrapping to 2-3 lines on
+   mobile is fine UX. */
 .gp-pills-wrap {
   margin-bottom: 14px;
-  /* Allow horizontal scroll on small screens */
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: thin;
-  -webkit-overflow-scrolling: touch;
-  padding-bottom: 4px;
+  position: relative; /* anchor for absolutely-positioned pill menus */
 }
-.gp-pills-wrap::-webkit-scrollbar { height: 4px; }
-.gp-pills-wrap::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 2px; }
 
 .gp-pills {
   display: flex;
   gap: 8px;
-  flex-wrap: nowrap;
-  width: max-content;
-  min-width: 100%;
+  flex-wrap: wrap;
 }
 
 .gp-pill {

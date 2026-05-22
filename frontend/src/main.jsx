@@ -18,7 +18,6 @@ import SettingsPage from './pages/SettingsPage';
 import MyDayPage from './pages/MyDayPage';
 import GuidesPage from './pages/GuidesPage';
 import GuideDetailPage from './pages/GuideDetailPage';
-import LessonsPage from './pages/LessonsPage';
 import LessonDetailPage from './pages/LessonDetailPage';
 import ImageCleanerPage from './pages/ImageCleanerPage';
 import BatchCleanerPage from './pages/BatchCleanerPage';
@@ -61,10 +60,12 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="converter" element={<ConverterPage />} />
             <Route path="my-day" element={<MyDayPage />} />
             <Route path="guides" element={<GuidesPage />} />
-            <Route path="guides/new" element={<GuideDetailPage />} />
             <Route path="guides/:id" element={<GuideDetailPage />} />
-            <Route path="lessons" element={<LessonsPage />} />
-            <Route path="lessons/new" element={<LessonDetailPage />} />
+            {/* The old /lessons listing page now redirects to /guides.
+                /lessons/:id stays alive so video detail pages still work,
+                and the "back" button in LessonDetailPage that navigates
+                to /lessons now lands the user on Guides instead. */}
+            <Route path="lessons" element={<Navigate to="/guides" replace />} />
             <Route path="lessons/:id" element={<LessonDetailPage />} />
             <Route path="image-cleaner" element={<ImageCleanerPage />} />
             <Route path="batch-cleaner" element={<BatchCleanerPage />} />
