@@ -98,6 +98,11 @@
   flex-wrap: wrap;
 }
 
+.gp-pill-shell {
+  position: relative;   /* anchor for dropdown */
+  display: inline-block;
+}
+
 .gp-pill {
   display: inline-flex;
   align-items: stretch;
@@ -137,11 +142,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-.gp-pill-menu-wrap {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
 .gp-pill-menu-btn {
   background: transparent;
   border: none;
@@ -615,4 +615,55 @@
   .gp-item-thumb-wrap { width: 56px; height: 42px; }
   .gp-item-summary { display: none; }
   .gp-item-meta { font-size: 9px; }
+}
+
+/* ============================================================
+   Bulletproof dropdown menu backdrop
+   ============================================================ */
+.gp-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 25;        /* below menus (z=30) and modals (z=100), above content */
+  background: transparent;
+}
+
+/* ============================================================
+   Source-type tabs in AddVideoModal
+   ============================================================ */
+.gp-source-tabs {
+  display: flex;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 3px;
+  margin-bottom: 4px;
+}
+.gp-source-tab {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  padding: 7px 10px;
+  font-size: 12px;
+  font-family: inherit;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.gp-source-tab:hover { color: white; }
+.gp-source-tab.active {
+  background: rgba(167, 139, 250, 0.15);
+  color: #ddd6fe;
+  font-weight: 500;
+}
+
+.gp-input-hint {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  line-height: 1.4;
 }

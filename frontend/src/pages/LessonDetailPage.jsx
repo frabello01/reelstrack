@@ -70,7 +70,7 @@ export default function LessonDetailPage() {
   const handleDelete = async () => {
     if (!confirm(`Delete "${lesson.title}"? This can't be undone.`)) return;
     await api.deleteLesson(id);
-    navigate('/lessons');
+    navigate('/guides');
   };
 
   const handleThumbnailPick = () => {
@@ -115,8 +115,8 @@ export default function LessonDetailPage() {
   return (
     <div className="lesson-detail">
       <div className="lesson-detail-topbar">
-        <button className="back-btn" onClick={() => navigate('/lessons')}>
-          <ArrowLeft size={14} /> All lessons
+        <button className="back-btn" onClick={() => navigate('/guides')}>
+          <ArrowLeft size={14} /> Back to Guides
         </button>
         <div className="lesson-detail-actions">
           <button
@@ -160,10 +160,7 @@ export default function LessonDetailPage() {
         </div>
       )}
 
-      {/* Embedded player */}
-      <LessonPlayer lesson={lesson} />
-
-      {/* Description */}
+      {/* Description — now BEFORE the player as requested */}
       <div className="lesson-desc-section">
         {editingDesc ? (
           <div className="lesson-desc-edit">
@@ -190,6 +187,9 @@ export default function LessonDetailPage() {
           </button>
         )}
       </div>
+
+      {/* Embedded player — now AFTER the description as requested */}
+      <LessonPlayer lesson={lesson} />
 
       {/* Thumbnail manager */}
       <div className="lesson-thumb-section">
@@ -227,10 +227,6 @@ function LessonPlayer({ lesson }) {
     );
   }
   if (lesson.source_type === 'embed_html') {
-    // The backend already ran sanitizeEmbedHtml() — we only render iframe markup
-    // from an allow-listed host. Setting dangerouslySetInnerHTML is acceptable here
-    // because the input is reconstructed server-side from a strict schema, not the
-    // user's raw paste.
     return (
       <div className="lesson-player" dangerouslySetInnerHTML={{ __html: lesson.source_data }} />
     );

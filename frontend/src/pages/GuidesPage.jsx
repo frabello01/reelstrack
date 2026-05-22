@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
   BookOpen, Film, Plus, Pin, PinOff, Edit2, Trash2, Loader2, AlertCircle,
   X, ChevronDown, GripVertical, FolderOpen, Sparkles, Image as ImageIcon,
-  ChevronRight, MoreVertical, Move,
+  ChevronRight, MoreVertical, Move, Youtube,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import './GuidesPage.css';
@@ -38,6 +38,7 @@ export default function GuidesPage() {
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
   const [showMoveModalFor, setShowMoveModalFor] = useState(null); // {type, id}
+  const [showNewVideoModal, setShowNewVideoModal] = useState(false);
 
   // Drag state for items
   const draggedItemRef = useRef(null);
@@ -47,13 +48,8 @@ export default function GuidesPage() {
     if (selectedCategoryId) loadItems(selectedCategoryId);
   }, [selectedCategoryId]);
 
-  // Close the "new" dropdown on outside click
-  useEffect(() => {
-    if (!showNewMenu) return;
-    const handler = () => setShowNewMenu(false);
-    setTimeout(() => document.addEventListener('click', handler), 0);
-    return () => document.removeEventListener('click', handler);
-  }, [showNewMenu]);
+  // Note: "New" dropdown closes via backdrop overlay rendered inside the
+  // JSX (gp-menu-backdrop), not via document listener.
 
   const loadCategories = async () => {
     setLoadingCats(true);
@@ -133,20 +129,38 @@ export default function GuidesPage() {
       setShowCategoryModal(true);
       return;
     }
-    if (type !== 'article' && type !== 'video') return;
-
-    // Create the stub row server-side so we get a real UUID, then navigate.
-    // Solves the "invalid input syntax for type uuid: undefined" bug.
-    try {
-      const catId = selectedCategoryId !== 'all' && selectedCategoryId !== 'uncategorized'
-        ? selectedCategoryId
-        : null;
-      const stub = await api.createGuideItem(type, catId);
-      if (type === 'article') navigate(`/guides/${stub.id}`);
-      else navigate(`/lessons/${stub.id}`);
-    } catch (err) {
-      alert(`Couldn't create new ${type}: ${err.message}`);
+    if (type === 'video') {
+      // Videos need a URL/iframe up-front (no good placeholder works for
+      // YouTube — empty v= triggers "connection refused"). Open a modal.
+      setShowNewVideoModal(true);
+      return;
     }
+    if (type !== 'article') return;
+
+    // Articles can use the stub pattern (no URL needed) — backend creates the
+    // row with title='Untitled' and we navigate to the editor.
+    try {
+      const catId = selectedCategoryId !== 'uncategorized' ? selectedCategoryId : null;
+      const stub = await api.createGuideItem('article', catId);
+      navigate(`/guides/${stub.id}`);
+    } catch (err) {
+      alert(`Couldn't create new article: ${err.message}`);
+    }
+  };
+
+  const handleVideoCreated = (lesson) => {
+    setShowNewVideoModal(false);
+    // The video was created via the legacy /api/lessons endpoint which
+    // doesn't know about category_id. Move it into the current category if
+    // one is selected (and not the "uncategorized" virtual category).
+    const catId = selectedCategoryId && selectedCategoryId !== 'uncategorized'
+      ? selectedCategoryId
+      : null;
+    if (catId) {
+      api.moveGuideItem('video', lesson.id, catId)
+        .catch((err) => console.warn('[guides] could not assign category:', err.message));
+    }
+    navigate(`/lessons/${lesson.id}`);
   };
 
   const handleOpenItem = (item) => {
@@ -268,24 +282,32 @@ export default function GuidesPage() {
         <div className="gp-header-actions">
           <div className="gp-new-wrap">
             <button
+              type="button"
               className="btn btn-primary"
-              onClick={(e) => { e.stopPropagation(); setShowNewMenu((s) => !s); }}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setShowNewMenu((s) => !s);
+              }}
             >
               <Plus size={14} /> New <ChevronDown size={12} />
             </button>
             {showNewMenu && (
-              <div className="gp-new-menu" onClick={(e) => e.stopPropagation()}>
-                <button onClick={() => handleNew('article')}>
-                  <BookOpen size={14} /> New article
-                </button>
-                <button onClick={() => handleNew('video')}>
-                  <Film size={14} /> New video tutorial
-                </button>
-                <div className="gp-new-menu-sep" />
-                <button onClick={() => handleNew('category')}>
-                  <FolderOpen size={14} /> New category
-                </button>
-              </div>
+              <>
+                <div className="gp-menu-backdrop" onClick={() => setShowNewMenu(false)} />
+                <div className="gp-new-menu" onClick={(e) => e.stopPropagation()}>
+                  <button type="button" onClick={() => handleNew('article')}>
+                    <BookOpen size={14} /> New article
+                  </button>
+                  <button type="button" onClick={() => handleNew('video')}>
+                    <Film size={14} /> New video tutorial
+                  </button>
+                  <div className="gp-new-menu-sep" />
+                  <button type="button" onClick={() => handleNew('category')}>
+                    <FolderOpen size={14} /> New category
+                  </button>
+                </div>
+              </>
             )}
           </div>
         </div>
@@ -418,6 +440,13 @@ export default function GuidesPage() {
           onClose={() => setShowMoveModalFor(null)}
         />
       )}
+
+      {showNewVideoModal && (
+        <AddVideoModal
+          onClose={() => setShowNewVideoModal(false)}
+          onCreated={handleVideoCreated}
+        />
+      )}
     </div>
   );
 }
@@ -427,47 +456,59 @@ export default function GuidesPage() {
 // ============================================================
 function CategoryPill({ category, selected, onClick, onEdit, onDelete }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  useEffect(() => {
-    if (!menuOpen) return;
-    const handler = () => setMenuOpen(false);
-    setTimeout(() => document.addEventListener('click', handler), 0);
-    return () => document.removeEventListener('click', handler);
-  }, [menuOpen]);
 
   const isVirtual = category.id === 'uncategorized';
 
   return (
-    <div
-      className={`gp-pill ${selected ? 'selected' : ''}`}
-      style={selected ? { borderColor: category.color, backgroundColor: `${category.color}22` } : undefined}
-    >
-      <button className="gp-pill-main" onClick={onClick}>
-        <span className="gp-pill-icon">{category.icon}</span>
-        <span className="gp-pill-name">{category.name}</span>
-        {category.item_count !== undefined && (
-          <span className="gp-pill-count">{category.item_count}</span>
-        )}
-      </button>
-      {!isVirtual && (
-        <div className="gp-pill-menu-wrap">
+    <div className="gp-pill-shell">
+      <div
+        className={`gp-pill ${selected ? 'selected' : ''}`}
+        style={selected ? { borderColor: category.color, backgroundColor: `${category.color}22` } : undefined}
+      >
+        <button className="gp-pill-main" onClick={onClick}>
+          <span className="gp-pill-icon">{category.icon}</span>
+          <span className="gp-pill-name">{category.name}</span>
+          {category.item_count !== undefined && (
+            <span className="gp-pill-count">{category.item_count}</span>
+          )}
+        </button>
+        {!isVirtual && (
           <button
+            type="button"
             className="gp-pill-menu-btn"
-            onClick={(e) => { e.stopPropagation(); setMenuOpen((s) => !s); }}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setMenuOpen((s) => !s);
+            }}
             aria-label="Category options"
           >
-            <MoreVertical size={12} />
+            <MoreVertical size={14} />
           </button>
-          {menuOpen && (
-            <div className="gp-pill-menu" onClick={(e) => e.stopPropagation()}>
-              <button onClick={() => { setMenuOpen(false); onEdit(); }}>
-                <Edit2 size={11} /> Edit
-              </button>
-              <button onClick={() => { setMenuOpen(false); onDelete(); }} className="danger">
-                <Trash2 size={11} /> Delete
-              </button>
-            </div>
-          )}
-        </div>
+        )}
+      </div>
+
+      {/* Bulletproof menu pattern: invisible full-screen backdrop closes
+          the menu on any click. No document listeners, no race conditions. */}
+      {!isVirtual && menuOpen && (
+        <>
+          <div className="gp-menu-backdrop" onClick={() => setMenuOpen(false)} />
+          <div className="gp-pill-menu" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => { setMenuOpen(false); onEdit(); }}
+            >
+              <Edit2 size={11} /> Edit
+            </button>
+            <button
+              type="button"
+              onClick={() => { setMenuOpen(false); onDelete(); }}
+              className="danger"
+            >
+              <Trash2 size={11} /> Delete
+            </button>
+          </div>
+        </>
       )}
     </div>
   );
@@ -478,35 +519,37 @@ function CategoryPill({ category, selected, onClick, onEdit, onDelete }) {
 // ============================================================
 function ItemMenu({ item, onPin, onMove, onDelete }) {
   const [open, setOpen] = useState(false);
-  useEffect(() => {
-    if (!open) return;
-    const handler = () => setOpen(false);
-    setTimeout(() => document.addEventListener('click', handler), 0);
-    return () => document.removeEventListener('click', handler);
-  }, [open]);
 
   return (
     <div className="gp-item-menu-wrap">
       <button
+        type="button"
         className="gp-item-menu-btn"
-        onClick={(e) => { e.stopPropagation(); setOpen((s) => !s); }}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setOpen((s) => !s);
+        }}
         aria-label="Item options"
       >
         <MoreVertical size={14} />
       </button>
       {open && (
-        <div className="gp-item-menu" onClick={(e) => e.stopPropagation()}>
-          <button onClick={() => { setOpen(false); onPin(); }}>
-            {item.is_pinned ? <><PinOff size={11} /> Unpin</> : <><Pin size={11} /> Pin to top</>}
-          </button>
-          <button onClick={() => { setOpen(false); onMove(); }}>
-            <Move size={11} /> Move to…
-          </button>
-          <div className="gp-item-menu-sep" />
-          <button onClick={() => { setOpen(false); onDelete(); }} className="danger">
-            <Trash2 size={11} /> Delete
-          </button>
-        </div>
+        <>
+          <div className="gp-menu-backdrop" onClick={() => setOpen(false)} />
+          <div className="gp-item-menu" onClick={(e) => e.stopPropagation()}>
+            <button type="button" onClick={() => { setOpen(false); onPin(); }}>
+              {item.is_pinned ? <><PinOff size={11} /> Unpin</> : <><Pin size={11} /> Pin to top</>}
+            </button>
+            <button type="button" onClick={() => { setOpen(false); onMove(); }}>
+              <Move size={11} /> Move to…
+            </button>
+            <div className="gp-item-menu-sep" />
+            <button type="button" onClick={() => { setOpen(false); onDelete(); }} className="danger">
+              <Trash2 size={11} /> Delete
+            </button>
+          </div>
+        </>
       )}
     </div>
   );
@@ -645,6 +688,135 @@ function MoveItemModal({ categories, onSelect, onClose }) {
             <ChevronRight size={14} />
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// ADD-VIDEO MODAL
+// Bypasses the stub-creation pattern (which doesn't work for videos
+// since lessons require a non-null source_data, and we can't seed a
+// placeholder URL that won't trigger "connection refused" from YouTube).
+// Uses the existing /api/lessons POST endpoint which validates the URL
+// or iframe up-front and extracts a thumbnail.
+// ============================================================
+function AddVideoModal({ onClose, onCreated }) {
+  const [sourceType, setSourceType] = useState('youtube'); // 'youtube' | 'embed'
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [value, setValue] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleCreate = async (e) => {
+    e.preventDefault();
+    if (!title.trim()) return setError('Please enter a title.');
+    if (!value.trim()) {
+      return setError(sourceType === 'youtube'
+        ? 'Please paste a YouTube URL.'
+        : 'Please paste an <iframe> embed code.');
+    }
+    setCreating(true);
+    setError('');
+    try {
+      const lesson = await api.createLesson({
+        title: title.trim(),
+        description: description.trim() || null,
+        source: { type: sourceType, value: value.trim() },
+      });
+      onCreated(lesson);
+    } catch (err) {
+      setError(err.message || 'Could not create video tutorial');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  return (
+    <div className="gp-modal-backdrop" onClick={onClose}>
+      <div className="gp-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="gp-modal-header">
+          <h3><Film size={16} /> New video tutorial</h3>
+          <button className="gp-modal-close" onClick={onClose}><X size={16} /></button>
+        </div>
+
+        <form className="gp-modal-body" onSubmit={handleCreate}>
+          <div className="gp-source-tabs">
+            <button
+              type="button"
+              className={`gp-source-tab ${sourceType === 'youtube' ? 'active' : ''}`}
+              onClick={() => setSourceType('youtube')}
+            >
+              <Youtube size={13} /> YouTube URL
+            </button>
+            <button
+              type="button"
+              className={`gp-source-tab ${sourceType === 'embed' ? 'active' : ''}`}
+              onClick={() => setSourceType('embed')}
+            >
+              <Film size={13} /> Embed code
+            </button>
+          </div>
+
+          <div className="gp-field">
+            <label>Title</label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g. How to set up a new creator's bio"
+              autoFocus
+              maxLength={200}
+            />
+          </div>
+
+          <div className="gp-field">
+            <label>Description (optional)</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Short context shown above the video on the detail page."
+              rows={3}
+              maxLength={1000}
+            />
+          </div>
+
+          {sourceType === 'youtube' ? (
+            <div className="gp-field">
+              <label>YouTube URL</label>
+              <input
+                type="text"
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                placeholder="https://www.youtube.com/watch?v=…"
+              />
+              <p className="gp-input-hint">Works with watch URLs, Shorts, or youtu.be short links.</p>
+            </div>
+          ) : (
+            <div className="gp-field">
+              <label>Embed code</label>
+              <textarea
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                placeholder={'<iframe src="https://mega.nz/embed/…" …></iframe>'}
+                rows={5}
+              />
+              <p className="gp-input-hint">
+                Paste the full &lt;iframe&gt; from the host's share menu. Allowed: YouTube, Vimeo, Mega, Loom, Wistia, Dailymotion.
+              </p>
+            </div>
+          )}
+
+          {error && <div className="gp-error"><AlertCircle size={13} /> {error}</div>}
+
+          <div className="gp-modal-actions">
+            <button type="button" className="btn btn-secondary" onClick={onClose} disabled={creating}>Cancel</button>
+            <button type="submit" className="btn btn-primary" disabled={creating || !title.trim() || !value.trim()}>
+              {creating ? <><Loader2 size={12} className="spin" /> Creating…</> : 'Create video tutorial'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
