@@ -53,7 +53,7 @@
   border-radius: 8px;
   padding: 4px;
   min-width: 200px;
-  z-index: 20;
+  z-index: 30;        /* must be ABOVE .gp-menu-backdrop (z=25) */
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   display: flex;
   flex-direction: column;
@@ -145,12 +145,16 @@
 .gp-pill-menu-btn {
   background: transparent;
   border: none;
+  border-left: 1px solid rgba(255, 255, 255, 0.06);  /* visual separator from pill name */
   color: rgba(255, 255, 255, 0.5);
-  padding: 0 8px;
+  padding: 0;
+  width: 28px;                                        /* fixed square */
   cursor: pointer;
-  height: 100%;
   display: flex;
-  align-items: center;
+  align-items: center;        /* vertical center the icon */
+  justify-content: center;    /* horizontal center the icon */
+  align-self: stretch;        /* full height of pill */
+  flex-shrink: 0;
 }
 .gp-pill-menu-btn:hover { color: white; background: rgba(255, 255, 255, 0.05); }
 
