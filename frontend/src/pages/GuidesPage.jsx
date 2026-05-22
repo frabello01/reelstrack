@@ -113,13 +113,26 @@ export default function GuidesPage() {
   // ============================================================
   // ITEM ACTIONS
   // ============================================================
-  const handleNew = (type) => {
+  const handleNew = async (type) => {
     setShowNewMenu(false);
-    if (type === 'article') navigate('/guides/new');
-    else if (type === 'video') navigate('/lessons/new');
-    else if (type === 'category') {
+    if (type === 'category') {
       setEditingCategory(null);
       setShowCategoryModal(true);
+      return;
+    }
+    if (type !== 'article' && type !== 'video') return;
+
+    // Create the stub row server-side so we get a real UUID, then navigate.
+    // Solves the "invalid input syntax for type uuid: undefined" bug.
+    try {
+      const catId = selectedCategoryId !== 'all' && selectedCategoryId !== 'uncategorized'
+        ? selectedCategoryId
+        : null;
+      const stub = await api.createGuideItem(type, catId);
+      if (type === 'article') navigate(`/guides/${stub.id}`);
+      else navigate(`/lessons/${stub.id}`);
+    } catch (err) {
+      alert(`Couldn't create new ${type}: ${err.message}`);
     }
   };
 

@@ -219,6 +219,11 @@ export const api = {
     request('/api/guides-v2/categories/reorder', { method: 'POST', body: JSON.stringify({ ordered_ids }) }),
   getGuideItems: (categoryId) =>
     request(`/api/guides-v2/items${categoryId ? `?category_id=${encodeURIComponent(categoryId)}` : ''}`),
+  createGuideItem: (type, category_id) =>
+    request(`/api/guides-v2/items/${type}`, {
+      method: 'POST',
+      body: JSON.stringify({ category_id: category_id || null }),
+    }),
   moveGuideItem: (type, id, category_id) =>
     request(`/api/guides-v2/items/${type}/${id}/move`, { method: 'POST', body: JSON.stringify({ category_id }) }),
   toggleGuideItemPin: (type, id, is_pinned) =>

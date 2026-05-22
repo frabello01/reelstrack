@@ -1,21 +1,12 @@
 // ============================================================
-// /api/guides-v2 — Guides Overhaul backend
+// /api/guides-v2 — Guides Overhaul backend (v2 — schema-correct)
 // ============================================================
-// Provides the new category-based API on top of the existing
-// guide_articles + lessons tables. Does NOT modify or replace
-// the original /api/guides or /api/lessons routes.
-//
-// Endpoints:
-//   GET    /api/guides-v2/categories                       list all categories
-//   POST   /api/guides-v2/categories                       create category
-//   PATCH  /api/guides-v2/categories/:id                   update
-//   DELETE /api/guides-v2/categories/:id                   delete (items become uncategorized)
-//   POST   /api/guides-v2/categories/reorder               bulk-update sort_order
-//
-//   GET    /api/guides-v2/items?category_id=...            unified list (articles + lessons)
-//   POST   /api/guides-v2/items/:type/:id/move             move to another category
-//   POST   /api/guides-v2/items/:type/:id/pin              toggle is_pinned
-//   POST   /api/guides-v2/items/reorder                    bulk-update sort_order in a category
+// FIXED: column names now match actual DB schema:
+//   guide_articles: id, title, content (jsonb), content_text, created_at, updated_at
+//                   (+ added by migration: category_id, sort_order, is_pinned)
+//   lessons:        id, title, description, source_type, source_data,
+//                   thumbnail_url, is_done, done_at, created_at, updated_at
+//                   (+ added by migration: category_id, sort_order, is_pinned)
 // ============================================================
 
 const express = require('express');
@@ -37,21 +28,22 @@ function slugify(s) {
     .slice(0, 60) || `cat-${Date.now()}`;
 }
 
+// Pull a short preview snippet from the article's plain-text body
+function previewFromContentText(content_text) {
+  if (!content_text) return null;
+  const t = String(content_text).trim().replace(/\s+/g, ' ');
+  return t.length > 140 ? `${t.slice(0, 140)}…` : t;
+}
+
 async function fetchItemsForCategory(categoryId) {
-  // Articles
+  // Build queries with REAL columns
   const articlesQuery = supabase
     .from('guide_articles')
-    .select('id, title, slug, summary, body, image_url, sort_order, is_pinned, created_at, updated_at')
-    .order('is_pinned', { ascending: false })
-    .order('sort_order', { ascending: true })
-    .order('updated_at', { ascending: false });
+    .select('id, title, content_text, sort_order, is_pinned, created_at, updated_at, category_id');
 
   const lessonsQuery = supabase
     .from('lessons')
-    .select('id, title, slug, summary, video_url, thumbnail_url, duration_seconds, sort_order, is_pinned, created_at, updated_at')
-    .order('is_pinned', { ascending: false })
-    .order('sort_order', { ascending: true })
-    .order('updated_at', { ascending: false });
+    .select('id, title, description, source_type, source_data, thumbnail_url, is_done, sort_order, is_pinned, created_at, updated_at, category_id');
 
   if (categoryId === 'uncategorized') {
     articlesQuery.is('category_id', null);
@@ -69,24 +61,40 @@ async function fetchItemsForCategory(categoryId) {
   if (aErr) throw new Error(`Articles query failed: ${aErr.message}`);
   if (lErr) throw new Error(`Lessons query failed: ${lErr.message}`);
 
+  // Normalize to a shared shape for the UI
   const tagged = [
     ...(articles || []).map((a) => ({
-      ...a,
-      item_type: 'article',
-      // article doesn't have these fields, normalize to null
-      video_url: null,
-      thumbnail_url: a.image_url || null,
+      id: a.id,
+      title: a.title,
+      summary: previewFromContentText(a.content_text),
+      thumbnail_url: null,           // articles don't have thumbnails (yet)
       duration_seconds: null,
+      is_pinned: !!a.is_pinned,
+      sort_order: a.sort_order ?? 0,
+      category_id: a.category_id,
+      created_at: a.created_at,
+      updated_at: a.updated_at,
+      item_type: 'article',
     })),
     ...(lessons || []).map((l) => ({
-      ...l,
+      id: l.id,
+      title: l.title,
+      summary: l.description || null,
+      thumbnail_url: l.thumbnail_url || null,
+      duration_seconds: null,        // not in schema, leave null
+      source_type: l.source_type,
+      source_data: l.source_data,
+      is_done: !!l.is_done,
+      is_pinned: !!l.is_pinned,
+      sort_order: l.sort_order ?? 0,
+      category_id: l.category_id,
+      created_at: l.created_at,
+      updated_at: l.updated_at,
       item_type: 'video',
-      body: null,
-      image_url: null,
     })),
   ];
 
-  // Final merge sort: pinned first, then sort_order, then updated_at
+  // Sort: pinned first → sort_order → updated_at desc
   tagged.sort((a, b) => {
     if ((b.is_pinned ? 1 : 0) !== (a.is_pinned ? 1 : 0)) {
       return (b.is_pinned ? 1 : 0) - (a.is_pinned ? 1 : 0);
@@ -117,8 +125,6 @@ router.get('/categories', async (req, res) => {
       .order('created_at', { ascending: true });
     if (error) throw error;
 
-    // Tack on per-category counts (articles + lessons) so the UI can show
-    // "12 items" badges on each pill without a second round-trip.
     const cats = data || [];
     const counts = await Promise.all(
       cats.map(async (c) => {
@@ -134,7 +140,6 @@ router.get('/categories', async (req, res) => {
     const countMap = Object.fromEntries(counts.map((c) => [c.id, c.total]));
     const enriched = cats.map((c) => ({ ...c, item_count: countMap[c.id] || 0 }));
 
-    // Also count uncategorized as a virtual entry
     const [{ count: uncatArticles }, { count: uncatLessons }] = await Promise.all([
       supabase.from('guide_articles').select('id', { count: 'exact', head: true }).is('category_id', null),
       supabase.from('lessons').select('id', { count: 'exact', head: true }).is('category_id', null),
@@ -152,7 +157,6 @@ router.post('/categories', async (req, res) => {
     const { name, slug, description, icon, color } = req.body || {};
     if (!name?.trim()) return res.status(400).json({ error: 'name is required' });
 
-    // Determine next sort_order
     const { data: maxRow } = await supabase
       .from('guide_categories')
       .select('sort_order')
@@ -205,7 +209,6 @@ router.patch('/categories/:id', async (req, res) => {
 
 router.delete('/categories/:id', async (req, res) => {
   try {
-    // Items in this category get category_id=null automatically via ON DELETE SET NULL.
     const { error } = await supabase
       .from('guide_categories')
       .delete()
@@ -218,7 +221,6 @@ router.delete('/categories/:id', async (req, res) => {
 });
 
 // Bulk-reorder categories
-// body: { ordered_ids: [uuid, uuid, ...] }
 router.post('/categories/reorder', async (req, res) => {
   try {
     const ids = req.body?.ordered_ids;
@@ -242,7 +244,7 @@ router.post('/categories/reorder', async (req, res) => {
 });
 
 // ============================================================
-// ITEMS (articles + videos, unified)
+// ITEMS
 // ============================================================
 router.get('/items', async (req, res) => {
   try {
@@ -254,9 +256,56 @@ router.get('/items', async (req, res) => {
   }
 });
 
+// ============================================================
+// CREATE A NEW ARTICLE / VIDEO STUB (in optional category)
+// Solves the "/guides/new" UUID problem — backend creates the row
+// first, returns its real id, frontend then navigates to /guides/:id
+// ============================================================
+router.post('/items/:type', async (req, res) => {
+  try {
+    const type = req.params.type;
+    if (!VALID_TYPES.includes(type)) {
+      return res.status(400).json({ error: `type must be article or video` });
+    }
+    const { category_id } = req.body || {};
+
+    if (type === 'article') {
+      const { data, error } = await supabase
+        .from('guide_articles')
+        .insert({
+          title: 'Untitled',
+          content: null,
+          content_text: '',
+          category_id: category_id || null,
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      return res.json({ ...data, item_type: 'article' });
+    } else {
+      // Lessons need a non-null source_type+source_data because of the check
+      // constraint. We seed an empty youtube placeholder that the detail page
+      // overwrites as soon as the user enters a URL.
+      const { data, error } = await supabase
+        .from('lessons')
+        .insert({
+          title: 'Untitled',
+          description: null,
+          source_type: 'youtube',
+          source_data: 'https://www.youtube.com/watch?v=',  // placeholder, user fixes
+          category_id: category_id || null,
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      return res.json({ ...data, item_type: 'video' });
+    }
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
 // Move an item to a different category
-// POST /api/guides-v2/items/:type/:id/move
-// body: { category_id: uuid | null }
 router.post('/items/:type/:id/move', async (req, res) => {
   try {
     const table = tableFor(req.params.type);
@@ -287,7 +336,6 @@ router.post('/items/:type/:id/pin', async (req, res) => {
 
     let nextPinned = newVal;
     if (nextPinned === null) {
-      // Toggle: look up current value first
       const { data: row, error: getErr } = await supabase
         .from(table).select('is_pinned').eq('id', req.params.id).single();
       if (getErr) throw getErr;
@@ -309,7 +357,6 @@ router.post('/items/:type/:id/pin', async (req, res) => {
 });
 
 // Bulk-reorder items within a category
-// body: { ordered: [{ type: 'article'|'video', id: uuid }, ...] }
 router.post('/items/reorder', async (req, res) => {
   try {
     const ordered = req.body?.ordered;
@@ -321,7 +368,6 @@ router.post('/items/reorder', async (req, res) => {
         return res.status(400).json({ error: 'Each entry needs {type:"article"|"video", id:uuid}' });
       }
     }
-
     const updates = await Promise.all(
       ordered.map((o, idx) =>
         supabase
