@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { LayoutDashboard, ListVideo, LogOut, CheckSquare, Menu, X, BarChart3, Music, Sparkles, BookOpen, GraduationCap, Wand2, UserCircle2, Layers } from 'lucide-react';
+import { LayoutDashboard, ListVideo, LogOut, CheckSquare, Menu, X, BarChart3, Music, Sparkles, BookOpen, GraduationCap, Wand2, UserCircle2, Layers, Film } from 'lucide-react';
 import FetchProgress from './FetchProgress';
 import './Layout.css';
 
@@ -95,6 +95,10 @@ export default function Layout() {
           <NavLink to="/characters" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
             <UserCircle2 size={18} />
             Characters
+          </NavLink>
+          <NavLink to="/studio" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+            <Film size={18} />
+            Studio
           </NavLink>
           <NavLink to="/guides" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
             <BookOpen size={18} />

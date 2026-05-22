@@ -242,4 +242,27 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(body || {}),
     }),
+
+  // Studio (Seedream 4.5 via Replicate + LLM prompt rewriter)
+  getStudioStatus: () => request('/api/studio/status'),
+  getStudioCharacters: () => request('/api/studio/characters'),
+  createStudioCharacter: (body) =>
+    request('/api/studio/characters', { method: 'POST', body: JSON.stringify(body) }),
+  updateStudioCharacter: (id, body) =>
+    request(`/api/studio/characters/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteStudioCharacter: (id) =>
+    request(`/api/studio/characters/${id}`, { method: 'DELETE' }),
+  previewStudioPrompt: (body) =>
+    request('/api/studio/preview-prompt', { method: 'POST', body: JSON.stringify(body) }),
+  generateStudioImage: (body) =>
+    request('/api/studio/generate', { method: 'POST', body: JSON.stringify(body) }),
+  getStudioGenerations: (characterId) =>
+    request(`/api/studio/generations${characterId ? `?character_id=${encodeURIComponent(characterId)}` : ''}`),
+  deleteStudioGeneration: (id) =>
+    request(`/api/studio/generations/${id}`, { method: 'DELETE' }),
+  cleanStudioGeneration: (id, body) =>
+    request(`/api/studio/generations/${id}/clean`, {
+      method: 'POST',
+      body: JSON.stringify(body || {}),
+    }),
 };

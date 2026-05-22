@@ -23,6 +23,7 @@ import LessonDetailPage from './pages/LessonDetailPage';
 import ImageCleanerPage from './pages/ImageCleanerPage';
 import BatchCleanerPage from './pages/BatchCleanerPage';
 import CharactersPage from './pages/CharactersPage';
+import StudioPage from './pages/StudioPage';
 import Layout from './components/Layout';
 import './index.css';
 
@@ -66,6 +67,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="image-cleaner" element={<ImageCleanerPage />} />
             <Route path="batch-cleaner" element={<BatchCleanerPage />} />
             <Route path="characters" element={<CharactersPage />} />
+            <Route path="studio" element={<StudioPage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>
         </Routes>
