@@ -189,7 +189,7 @@ export const api = {
   toggleProfileDailyTasks: (profileId, enabled) =>
     request(`/api/daily-tasks/profiles/${profileId}/toggle`, { method: 'PATCH', body: JSON.stringify({ enabled }) }),
 
-  // Guides (knowledge base / SOPs)
+  // Guides (knowledge base / SOPs) — legacy endpoints, still used by detail pages
   getGuides: (search) => request(`/api/guides${search ? `?search=${encodeURIComponent(search)}` : ''}`),
   getGuide: (id) => request(`/api/guides/${id}`),
   createGuide: (body) => request('/api/guides', { method: 'POST', body: JSON.stringify(body) }),
@@ -198,7 +198,7 @@ export const api = {
   uploadGuideImage: (id, image_data_url) =>
     request(`/api/guides/${id}/image`, { method: 'POST', body: JSON.stringify({ image_data_url }) }),
 
-  // Lessons (e-learning)
+  // Lessons (e-learning) — legacy endpoints, still used by detail pages
   getLessons: (search) => request(`/api/lessons${search ? `?search=${encodeURIComponent(search)}` : ''}`),
   getLesson: (id) => request(`/api/lessons/${id}`),
   createLesson: (body) => request('/api/lessons', { method: 'POST', body: JSON.stringify(body) }),
@@ -206,6 +206,25 @@ export const api = {
   deleteLesson: (id) => request(`/api/lessons/${id}`, { method: 'DELETE' }),
   uploadLessonThumbnail: (id, image_data_url) =>
     request(`/api/lessons/${id}/thumbnail`, { method: 'POST', body: JSON.stringify({ image_data_url }) }),
+
+  // Guides V2 — category-based unified API for the new Guides page
+  getGuideCategories: () => request('/api/guides-v2/categories'),
+  createGuideCategory: (body) =>
+    request('/api/guides-v2/categories', { method: 'POST', body: JSON.stringify(body) }),
+  updateGuideCategory: (id, body) =>
+    request(`/api/guides-v2/categories/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteGuideCategory: (id) =>
+    request(`/api/guides-v2/categories/${id}`, { method: 'DELETE' }),
+  reorderGuideCategories: (ordered_ids) =>
+    request('/api/guides-v2/categories/reorder', { method: 'POST', body: JSON.stringify({ ordered_ids }) }),
+  getGuideItems: (categoryId) =>
+    request(`/api/guides-v2/items${categoryId ? `?category_id=${encodeURIComponent(categoryId)}` : ''}`),
+  moveGuideItem: (type, id, category_id) =>
+    request(`/api/guides-v2/items/${type}/${id}/move`, { method: 'POST', body: JSON.stringify({ category_id }) }),
+  toggleGuideItemPin: (type, id, is_pinned) =>
+    request(`/api/guides-v2/items/${type}/${id}/pin`, { method: 'POST', body: JSON.stringify({ is_pinned }) }),
+  reorderGuideItems: (ordered) =>
+    request('/api/guides-v2/items/reorder', { method: 'POST', body: JSON.stringify({ ordered }) }),
 
   // AI Image Cleaner
   getImageCleanerModels: () => request('/api/image-cleaner/models'),

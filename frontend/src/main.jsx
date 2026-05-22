@@ -61,8 +61,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="converter" element={<ConverterPage />} />
             <Route path="my-day" element={<MyDayPage />} />
             <Route path="guides" element={<GuidesPage />} />
+            <Route path="guides/new" element={<GuideDetailPage />} />
             <Route path="guides/:id" element={<GuideDetailPage />} />
             <Route path="lessons" element={<LessonsPage />} />
+            <Route path="lessons/new" element={<LessonDetailPage />} />
             <Route path="lessons/:id" element={<LessonDetailPage />} />
             <Route path="image-cleaner" element={<ImageCleanerPage />} />
             <Route path="batch-cleaner" element={<BatchCleanerPage />} />
