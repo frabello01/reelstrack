@@ -1,0 +1,12 @@
+/* ============================================================
+   ADD THIS SMALL SNIPPET TO YOUR EXISTING Layout.css
+   ============================================================
+   Just append it at the end. Adds the visual separator between the
+   "Guides" item and the admin-only "Team" item in the sidebar.
+*/
+
+.nav-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 8px 12px;
+}

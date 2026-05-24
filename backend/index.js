@@ -20,6 +20,9 @@ const imageCleanerRouter = require('./routes/imageCleaner');
 const higgsfieldRouter = require('./routes/higgsfield');
 const studioRouter = require('./routes/studio');
 const guidesV2Router = require('./routes/guidesV2');
+const teamRouter = require('./routes/team');
+const invitesRouter = require('./routes/invites');
+const { requireAuth } = require('./middleware/auth');
 const { runMyAccountsFetch } = require('./services/myAccountsService');
 const { generateDailyTasks, cleanupOldDailyTasks } = require('./services/dailyTasksService');
 
@@ -27,9 +30,9 @@ const app = express();
 app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3001;
 
+// ============================================================
 // Middleware
-// CORS — supports multiple origins via comma-separated FRONTEND_URL env var.
-// e.g. FRONTEND_URL="https://app.reelstrack.io,https://reels-tracker.vercel.app"
+// ============================================================
 const allowedOrigins = (process.env.FRONTEND_URL || '*')
   .split(',')
   .map((o) => o.trim())
@@ -37,7 +40,6 @@ const allowedOrigins = (process.env.FRONTEND_URL || '*')
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, curl, server-side)
     if (!origin) return callback(null, true);
     if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
       return callback(null, true);
@@ -48,18 +50,42 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '15mb' }));
 
-// Health check endpoint — exempt from rate limiting (used by UptimeRobot to keep the dyno awake)
+// ============================================================
+// PUBLIC ROUTES (no auth required) — mount BEFORE the auth gate
+// ============================================================
 app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date() }));
 
-// Rate limiter — applies to all OTHER routes.
-// Skip the high-frequency polling endpoint so the FetchProgress bar doesn't burn the limit.
+// Public invite acceptance flow (token in URL is the access control)
+app.use('/api/invites', invitesRouter);
+
+// ============================================================
+// RATE LIMIT — applies to everything else
+// ============================================================
 app.use(rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 1000, // raised from 200 to 1000 to accommodate normal in-app usage
+  max: 1000,
   skip: (req) => req.path === '/api/fetch/active',
 }));
 
-// Routes
+// ============================================================
+// AUTH GATE — every /api/* request below this must be authenticated
+// ============================================================
+// requireAuth attaches req.user with { id, email, role, display_name }.
+//
+// EXCEPTION: the public to-do share link `/api/todos/public/:token/...`
+// is intentionally anonymous (the token IS the access control). We skip
+// auth for any path under /api/todos/public/.
+//
+// Per-route admin gating happens inside each router via the requireAdmin
+// middleware (added in Phase 2; not in Phase 1).
+app.use('/api', (req, res, next) => {
+  if (req.path.startsWith('/todos/public/')) return next();
+  return requireAuth(req, res, next);
+});
+
+// ============================================================
+// AUTHENTICATED ROUTES
+// ============================================================
 app.use('/api/lists', listsRouter);
 app.use('/api/creators', creatorsRouter);
 app.use('/api/reels', reelsRouter);
@@ -76,14 +102,11 @@ app.use('/api/image-cleaner', imageCleanerRouter);
 app.use('/api/higgsfield', higgsfieldRouter);
 app.use('/api/studio', studioRouter);
 app.use('/api/guides-v2', guidesV2Router);
+app.use('/api/team', teamRouter);
 
-// Competitor reels fetch is now MANUAL only.
-// Use the "Fetch Now" button on the dashboard (whole list) or the 🔄 button
-// next to each creator (single creator) to trigger fetches on demand.
-// This avoids burning HikerAPI credits on days the app isn't being used.
-
-// My-accounts cron: runs every day at 5:00 AM UTC (1 hour before competitor fetch)
-// Snapshots followers + reels for each account. Idempotent — safe to run multiple times per day.
+// ============================================================
+// CRONS (unchanged)
+// ============================================================
 cron.schedule('0 5 * * *', async () => {
   console.log('[CRON] Starting my-accounts daily snapshot...');
   try {
@@ -94,10 +117,6 @@ cron.schedule('0 5 * * *', async () => {
   }
 });
 
-// Daily-tasks cron: runs at 00:01 Europe/Rome every day.
-// Generates fresh task instances for every (active + opted-in) profile, and
-// cleans up tasks older than 30 days. node-cron's `timezone` option handles
-// DST transitions automatically.
 cron.schedule('1 0 * * *', async () => {
   console.log('[CRON] Generating daily tasks for today (Europe/Rome)...');
   try {

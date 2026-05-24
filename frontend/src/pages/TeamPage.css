@@ -1,0 +1,376 @@
+.team-page {
+  padding: 24px;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.team-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 22px;
+  flex-wrap: wrap;
+}
+
+.team-header h1 {
+  margin: 0;
+  color: white;
+  font-family: 'Syne', sans-serif;
+  font-size: 28px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.team-header h1 svg { color: #c4b5fd; }
+.team-subtitle {
+  color: rgba(255, 255, 255, 0.55);
+  margin: 4px 0 0;
+  font-size: 13px;
+  max-width: 600px;
+  line-height: 1.55;
+}
+
+.team-error {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.08);
+  border: 1px solid rgba(248, 113, 113, 0.25);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 12px;
+  margin-bottom: 14px;
+}
+
+.team-loading {
+  display: flex;
+  justify-content: center;
+  padding: 40px 0;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.team-section {
+  margin-bottom: 24px;
+}
+.team-section h2 {
+  margin: 0 0 10px;
+  color: rgba(255, 255, 255, 0.85);
+  font-family: 'Syne', sans-serif;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.team-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* ===== Rows ===== */
+.team-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+.team-row-invite {
+  border-color: rgba(167, 139, 250, 0.2);
+  background: rgba(167, 139, 250, 0.04);
+}
+.team-row-deactivated {
+  opacity: 0.55;
+}
+
+.team-row-avatar {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: rgba(167, 139, 250, 0.15);
+  color: #ddd6fe;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.team-row-avatar-pending {
+  background: rgba(167, 139, 250, 0.2);
+  color: #c4b5fd;
+}
+.team-row-avatar-off {
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.team-row-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.team-row-name {
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.team-self-badge {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 9px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.team-admin-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: rgba(252, 211, 77, 0.15);
+  color: #fcd34d;
+  font-size: 9px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.team-row-email {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
+  margin-top: 2px;
+}
+
+.team-row-meta {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  margin-top: 3px;
+}
+
+.team-row-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.team-role-select {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: white;
+  border-radius: 5px;
+  padding: 5px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.team-role-select:focus { outline: none; border-color: #a78bfa; }
+
+.team-row-delete {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.55);
+  width: 30px; height: 30px;
+  border-radius: 5px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+.team-row-delete:hover {
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.3);
+  background: rgba(248, 113, 113, 0.06);
+}
+
+.team-invite-link {
+  margin-top: 6px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 5px;
+  padding: 6px 8px;
+  font-size: 11px;
+  font-family: 'SF Mono', Menlo, monospace;
+  color: rgba(167, 139, 250, 0.85);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.team-invite-link code { font-family: inherit; }
+
+/* ===== Modal ===== */
+.team-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.team-modal {
+  background: #15151a;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 480px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+.team-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.team-modal-header h3 {
+  margin: 0;
+  color: white;
+  font-family: 'Syne', sans-serif;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.team-modal-close {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+}
+.team-modal-close:hover { color: white; background: rgba(255, 255, 255, 0.06); }
+
+.team-modal-body {
+  padding: 16px 18px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.team-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.team-field label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  font-weight: 500;
+}
+.team-field input[type="text"],
+.team-field input[type="email"] {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: white;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-family: inherit;
+  font-size: 13px;
+}
+.team-field input:focus { outline: none; border-color: #a78bfa; }
+
+.team-role-radio {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.team-role-radio label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  text-transform: none;
+  letter-spacing: 0;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  color: white;
+  font-size: 13px;
+  font-weight: normal;
+}
+.team-role-radio label.active {
+  border-color: #a78bfa;
+  background: rgba(167, 139, 250, 0.08);
+}
+.team-role-radio label input[type="radio"] {
+  margin-top: 4px;
+  accent-color: #a78bfa;
+}
+.team-role-radio label > svg {
+  color: rgba(167, 139, 250, 0.7);
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+.team-role-radio label strong { color: white; font-size: 13px; }
+.team-role-radio label p {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+  line-height: 1.45;
+}
+
+.team-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.team-invite-success {
+  text-align: center;
+  padding: 12px 0;
+}
+.team-invite-success svg { color: #4ade80; }
+.team-invite-success h4 {
+  margin: 8px 0 4px;
+  color: white;
+  font-family: 'Syne', sans-serif;
+  font-size: 16px;
+}
+.team-invite-success p {
+  margin: 4px 0;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+}
+
+.team-invite-link-box {
+  margin: 12px 0;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(167, 139, 250, 0.25);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-family: 'SF Mono', Menlo, monospace;
+  font-size: 11px;
+  color: #c4b5fd;
+  word-break: break-all;
+  text-align: left;
+}
+.team-invite-link-box code { font-family: inherit; }
+
+.team-invite-note {
+  font-size: 11px;
+  color: #fbbf24;
+  margin-top: 8px;
+}
+
+@keyframes spin { from { transform: rotate(0); } to { transform: rotate(360deg); } }
+.spin { animation: spin 1s linear infinite; }

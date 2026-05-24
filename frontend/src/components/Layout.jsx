@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { LayoutDashboard, ListVideo, LogOut, CheckSquare, Menu, X, BarChart3, Music, Sparkles, BookOpen, UserCircle2, Layers, Film } from 'lucide-react';
+import { LayoutDashboard, ListVideo, LogOut, CheckSquare, Menu, X, BarChart3, Music, Sparkles, BookOpen, UserCircle2, Layers, Film, Users } from 'lucide-react';
 import FetchProgress from './FetchProgress';
 import './Layout.css';
 
 export default function Layout() {
-  const { user, signOut } = useAuth();
+  const { user, displayName, isAdmin, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -39,10 +39,9 @@ export default function Layout() {
           <Menu size={22} />
         </button>
         <img src="/logo.png" alt="Creator Advisor" className="mobile-logo" />
-        <div style={{ width: 40 }} /> {/* spacer for balance */}
+        <div style={{ width: 40 }} />
       </header>
 
-      {/* Backdrop when sidebar is open on mobile */}
       {mobileOpen && (
         <div className="sidebar-backdrop" onClick={() => setMobileOpen(false)} />
       )}
@@ -100,12 +99,23 @@ export default function Layout() {
             <BookOpen size={18} />
             Guides
           </NavLink>
+
+          {/* Admin-only section */}
+          {isAdmin && (
+            <>
+              <div className="nav-divider" />
+              <NavLink to="/team" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+                <Users size={18} />
+                Team
+              </NavLink>
+            </>
+          )}
         </nav>
 
         <div className="sidebar-footer">
           <NavLink to="/settings" className="user-info-link" title="Settings">
-            <div className="user-avatar">{user?.email?.[0].toUpperCase()}</div>
-            <span className="user-email">{user?.email}</span>
+            <div className="user-avatar">{(displayName || user?.email || '?')[0].toUpperCase()}</div>
+            <span className="user-email">{displayName || user?.email}</span>
           </NavLink>
           <button className="btn btn-ghost btn-sm" onClick={handleSignOut} aria-label="Sign out">
             <LogOut size={14} />
@@ -117,7 +127,6 @@ export default function Layout() {
         <Outlet />
       </main>
 
-      {/* Floating progress bar — shows whenever a fetch job is running */}
       <FetchProgress />
     </div>
   );

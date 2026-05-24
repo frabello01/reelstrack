@@ -1,26 +1,38 @@
+import { supabase } from './supabase';
+
 const BASE = import.meta.env.VITE_API_URL || '';
 
+// ============================================================
+// REQUEST HELPER
+// ============================================================
+// Every API call now attaches the current Supabase session JWT as a
+// Bearer token. The backend's auth middleware verifies it on each request.
+// If no session exists, the request goes out without an Authorization
+// header — backend will respond 401 and the caller can react.
 async function request(path, options = {}) {
   const t0 = Date.now();
+
+  // Grab the current session for its access_token. This is cached by the
+  // Supabase SDK in localStorage so the call is effectively free.
+  const { data: { session } } = await supabase.auth.getSession();
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(options.headers || {}),
+  };
+  if (session?.access_token) {
+    headers.Authorization = `Bearer ${session.access_token}`;
+  }
+
   let res;
   try {
-    res = await fetch(`${BASE}${path}`, {
-      headers: { 'Content-Type': 'application/json' },
-      ...options,
-    });
+    res = await fetch(`${BASE}${path}`, { ...options, headers });
   } catch (err) {
-    // Network failure (CORS, offline, server down)
     console.error(`[api] NETWORK FAIL ${path}:`, err.message);
     throw err;
   }
   const elapsed = Date.now() - t0;
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-    // Stringify the error properly — server might return:
-    //   { error: "string" }                            → use as-is
-    //   { error: { message, code, ... } }              → extract .message
-    //   { error: "string", details: {...} }            → append details
-    //   anything else                                  → JSON stringify
     let msg;
     if (typeof err.error === 'string') {
       msg = err.error;
@@ -29,7 +41,6 @@ async function request(path, options = {}) {
     } else {
       msg = `HTTP ${res.status}`;
     }
-    // Append details if present (often has the real reason)
     if (err.details) {
       const detailStr = typeof err.details === 'string'
         ? err.details
@@ -40,7 +51,6 @@ async function request(path, options = {}) {
     throw new Error(msg);
   }
   const data = await res.json();
-  // Debug: log empty responses so we can spot when the backend returns [] mysteriously
   if (Array.isArray(data) && data.length === 0 && !path.includes('/active') && !path.includes('/jobs')) {
     console.warn(`[api] EMPTY ARRAY from ${path} (${elapsed}ms)`);
   }
@@ -111,7 +121,6 @@ export const api = {
   copyReel: (sourceId, reelId, target_list_id) =>
     request(`/api/todos/${sourceId}/reels/${reelId}/copy`, { method: 'POST', body: JSON.stringify({ target_list_id }) }),
 
-  // Direct video upload (initiates a signed Supabase Storage URL, finalize after upload)
   initVideoUpload: (todoId, filename, size_bytes) =>
     request(`/api/todos/${todoId}/reels/upload/init`, { method: 'POST', body: JSON.stringify({ filename, size_bytes }) }),
   finalizeVideoUpload: (todoId, payload) =>
@@ -121,12 +130,12 @@ export const api = {
   retryReelBackup: (todoId, reelId) =>
     request(`/api/todos/${todoId}/reels/${reelId}/backup`, { method: 'POST' }),
 
-  // Public to-do list (no auth)
+  // Public to-do list (no auth — bypasses the JWT gate on the backend)
   getPublicTodo: (token) => request(`/api/todos/public/${token}`),
   togglePublicReelDone: (token, reelId, is_done) =>
     request(`/api/todos/public/${token}/reels/${reelId}`, { method: 'PATCH', body: JSON.stringify({ is_done }) }),
 
-  // My Accounts (accounts I manage) — kept for the per-profile detail page
+  // My Accounts
   getMyAccounts: () => request('/api/my-accounts'),
   getMyAccount: (id) => request(`/api/my-accounts/${id}`),
   addMyAccount: (body) => request('/api/my-accounts', { method: 'POST', body: JSON.stringify(body) }),
@@ -136,7 +145,7 @@ export const api = {
   triggerMyAccountsFetch: (account_id) =>
     request('/api/my-accounts/fetch/run', { method: 'POST', body: JSON.stringify({ account_id }) }),
 
-  // Talents ("My Creators") — top-level entity wrapping multiple IG profiles
+  // Talents
   getTalents: () => request('/api/talents'),
   getTalent: (id) => request(`/api/talents/${id}`),
   createTalent: (body) => request('/api/talents', { method: 'POST', body: JSON.stringify(body) }),
@@ -153,19 +162,17 @@ export const api = {
   removeTalentProfilePic: (talentId) =>
     request(`/api/talents/${talentId}/profile-pic`, { method: 'DELETE' }),
 
-  // To-do list cover image
   uploadTodoCover: (todoId, image_data_url) =>
     request(`/api/todos/${todoId}/cover-image`, { method: 'POST', body: JSON.stringify({ image_data_url }) }),
   removeTodoCover: (todoId) =>
     request(`/api/todos/${todoId}/cover-image`, { method: 'DELETE' }),
 
-  // Reel converter — paste IG link, get fresh video URL + metadata
   fetchReelForConverter: (url) =>
     request('/api/converter/fetch-reel', { method: 'POST', body: JSON.stringify({ url }) }),
   convertReelToMp3: (url) =>
     request('/api/converter/convert-to-mp3', { method: 'POST', body: JSON.stringify({ url }) }),
 
-  // Agency settings (display name + logo)
+  // Settings
   getSettings: () => request('/api/settings'),
   updateSettings: (display_name) =>
     request('/api/settings', { method: 'PATCH', body: JSON.stringify({ display_name }) }),
@@ -189,7 +196,7 @@ export const api = {
   toggleProfileDailyTasks: (profileId, enabled) =>
     request(`/api/daily-tasks/profiles/${profileId}/toggle`, { method: 'PATCH', body: JSON.stringify({ enabled }) }),
 
-  // Guides (knowledge base / SOPs) — legacy endpoints, still used by detail pages
+  // Guides (legacy)
   getGuides: (search) => request(`/api/guides${search ? `?search=${encodeURIComponent(search)}` : ''}`),
   getGuide: (id) => request(`/api/guides/${id}`),
   createGuide: (body) => request('/api/guides', { method: 'POST', body: JSON.stringify(body) }),
@@ -198,7 +205,7 @@ export const api = {
   uploadGuideImage: (id, image_data_url) =>
     request(`/api/guides/${id}/image`, { method: 'POST', body: JSON.stringify({ image_data_url }) }),
 
-  // Lessons (e-learning) — legacy endpoints, still used by detail pages
+  // Lessons (legacy)
   getLessons: (search) => request(`/api/lessons${search ? `?search=${encodeURIComponent(search)}` : ''}`),
   getLesson: (id) => request(`/api/lessons/${id}`),
   createLesson: (body) => request('/api/lessons', { method: 'POST', body: JSON.stringify(body) }),
@@ -207,7 +214,7 @@ export const api = {
   uploadLessonThumbnail: (id, image_data_url) =>
     request(`/api/lessons/${id}/thumbnail`, { method: 'POST', body: JSON.stringify({ image_data_url }) }),
 
-  // Guides V2 — category-based unified API for the new Guides page
+  // Guides V2
   getGuideCategories: () => request('/api/guides-v2/categories'),
   createGuideCategory: (body) =>
     request('/api/guides-v2/categories', { method: 'POST', body: JSON.stringify(body) }),
@@ -246,7 +253,7 @@ export const api = {
   deleteHiggsfieldCharacter: (id) =>
     request(`/api/higgsfield/characters/${id}`, { method: 'DELETE' }),
 
-  // Higgsfield Characters — real API (Soul IDs trained via Higgsfield)
+  // Higgsfield Characters — real API
   getHiggsfieldApiCharacters: () => request('/api/higgsfield/api-characters'),
   getHiggsfieldCharacterStatus: (id) => request(`/api/higgsfield/api-characters/${id}`),
   trainHiggsfieldCharacter: (body) =>
@@ -267,7 +274,7 @@ export const api = {
       body: JSON.stringify(body || {}),
     }),
 
-  // Studio (Seedream 4.5 via Replicate + LLM prompt rewriter)
+  // Studio
   getStudioStatus: () => request('/api/studio/status'),
   getStudioCharacters: () => request('/api/studio/characters'),
   createStudioCharacter: (body) =>
@@ -288,5 +295,26 @@ export const api = {
     request(`/api/studio/generations/${id}/clean`, {
       method: 'POST',
       body: JSON.stringify(body || {}),
+    }),
+
+  // Team
+  getMe: () => request('/api/team/me'),
+  getTeamMembers: () => request('/api/team/members'),
+  getTeamInvites: () => request('/api/team/invites'),
+  createTeamInvite: (body) =>
+    request('/api/team/invites', { method: 'POST', body: JSON.stringify(body) }),
+  revokeTeamInvite: (id) =>
+    request(`/api/team/invites/${id}`, { method: 'DELETE' }),
+  updateTeamMember: (id, body) =>
+    request(`/api/team/members/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deactivateTeamMember: (id) =>
+    request(`/api/team/members/${id}`, { method: 'DELETE' }),
+
+  // Invite acceptance (public, no auth)
+  checkInvite: (token) => request(`/api/invites/${token}`),
+  acceptInvite: (token, password) =>
+    request(`/api/invites/${token}/accept`, {
+      method: 'POST',
+      body: JSON.stringify({ password }),
     }),
 };

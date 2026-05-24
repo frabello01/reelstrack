@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import LoginPage from './pages/LoginPage';
+import SignupPage from './pages/SignupPage';
 import DashboardPage from './pages/DashboardPage';
 import ListsPage from './pages/ListsPage';
 import ListDetailPage from './pages/ListDetailPage';
@@ -23,13 +24,46 @@ import ImageCleanerPage from './pages/ImageCleanerPage';
 import BatchCleanerPage from './pages/BatchCleanerPage';
 import CharactersPage from './pages/CharactersPage';
 import StudioPage from './pages/StudioPage';
+import TeamPage from './pages/TeamPage';
 import Layout from './components/Layout';
 import './index.css';
 
+// Any signed-in user with an active team_members row
 function ProtectedRoute({ children }) {
-  const { user, loading } = useAuth();
+  const { user, profile, loading, profileError, signOut } = useAuth();
   if (loading) return <div className="loading-screen"><div className="spinner" /></div>;
   if (!user) return <Navigate to="/login" replace />;
+
+  // Signed into Supabase but no team_members row (or deactivated) — refuse
+  // access and offer a sign-out. This prevents stale auth sessions from
+  // accessing the API after an account has been deactivated.
+  if (!profile) {
+    return (
+      <div className="loading-screen" style={{ flexDirection: 'column', gap: 16 }}>
+        <div style={{ maxWidth: 380, textAlign: 'center', color: 'rgba(255,255,255,0.85)', padding: '0 24px' }}>
+          <h2 style={{ fontFamily: 'Syne, sans-serif', marginBottom: 8 }}>Account not active</h2>
+          <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', lineHeight: 1.55 }}>
+            {profileError || 'Your team membership is not active. Ask the admin to re-invite or reactivate you.'}
+          </p>
+          <button
+            className="btn btn-secondary"
+            style={{ marginTop: 16 }}
+            onClick={() => signOut().then(() => window.location.assign('/login'))}
+          >
+            Sign out
+          </button>
+        </div>
+      </div>
+    );
+  }
+  return children;
+}
+
+// Admin-only route — used for /team and (later) /log
+function AdminRoute({ children }) {
+  const { isAdmin, loading } = useAuth();
+  if (loading) return <div className="loading-screen"><div className="spinner" /></div>;
+  if (!isAdmin) return <Navigate to="/" replace />;
   return children;
 }
 
@@ -38,8 +72,12 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <AuthProvider>
       <BrowserRouter>
         <Routes>
+          {/* Public */}
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/signup" element={<SignupPage />} />
           <Route path="/share/:token" element={<PublicTodoPage />} />
+
+          {/* Protected (any active team member) */}
           <Route
             path="/"
             element={
@@ -61,10 +99,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="my-day" element={<MyDayPage />} />
             <Route path="guides" element={<GuidesPage />} />
             <Route path="guides/:id" element={<GuideDetailPage />} />
-            {/* The old /lessons listing page now redirects to /guides.
-                /lessons/:id stays alive so video detail pages still work,
-                and the "back" button in LessonDetailPage that navigates
-                to /lessons now lands the user on Guides instead. */}
             <Route path="lessons" element={<Navigate to="/guides" replace />} />
             <Route path="lessons/:id" element={<LessonDetailPage />} />
             <Route path="image-cleaner" element={<ImageCleanerPage />} />
@@ -72,6 +106,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="characters" element={<CharactersPage />} />
             <Route path="studio" element={<StudioPage />} />
             <Route path="settings" element={<SettingsPage />} />
+
+            {/* Admin only */}
+            <Route path="team" element={<AdminRoute><TeamPage /></AdminRoute>} />
           </Route>
         </Routes>
       </BrowserRouter>
