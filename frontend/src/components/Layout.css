@@ -64,6 +64,12 @@
 .nav-item:hover { background: var(--bg3); color: var(--text); }
 .nav-item.active { background: var(--accent-glow); color: var(--accent2); }
 
+.nav-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 8px 4px;
+}
+
 .sidebar-footer {
   display: flex;
   align-items: center;
@@ -72,21 +78,12 @@
   border-top: 1px solid var(--border);
 }
 
-.user-info,
-.user-info-link {
+.user-info {
   display: flex;
   align-items: center;
   gap: 8px;
   flex: 1;
   min-width: 0;
-  text-decoration: none;
-  color: inherit;
-  padding: 4px;
-  margin: -4px;
-  border-radius: 6px;
-}
-.user-info-link:hover {
-  background: var(--bg3);
 }
 
 .user-avatar {
