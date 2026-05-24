@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
   BookOpen, Film, Plus, Pin, PinOff, Edit2, Trash2, Loader2, AlertCircle,
   X, ChevronDown, GripVertical, FolderOpen, Sparkles, Image as ImageIcon,
-  ChevronRight, MoreVertical, Move, Youtube, CheckCircle2,
+  ChevronRight, MoreVertical, Move, Youtube, CheckCircle2, Search,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuth } from '../hooks/useAuth';
@@ -384,15 +384,6 @@ export default function GuidesPage() {
         <div className="gp-error"><AlertCircle size={14} /> {error}</div>
       )}
 
-      {/* Admin-only: team progress matrix for the current category */}
-      {isAdmin && (
-        <ProgressMatrix
-          matrix={matrix}
-          loading={loadingMatrix}
-          onCellClick={(item) => handleOpenItem({ id: item.item_id, item_type: item.item_type })}
-        />
-      )}
-
       {/* Items pane */}
       <div className="gp-items-pane">
         <div className="gp-items-header">
@@ -494,6 +485,15 @@ export default function GuidesPage() {
           </div>
         )}
       </div>
+
+      {/* Admin-only: team progress for the current category — at the BOTTOM */}
+      {isAdmin && (
+        <ProgressMatrix
+          matrix={matrix}
+          loading={loadingMatrix}
+          onItemClick={(item) => handleOpenItem({ id: item.item_id, item_type: item.item_type })}
+        />
+      )}
 
       {showCategoryModal && (
         <CategoryModal
@@ -894,18 +894,37 @@ function AddVideoModal({ onClose, onCreated }) {
 }
 
 // ============================================================
-// PROGRESS MATRIX (admin only)
+// PROGRESS MATRIX (admin only) — list view
 // ============================================================
-// Compact table: rows = active team members, columns = items in the
-// currently-selected category, cells = ✓ green (completed) or — gray.
-// Click any cell to open that item in detail view.
-// Item titles in column headers are rotated for compact display.
+// Replaces the wide table layout which didn't scale past ~20 items.
+// Two view modes (toggleable):
+//   - "By member": list of members, each row shows X/Y completed +
+//                  a progress bar. Click to expand to per-item list.
+//   - "By item":   list of items, each row shows X/Y members done.
+//                  Click to expand to per-member list.
+// Both modes have a search box in expanded rows to filter long lists.
 // ============================================================
-function ProgressMatrix({ matrix, loading, onCellClick }) {
+function ProgressMatrix({ matrix, loading, onItemClick }) {
+  const [mode, setMode] = useState('by-member'); // 'by-member' | 'by-item'
+  const [expandedKey, setExpandedKey] = useState(null);
+  const [search, setSearch] = useState('');
+
+  // Reset expansion + search when mode changes
+  useEffect(() => {
+    setExpandedKey(null);
+    setSearch('');
+  }, [mode]);
+
   if (loading) {
     return (
-      <div className="gp-matrix-wrap">
-        <div className="gp-matrix-loading"><Loader2 size={16} className="spin" /> Loading progress…</div>
+      <div className="gp-progress-wrap">
+        <div className="gp-progress-header">
+          <UsersIconSafe />
+          <span>Team progress</span>
+        </div>
+        <div className="gp-progress-loading">
+          <Loader2 size={14} className="spin" /> Loading…
+        </div>
       </div>
     );
   }
@@ -915,133 +934,297 @@ function ProgressMatrix({ matrix, loading, onCellClick }) {
   const items = matrix.items || [];
   const completions = matrix.completions || [];
 
-  // Index: "userId|type|id" → completedAt iso
-  const map = new Map();
+  // Lookup map: "userId|type|id" → completedAt iso
+  const completionMap = new Map();
   for (const c of completions) {
-    map.set(`${c.user_id}|${c.item_type}|${c.item_id}`, c.completed_at);
+    completionMap.set(`${c.user_id}|${c.item_type}|${c.item_id}`, c.completed_at);
   }
 
   if (members.length === 0) {
     return (
-      <div className="gp-matrix-wrap">
-        <div className="gp-matrix-header-row">
-          <UsersIconSafe /> Team progress
+      <div className="gp-progress-wrap">
+        <div className="gp-progress-header">
+          <UsersIconSafe />
+          <span>Team progress</span>
         </div>
-        <div className="gp-matrix-empty">
+        <div className="gp-progress-empty">
           No active team members yet. Invite some from the Team page.
         </div>
       </div>
     );
   }
-
   if (items.length === 0) {
     return (
-      <div className="gp-matrix-wrap">
-        <div className="gp-matrix-header-row">
-          <UsersIconSafe /> Team progress
+      <div className="gp-progress-wrap">
+        <div className="gp-progress-header">
+          <UsersIconSafe />
+          <span>Team progress</span>
         </div>
-        <div className="gp-matrix-empty">
-          No items in this category yet. Add an article or video first.
+        <div className="gp-progress-empty">
+          No items in this category yet.
         </div>
       </div>
     );
   }
 
-  // Totals: per-member completed count in this category
-  const memberTotals = members.map((m) => ({
-    member: m,
-    completed: items.filter((it) =>
-      map.has(`${m.user_id}|${it.item_type}|${it.item_id}`)
-    ).length,
-  }));
-
   return (
-    <div className="gp-matrix-wrap">
-      <div className="gp-matrix-header-row">
+    <div className="gp-progress-wrap">
+      <div className="gp-progress-header">
         <UsersIconSafe />
         <span>Team progress</span>
-        <span className="gp-matrix-total-count">
+        <span className="gp-progress-counts">
           {members.length} member{members.length === 1 ? '' : 's'} · {items.length} item{items.length === 1 ? '' : 's'}
         </span>
+        <div className="gp-progress-mode-toggle">
+          <button
+            type="button"
+            className={`gp-progress-mode-btn ${mode === 'by-member' ? 'active' : ''}`}
+            onClick={() => setMode('by-member')}
+          >
+            By member
+          </button>
+          <button
+            type="button"
+            className={`gp-progress-mode-btn ${mode === 'by-item' ? 'active' : ''}`}
+            onClick={() => setMode('by-item')}
+          >
+            By item
+          </button>
+        </div>
       </div>
 
-      <div className="gp-matrix-scroll">
-        <table className="gp-matrix">
-          <thead>
-            <tr>
-              <th className="gp-matrix-corner">Member</th>
-              {items.map((it) => (
-                <th
-                  key={`${it.item_type}-${it.item_id}`}
-                  className="gp-matrix-col-header"
-                  title={`${it.title} (${it.item_type})`}
-                >
-                  <div className="gp-matrix-col-label">
-                    <span className="gp-matrix-col-type">
-                      {it.item_type === 'article' ? '📄' : '🎬'}
-                    </span>
-                    <span className="gp-matrix-col-title">{it.title}</span>
-                  </div>
-                </th>
-              ))}
-              <th className="gp-matrix-total-header">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {memberTotals.map(({ member, completed }) => {
-              const pct = items.length > 0 ? Math.round((completed / items.length) * 100) : 0;
-              return (
-                <tr key={member.id}>
-                  <td className="gp-matrix-row-header">
-                    <div className="gp-matrix-member-name">
-                      {member.display_name}
-                      {member.role === 'admin' && <span className="gp-matrix-admin-tag">admin</span>}
-                    </div>
-                  </td>
-                  {items.map((it) => {
-                    const completedAt = map.get(`${member.user_id}|${it.item_type}|${it.item_id}`);
-                    return (
-                      <td
-                        key={`${member.id}-${it.item_type}-${it.item_id}`}
-                        className={`gp-matrix-cell ${completedAt ? 'done' : 'todo'}`}
-                        title={
-                          completedAt
-                            ? `${member.display_name} completed "${it.title}" on ${new Date(completedAt).toLocaleString()}`
-                            : `${member.display_name} has not completed "${it.title}"`
-                        }
-                        onClick={() => onCellClick && onCellClick(it)}
-                      >
-                        {completedAt ? '✓' : '·'}
-                      </td>
-                    );
-                  })}
-                  <td className="gp-matrix-total-cell">
-                    <div className="gp-matrix-total-frac">
-                      {completed}/{items.length}
-                    </div>
-                    <div className="gp-matrix-progress-bar">
-                      <div
-                        className="gp-matrix-progress-fill"
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      <div className="gp-progress-list">
+        {mode === 'by-member' ? (
+          members.map((member) => (
+            <MemberRow
+              key={member.id}
+              member={member}
+              items={items}
+              completionMap={completionMap}
+              expanded={expandedKey === member.id}
+              onToggle={() => setExpandedKey(expandedKey === member.id ? null : member.id)}
+              search={expandedKey === member.id ? search : ''}
+              onSearchChange={setSearch}
+              onItemClick={onItemClick}
+            />
+          ))
+        ) : (
+          items.map((item) => {
+            const key = `${item.item_type}:${item.item_id}`;
+            return (
+              <ItemRow
+                key={key}
+                item={item}
+                members={members}
+                completionMap={completionMap}
+                expanded={expandedKey === key}
+                onToggle={() => setExpandedKey(expandedKey === key ? null : key)}
+                search={expandedKey === key ? search : ''}
+                onSearchChange={setSearch}
+                onItemClick={onItemClick}
+              />
+            );
+          })
+        )}
       </div>
     </div>
   );
 }
 
-// Small wrapper so we don't have to add another lucide import alias collision.
-// (UsersIcon is already used inside LessonDetailPage with alias `UsersIcon`,
-// but in this file we just use `Users` from lucide — re-export under the safe name.)
-function UsersIconSafe() {
-  return <span aria-hidden style={{ display: 'inline-flex' }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>;
+// ============================================================
+// MEMBER ROW
+// ============================================================
+function MemberRow({ member, items, completionMap, expanded, onToggle, search, onSearchChange, onItemClick }) {
+  // Tally + classify
+  const enriched = items.map((it) => {
+    const completedAt = completionMap.get(`${member.user_id}|${it.item_type}|${it.item_id}`);
+    return { ...it, completedAt };
+  });
+  const completedCount = enriched.filter((it) => it.completedAt).length;
+  const pct = items.length > 0 ? Math.round((completedCount / items.length) * 100) : 0;
+
+  // Filter expanded items by search
+  const term = search.trim().toLowerCase();
+  const filtered = term
+    ? enriched.filter((it) => it.title.toLowerCase().includes(term))
+    : enriched;
+  // Sort: not-yet first (so admin's eye lands on what's missing), then by title
+  const sorted = [...filtered].sort((a, b) => {
+    if (!!a.completedAt !== !!b.completedAt) {
+      return a.completedAt ? 1 : -1;     // pending first
+    }
+    return a.title.localeCompare(b.title);
+  });
+
+  return (
+    <div className={`gp-progress-row ${expanded ? 'expanded' : ''}`}>
+      <button type="button" className="gp-progress-row-header" onClick={onToggle}>
+        <ChevronRight size={14} className={`gp-progress-chevron ${expanded ? 'open' : ''}`} />
+        <span className="gp-progress-row-title">
+          {member.display_name}
+          {member.role === 'admin' && <span className="gp-progress-admin-tag">admin</span>}
+        </span>
+        <span className="gp-progress-row-frac">{completedCount} / {items.length}</span>
+        <div className="gp-progress-bar">
+          <div className="gp-progress-bar-fill" style={{ width: `${pct}%` }} />
+        </div>
+        <span className="gp-progress-row-pct">{pct}%</span>
+      </button>
+
+      {expanded && (
+        <div className="gp-progress-row-body">
+          <div className="gp-progress-search">
+            <Search size={12} />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => onSearchChange(e.target.value)}
+              placeholder={`Search ${items.length} items…`}
+              autoFocus
+            />
+          </div>
+          {sorted.length === 0 ? (
+            <div className="gp-progress-no-match">No items match "{term}"</div>
+          ) : (
+            <ul className="gp-progress-sublist">
+              {sorted.map((it) => (
+                <li
+                  key={`${it.item_type}:${it.item_id}`}
+                  className={`gp-progress-subrow ${it.completedAt ? 'done' : 'pending'}`}
+                  onClick={() => onItemClick && onItemClick(it)}
+                >
+                  <span className="gp-progress-subrow-icon">
+                    {it.completedAt ? '✓' : '·'}
+                  </span>
+                  <span className="gp-progress-subrow-type">
+                    {it.item_type === 'article' ? '📄' : '🎬'}
+                  </span>
+                  <span className="gp-progress-subrow-title">{it.title}</span>
+                  <span className="gp-progress-subrow-time">
+                    {it.completedAt ? timeAgoShort(it.completedAt) : 'not yet'}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
+
+// ============================================================
+// ITEM ROW
+// ============================================================
+function ItemRow({ item, members, completionMap, expanded, onToggle, search, onSearchChange, onItemClick }) {
+  const enriched = members.map((m) => {
+    const completedAt = completionMap.get(`${m.user_id}|${item.item_type}|${item.item_id}`);
+    return { ...m, completedAt };
+  });
+  const completedCount = enriched.filter((m) => m.completedAt).length;
+  const pct = members.length > 0 ? Math.round((completedCount / members.length) * 100) : 0;
+
+  const term = search.trim().toLowerCase();
+  const filtered = term
+    ? enriched.filter((m) => m.display_name.toLowerCase().includes(term))
+    : enriched;
+  const sorted = [...filtered].sort((a, b) => {
+    if (!!a.completedAt !== !!b.completedAt) {
+      return a.completedAt ? 1 : -1;
+    }
+    return a.display_name.localeCompare(b.display_name);
+  });
+
+  return (
+    <div className={`gp-progress-row ${expanded ? 'expanded' : ''}`}>
+      <button type="button" className="gp-progress-row-header" onClick={onToggle}>
+        <ChevronRight size={14} className={`gp-progress-chevron ${expanded ? 'open' : ''}`} />
+        <span className="gp-progress-row-type">
+          {item.item_type === 'article' ? '📄' : '🎬'}
+        </span>
+        <span className="gp-progress-row-title">{item.title}</span>
+        <span className="gp-progress-row-frac">{completedCount} / {members.length}</span>
+        <div className="gp-progress-bar">
+          <div className="gp-progress-bar-fill" style={{ width: `${pct}%` }} />
+        </div>
+        <span className="gp-progress-row-pct">{pct}%</span>
+        {onItemClick && (
+          <button
+            type="button"
+            className="gp-progress-row-open"
+            onClick={(e) => { e.stopPropagation(); onItemClick(item); }}
+            title="Open"
+          >
+            <ChevronRight size={13} />
+          </button>
+        )}
+      </button>
+
+      {expanded && (
+        <div className="gp-progress-row-body">
+          <div className="gp-progress-search">
+            <Search size={12} />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => onSearchChange(e.target.value)}
+              placeholder={`Search ${members.length} members…`}
+              autoFocus
+            />
+          </div>
+          {sorted.length === 0 ? (
+            <div className="gp-progress-no-match">No members match "{term}"</div>
+          ) : (
+            <ul className="gp-progress-sublist">
+              {sorted.map((m) => (
+                <li
+                  key={m.id}
+                  className={`gp-progress-subrow ${m.completedAt ? 'done' : 'pending'}`}
+                >
+                  <span className="gp-progress-subrow-icon">
+                    {m.completedAt ? '✓' : '·'}
+                  </span>
+                  <span className="gp-progress-subrow-title">
+                    {m.display_name}
+                    {m.role === 'admin' && <span className="gp-progress-admin-tag">admin</span>}
+                  </span>
+                  <span className="gp-progress-subrow-time">
+                    {m.completedAt ? timeAgoShort(m.completedAt) : 'not yet'}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function UsersIconSafe() {
+  return (
+    <span aria-hidden style={{ display: 'inline-flex' }}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+        <circle cx="9" cy="7" r="4"/>
+        <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+      </svg>
+    </span>
+  );
+}
+
+function timeAgoShort(iso) {
+  if (!iso) return '';
+  const sec = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+  if (sec < 60) return 'just now';
+  if (sec < 3600) return `${Math.floor(sec / 60)}m`;
+  if (sec < 86400) return `${Math.floor(sec / 3600)}h`;
+  if (sec < 86400 * 7) return `${Math.floor(sec / 86400)}d`;
+  if (sec < 86400 * 30) return `${Math.floor(sec / (86400 * 7))}w`;
+  return `${Math.floor(sec / (86400 * 30))}mo`;
+}
+
 
 // ============================================================
 // UTIL
