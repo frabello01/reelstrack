@@ -336,6 +336,10 @@ export const api = {
     const qs = new URLSearchParams({ item_type, item_id }).toString();
     return request(`/api/guide-completions?${qs}`);
   },
+  getGuideCompletionsMatrix: (categoryId) => {
+    const qs = categoryId ? `?category_id=${encodeURIComponent(categoryId)}` : '';
+    return request(`/api/guide-completions/matrix${qs}`);
+  },
   markGuideComplete: (item_type, item_id) =>
     request('/api/guide-completions', {
       method: 'POST',
