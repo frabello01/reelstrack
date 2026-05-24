@@ -671,3 +671,25 @@
   color: rgba(255, 255, 255, 0.45);
   line-height: 1.4;
 }
+
+/* ============================================================
+   Phase 2 — completion badge for current user
+   ============================================================ */
+.gp-item.completed-by-me {
+  background: rgba(74, 222, 128, 0.04);
+}
+
+.gp-item-done-badge {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #16a34a;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 0 2px #15151a;
+}

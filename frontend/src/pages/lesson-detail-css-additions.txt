@@ -1,0 +1,75 @@
+/* ============================================================
+   PHASE 2 — append these rules to your existing
+   frontend/src/pages/LessonDetailPage.css
+   ============================================================
+   Adds styles for: editable-vs-readonly title/description states,
+   and the admin-only "Completed by" list.
+*/
+
+/* Title is only "click to edit" cursor when admin */
+.lesson-title-editable {
+  cursor: pointer;
+}
+.lesson-title-editable:hover .lesson-title-pencil {
+  opacity: 1;
+}
+.lesson-title-pencil {
+  opacity: 0.4;
+  transition: opacity 0.15s;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+/* Description shown to members (no hover, no edit hint, plain prose) */
+.lesson-desc-readonly {
+  cursor: default !important;
+}
+.lesson-desc-readonly:hover {
+  background: inherit !important;
+}
+
+/* Admin-only "Completed by" list */
+.lesson-completions {
+  margin-top: 24px;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+}
+.lesson-completions-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 10px;
+}
+.lesson-completions-header svg { color: #c4b5fd; }
+.lesson-completions-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.lesson-completions-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(74, 222, 128, 0.04);
+  font-size: 13px;
+}
+.lesson-completion-name {
+  color: white;
+  font-weight: 500;
+}
+.lesson-completion-time {
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 11px;
+}

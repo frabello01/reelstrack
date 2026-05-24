@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, CheckCircle2, Circle, Trash2, Image as ImageIcon, Pencil, X, Check, AlertCircle
+  ArrowLeft, CheckCircle2, Circle, Trash2, Image as ImageIcon, Pencil, X, Check, AlertCircle, Users as UsersIcon
 } from 'lucide-react';
 import { api } from '../lib/api';
+import { useAuth } from '../hooks/useAuth';
 import './LessonDetailPage.css';
 
 const MAX_THUMB_BYTES = 5 * 1024 * 1024;
@@ -12,6 +13,7 @@ const ALLOWED_THUMB_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp
 export default function LessonDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { isAdmin } = useAuth();
   const [lesson, setLesson] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -19,6 +21,11 @@ export default function LessonDetailPage() {
   const [editingDesc, setEditingDesc] = useState(false);
   const [draft, setDraft] = useState({ title: '', description: '' });
   const [uploadingThumb, setUploadingThumb] = useState(false);
+
+  // Phase 2: per-user completion tracking
+  const [completedByMe, setCompletedByMe] = useState(false);
+  const [completions, setCompletions] = useState([]); // list of who has completed (admin view)
+  const [togglingComplete, setTogglingComplete] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -33,7 +40,37 @@ export default function LessonDetailPage() {
     }
   };
 
-  useEffect(() => { load(); }, [id]);
+  useEffect(() => { load(); loadCompletions(); }, [id]);
+
+  // Phase 2 helpers
+  const loadCompletions = async () => {
+    try {
+      const [mine, all] = await Promise.all([
+        api.getMyGuideCompletions(),
+        api.getGuideCompletionsForItem('video', id),
+      ]);
+      setCompletedByMe((mine.videos || []).includes(id));
+      setCompletions(all.completions || []);
+    } catch (err) {
+      console.warn('Could not load completion state:', err.message);
+    }
+  };
+
+  const handleToggleMyCompletion = async () => {
+    setTogglingComplete(true);
+    try {
+      if (completedByMe) {
+        await api.unmarkGuideComplete('video', id);
+      } else {
+        await api.markGuideComplete('video', id);
+      }
+      await loadCompletions();
+    } catch (err) {
+      alert(`Failed: ${err.message}`);
+    } finally {
+      setTogglingComplete(false);
+    }
+  };
 
   const handleToggleDone = async () => {
     const next = !lesson.is_done;
@@ -120,15 +157,18 @@ export default function LessonDetailPage() {
         </button>
         <div className="lesson-detail-actions">
           <button
-            className={`btn btn-sm ${lesson.is_done ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={handleToggleDone}
+            className={`btn btn-sm ${completedByMe ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={handleToggleMyCompletion}
+            disabled={togglingComplete}
           >
-            {lesson.is_done ? <CheckCircle2 size={13} /> : <Circle size={13} />}
-            {lesson.is_done ? 'Completed' : 'Mark complete'}
+            {completedByMe ? <CheckCircle2 size={13} /> : <Circle size={13} />}
+            {completedByMe ? 'Completed by you' : 'Mark complete'}
           </button>
-          <button className="btn btn-ghost btn-sm danger-hover" onClick={handleDelete} title="Delete lesson">
-            <Trash2 size={13} />
-          </button>
+          {isAdmin && (
+            <button className="btn btn-ghost btn-sm danger-hover" onClick={handleDelete} title="Delete lesson">
+              <Trash2 size={13} />
+            </button>
+          )}
         </div>
       </div>
 
@@ -147,9 +187,12 @@ export default function LessonDetailPage() {
           <button className="btn btn-ghost btn-sm" onClick={() => { setDraft((d) => ({ ...d, title: lesson.title })); setEditingTitle(false); }}><X size={13} /></button>
         </div>
       ) : (
-        <h1 className="lesson-title" onClick={() => setEditingTitle(true)}>
+        <h1
+          className={`lesson-title ${isAdmin ? 'lesson-title-editable' : ''}`}
+          onClick={isAdmin ? () => setEditingTitle(true) : undefined}
+        >
           {lesson.title}
-          <Pencil size={14} className="lesson-title-pencil" />
+          {isAdmin && <Pencil size={14} className="lesson-title-pencil" />}
         </h1>
       )}
 
@@ -162,7 +205,7 @@ export default function LessonDetailPage() {
 
       {/* Description — now BEFORE the player as requested */}
       <div className="lesson-desc-section">
-        {editingDesc ? (
+        {editingDesc && isAdmin ? (
           <div className="lesson-desc-edit">
             <textarea
               value={draft.description}
@@ -177,34 +220,56 @@ export default function LessonDetailPage() {
             </div>
           </div>
         ) : lesson.description ? (
-          <div className="lesson-desc" onClick={() => setEditingDesc(true)}>
+          <div
+            className={`lesson-desc ${isAdmin ? '' : 'lesson-desc-readonly'}`}
+            onClick={isAdmin ? () => setEditingDesc(true) : undefined}
+          >
             {lesson.description}
-            <span className="lesson-desc-edit-hint">click to edit</span>
+            {isAdmin && <span className="lesson-desc-edit-hint">click to edit</span>}
           </div>
-        ) : (
+        ) : isAdmin ? (
           <button className="lesson-desc-add" onClick={() => setEditingDesc(true)}>
             <Pencil size={12} /> Add a description
           </button>
-        )}
+        ) : null}
       </div>
 
       {/* Embedded player — now AFTER the description as requested */}
       <LessonPlayer lesson={lesson} />
 
-      {/* Thumbnail manager */}
-      <div className="lesson-thumb-section">
-        <div className="lesson-thumb-label">Thumbnail</div>
-        <div className="lesson-thumb-row">
-          {lesson.thumbnail_url ? (
-            <img src={lesson.thumbnail_url} alt="" className="lesson-thumb-preview" />
-          ) : (
-            <div className="lesson-thumb-empty">No thumbnail</div>
-          )}
-          <button className="btn btn-secondary btn-sm" onClick={handleThumbnailPick} disabled={uploadingThumb}>
-            <ImageIcon size={13} /> {uploadingThumb ? 'Uploading…' : lesson.thumbnail_url ? 'Replace' : 'Upload'}
-          </button>
+      {/* Thumbnail manager — admin only */}
+      {isAdmin && (
+        <div className="lesson-thumb-section">
+          <div className="lesson-thumb-label">Thumbnail</div>
+          <div className="lesson-thumb-row">
+            {lesson.thumbnail_url ? (
+              <img src={lesson.thumbnail_url} alt="" className="lesson-thumb-preview" />
+            ) : (
+              <div className="lesson-thumb-empty">No thumbnail</div>
+            )}
+            <button className="btn btn-secondary btn-sm" onClick={handleThumbnailPick} disabled={uploadingThumb}>
+              <ImageIcon size={13} /> {uploadingThumb ? 'Uploading…' : lesson.thumbnail_url ? 'Replace' : 'Upload'}
+            </button>
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Admin-only "Completed by" list */}
+      {isAdmin && completions.length > 0 && (
+        <div className="lesson-completions">
+          <div className="lesson-completions-header">
+            <UsersIcon size={13} /> Completed by ({completions.length})
+          </div>
+          <ul className="lesson-completions-list">
+            {completions.map((c) => (
+              <li key={c.user_id}>
+                <span className="lesson-completion-name">{c.user_name || 'Unknown'}</span>
+                <span className="lesson-completion-time">{timeAgo(c.completed_at)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

@@ -22,7 +22,11 @@ const studioRouter = require('./routes/studio');
 const guidesV2Router = require('./routes/guidesV2');
 const teamRouter = require('./routes/team');
 const invitesRouter = require('./routes/invites');
+const activityLogRouter = require('./routes/activityLog');
+const guideCompletionsRouter = require('./routes/guideCompletions');
 const { requireAuth } = require('./middleware/auth');
+const { requireAdminForWrites } = require('./middleware/requireAdminForWrites');
+const { autoLogMiddleware } = require('./middleware/autoLogMiddleware');
 const { runMyAccountsFetch } = require('./services/myAccountsService');
 const { generateDailyTasks, cleanupOldDailyTasks } = require('./services/dailyTasksService');
 
@@ -54,12 +58,10 @@ app.use(express.json({ limit: '15mb' }));
 // PUBLIC ROUTES (no auth required) — mount BEFORE the auth gate
 // ============================================================
 app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date() }));
-
-// Public invite acceptance flow (token in URL is the access control)
 app.use('/api/invites', invitesRouter);
 
 // ============================================================
-// RATE LIMIT — applies to everything else
+// RATE LIMIT
 // ============================================================
 app.use(rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -69,19 +71,29 @@ app.use(rateLimit({
 
 // ============================================================
 // AUTH GATE — every /api/* request below this must be authenticated
+// EXCEPT the public to-do share endpoints
 // ============================================================
-// requireAuth attaches req.user with { id, email, role, display_name }.
-//
-// EXCEPTION: the public to-do share link `/api/todos/public/:token/...`
-// is intentionally anonymous (the token IS the access control). We skip
-// auth for any path under /api/todos/public/.
-//
-// Per-route admin gating happens inside each router via the requireAdmin
-// middleware (added in Phase 2; not in Phase 1).
 app.use('/api', (req, res, next) => {
   if (req.path.startsWith('/todos/public/')) return next();
   return requireAuth(req, res, next);
 });
+
+// ============================================================
+// AUTO-LOG MIDDLEWARE — must come AFTER auth (needs req.user) and
+// BEFORE the routes (so it can register the res.on('finish') hook).
+// Any route that calls log() explicitly will mark req[LOGGED_SYMBOL]
+// and the auto-logger will skip it for that request.
+// ============================================================
+app.use(autoLogMiddleware);
+
+// ============================================================
+// ADMIN-ONLY WRITES on guides surfaces
+// (members can READ guides + mark complete via /api/guide-completions,
+//  but cannot create/edit/delete guides, articles, videos, or categories)
+// ============================================================
+app.use('/api/guides', requireAdminForWrites);
+app.use('/api/lessons', requireAdminForWrites);
+app.use('/api/guides-v2', requireAdminForWrites);
 
 // ============================================================
 // AUTHENTICATED ROUTES
@@ -103,9 +115,11 @@ app.use('/api/higgsfield', higgsfieldRouter);
 app.use('/api/studio', studioRouter);
 app.use('/api/guides-v2', guidesV2Router);
 app.use('/api/team', teamRouter);
+app.use('/api/activity-log', activityLogRouter);
+app.use('/api/guide-completions', guideCompletionsRouter);
 
 // ============================================================
-// CRONS (unchanged)
+// CRONS (unchanged + new log retention cleanup)
 // ============================================================
 cron.schedule('0 5 * * *', async () => {
   console.log('[CRON] Starting my-accounts daily snapshot...');
@@ -125,6 +139,17 @@ cron.schedule('1 0 * * *', async () => {
     await cleanupOldDailyTasks();
   } catch (err) {
     console.error('[CRON] Daily tasks generation failed:', err.message);
+  }
+
+  // While we're at it, prune activity_log older than 90 days
+  try {
+    const supabase = require('./lib/supabase');
+    const cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+    const { error } = await supabase.from('activity_log').delete().lt('created_at', cutoff);
+    if (error) console.warn('[CRON] activity_log prune failed:', error.message);
+    else console.log(`[CRON] Pruned activity_log entries older than ${cutoff}`);
+  } catch (err) {
+    console.warn('[CRON] activity_log prune error:', err.message);
   }
 }, {
   timezone: 'Europe/Rome',

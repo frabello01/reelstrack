@@ -317,4 +317,32 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ password }),
     }),
+
+  // Activity log (admin only)
+  getActivityLog: (params = {}) => {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) {
+      if (v !== undefined && v !== null && v !== '') qs.set(k, v);
+    }
+    const q = qs.toString();
+    return request(`/api/activity-log${q ? `?${q}` : ''}`);
+  },
+  getActivityLogSections: () => request('/api/activity-log/sections'),
+  getActivityLogUsers: () => request('/api/activity-log/users'),
+
+  // Guide completions (per-user)
+  getMyGuideCompletions: () => request('/api/guide-completions/mine'),
+  getGuideCompletionsForItem: (item_type, item_id) => {
+    const qs = new URLSearchParams({ item_type, item_id }).toString();
+    return request(`/api/guide-completions?${qs}`);
+  },
+  markGuideComplete: (item_type, item_id) =>
+    request('/api/guide-completions', {
+      method: 'POST',
+      body: JSON.stringify({ item_type, item_id }),
+    }),
+  unmarkGuideComplete: (item_type, item_id) => {
+    const qs = new URLSearchParams({ item_type, item_id }).toString();
+    return request(`/api/guide-completions?${qs}`, { method: 'DELETE' });
+  },
 };

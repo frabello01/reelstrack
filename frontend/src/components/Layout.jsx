@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { LayoutDashboard, ListVideo, LogOut, CheckSquare, Menu, X, BarChart3, Music, Sparkles, BookOpen, UserCircle2, Layers, Film, Users } from 'lucide-react';
+import { LayoutDashboard, ListVideo, LogOut, CheckSquare, Menu, X, BarChart3, Music, Sparkles, BookOpen, UserCircle2, Layers, Film, Users, ScrollText } from 'lucide-react';
 import FetchProgress from './FetchProgress';
 import './Layout.css';
 
@@ -11,12 +11,8 @@ export default function Layout() {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // Auto-close sidebar when navigating on mobile
-  useEffect(() => {
-    setMobileOpen(false);
-  }, [location.pathname]);
+  useEffect(() => { setMobileOpen(false); }, [location.pathname]);
 
-  // Lock body scroll when sidebar is open on mobile
   useEffect(() => {
     document.body.style.overflow = mobileOpen ? 'hidden' : '';
     return () => { document.body.style.overflow = ''; };
@@ -29,7 +25,6 @@ export default function Layout() {
 
   return (
     <div className="layout">
-      {/* Mobile top bar */}
       <header className="mobile-topbar">
         <button
           className="mobile-menu-btn"
@@ -107,6 +102,10 @@ export default function Layout() {
               <NavLink to="/team" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
                 <Users size={18} />
                 Team
+              </NavLink>
+              <NavLink to="/log" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+                <ScrollText size={18} />
+                Log
               </NavLink>
             </>
           )}

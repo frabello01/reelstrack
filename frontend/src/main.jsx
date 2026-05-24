@@ -25,18 +25,14 @@ import BatchCleanerPage from './pages/BatchCleanerPage';
 import CharactersPage from './pages/CharactersPage';
 import StudioPage from './pages/StudioPage';
 import TeamPage from './pages/TeamPage';
+import LogPage from './pages/LogPage';
 import Layout from './components/Layout';
 import './index.css';
 
-// Any signed-in user with an active team_members row
 function ProtectedRoute({ children }) {
   const { user, profile, loading, profileError, signOut } = useAuth();
   if (loading) return <div className="loading-screen"><div className="spinner" /></div>;
   if (!user) return <Navigate to="/login" replace />;
-
-  // Signed into Supabase but no team_members row (or deactivated) — refuse
-  // access and offer a sign-out. This prevents stale auth sessions from
-  // accessing the API after an account has been deactivated.
   if (!profile) {
     return (
       <div className="loading-screen" style={{ flexDirection: 'column', gap: 16 }}>
@@ -59,7 +55,6 @@ function ProtectedRoute({ children }) {
   return children;
 }
 
-// Admin-only route — used for /team and (later) /log
 function AdminRoute({ children }) {
   const { isAdmin, loading } = useAuth();
   if (loading) return <div className="loading-screen"><div className="spinner" /></div>;
@@ -72,12 +67,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          {/* Public */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
           <Route path="/share/:token" element={<PublicTodoPage />} />
 
-          {/* Protected (any active team member) */}
           <Route
             path="/"
             element={
@@ -109,6 +102,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 
             {/* Admin only */}
             <Route path="team" element={<AdminRoute><TeamPage /></AdminRoute>} />
+            <Route path="log" element={<AdminRoute><LogPage /></AdminRoute>} />
           </Route>
         </Routes>
       </BrowserRouter>

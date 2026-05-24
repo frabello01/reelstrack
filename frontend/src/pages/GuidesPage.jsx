@@ -3,9 +3,10 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
   BookOpen, Film, Plus, Pin, PinOff, Edit2, Trash2, Loader2, AlertCircle,
   X, ChevronDown, GripVertical, FolderOpen, Sparkles, Image as ImageIcon,
-  ChevronRight, MoreVertical, Move, Youtube,
+  ChevronRight, MoreVertical, Move, Youtube, CheckCircle2,
 } from 'lucide-react';
 import { api } from '../lib/api';
+import { useAuth } from '../hooks/useAuth';
 import './GuidesPage.css';
 
 // ============================================================
@@ -25,6 +26,7 @@ const ICON_PRESETS = ['📚', '🎬', '⚡', '🔧', '💡', '🎯', '🚀', '�
 // ============================================================
 export default function GuidesPage() {
   const navigate = useNavigate();
+  const { isAdmin } = useAuth();
 
   const [categories, setCategories] = useState([]);
   const [uncategorizedCount, setUncategorizedCount] = useState(0);
@@ -40,16 +42,31 @@ export default function GuidesPage() {
   const [showMoveModalFor, setShowMoveModalFor] = useState(null); // {type, id}
   const [showNewVideoModal, setShowNewVideoModal] = useState(false);
 
+  // Per-user completion tracking (for the green check on each item)
+  const [myCompletions, setMyCompletions] = useState({ articles: new Set(), videos: new Set() });
+
   // Drag state for items
   const draggedItemRef = useRef(null);
 
-  useEffect(() => { loadCategories(); }, []);
+  useEffect(() => { loadCategories(); loadMyCompletions(); }, []);
   useEffect(() => {
     if (selectedCategoryId) loadItems(selectedCategoryId);
   }, [selectedCategoryId]);
 
   // Note: "New" dropdown closes via backdrop overlay rendered inside the
   // JSX (gp-menu-backdrop), not via document listener.
+
+  const loadMyCompletions = async () => {
+    try {
+      const r = await api.getMyGuideCompletions();
+      setMyCompletions({
+        articles: new Set(r.articles || []),
+        videos: new Set(r.videos || []),
+      });
+    } catch (err) {
+      console.warn('Could not load completions:', err.message);
+    }
+  };
 
   const loadCategories = async () => {
     setLoadingCats(true);
@@ -280,6 +297,7 @@ export default function GuidesPage() {
           </p>
         </div>
         <div className="gp-header-actions">
+          {isAdmin && (
           <div className="gp-new-wrap">
             <button
               type="button"
@@ -310,6 +328,7 @@ export default function GuidesPage() {
               </>
             )}
           </div>
+          )}
         </div>
       </header>
 
@@ -324,6 +343,7 @@ export default function GuidesPage() {
                 key={c.id}
                 category={c}
                 selected={selectedCategoryId === c.id}
+                canEdit={isAdmin}
                 onClick={() => setSelectedCategoryId(c.id)}
                 onEdit={() => { setEditingCategory(c); setShowCategoryModal(true); }}
                 onDelete={() => handleDeleteCategory(c)}
@@ -372,19 +392,25 @@ export default function GuidesPage() {
           </div>
         ) : (
           <div className="gp-items-list">
-            {items.map((item, idx) => (
+            {items.map((item, idx) => {
+              const completedByMe = item.item_type === 'article'
+                ? myCompletions.articles.has(item.id)
+                : myCompletions.videos.has(item.id);
+              return (
               <div
                 key={`${item.item_type}-${item.id}`}
-                className={`gp-item ${item.is_pinned ? 'pinned' : ''}`}
-                draggable
-                onDragStart={(e) => onItemDragStart(e, idx)}
-                onDragOver={onItemDragOver}
-                onDragEnter={(e) => onItemDragEnter(e, idx)}
-                onDragLeave={onItemDragLeave}
-                onDrop={(e) => onItemDrop(e, idx)}
-                onDragEnd={onItemDragEnd}
+                className={`gp-item ${item.is_pinned ? 'pinned' : ''} ${completedByMe ? 'completed-by-me' : ''}`}
+                draggable={isAdmin}
+                onDragStart={isAdmin ? (e) => onItemDragStart(e, idx) : undefined}
+                onDragOver={isAdmin ? onItemDragOver : undefined}
+                onDragEnter={isAdmin ? (e) => onItemDragEnter(e, idx) : undefined}
+                onDragLeave={isAdmin ? onItemDragLeave : undefined}
+                onDrop={isAdmin ? (e) => onItemDrop(e, idx) : undefined}
+                onDragEnd={isAdmin ? onItemDragEnd : undefined}
               >
-                <div className="gp-item-handle"><GripVertical size={14} /></div>
+                {isAdmin && (
+                  <div className="gp-item-handle"><GripVertical size={14} /></div>
+                )}
 
                 <div className="gp-item-thumb-wrap" onClick={() => handleOpenItem(item)}>
                   {item.thumbnail_url ? (
@@ -396,6 +422,11 @@ export default function GuidesPage() {
                   )}
                   {item.item_type === 'video' && (
                     <div className="gp-item-type-badge"><Film size={9} /> Video</div>
+                  )}
+                  {completedByMe && (
+                    <div className="gp-item-done-badge" title="You've completed this">
+                      <CheckCircle2 size={11} />
+                    </div>
                   )}
                 </div>
 
@@ -413,14 +444,17 @@ export default function GuidesPage() {
                   </div>
                 </div>
 
-                <ItemMenu
-                  item={item}
-                  onPin={() => handlePin(item)}
-                  onMove={() => setShowMoveModalFor({ type: item.item_type, id: item.id })}
-                  onDelete={() => handleDelete(item)}
-                />
+                {isAdmin && (
+                  <ItemMenu
+                    item={item}
+                    onPin={() => handlePin(item)}
+                    onMove={() => setShowMoveModalFor({ type: item.item_type, id: item.id })}
+                    onDelete={() => handleDelete(item)}
+                  />
+                )}
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -454,10 +488,11 @@ export default function GuidesPage() {
 // ============================================================
 // CATEGORY PILL
 // ============================================================
-function CategoryPill({ category, selected, onClick, onEdit, onDelete }) {
+function CategoryPill({ category, selected, canEdit, onClick, onEdit, onDelete }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   const isVirtual = category.id === 'uncategorized';
+  const showMenu = canEdit && !isVirtual;
 
   return (
     <div className="gp-pill-shell">
@@ -472,7 +507,7 @@ function CategoryPill({ category, selected, onClick, onEdit, onDelete }) {
             <span className="gp-pill-count">{category.item_count}</span>
           )}
         </button>
-        {!isVirtual && (
+        {showMenu && (
           <button
             type="button"
             className="gp-pill-menu-btn"
@@ -490,7 +525,7 @@ function CategoryPill({ category, selected, onClick, onEdit, onDelete }) {
 
       {/* Bulletproof menu pattern: invisible full-screen backdrop closes
           the menu on any click. No document listeners, no race conditions. */}
-      {!isVirtual && menuOpen && (
+      {showMenu && menuOpen && (
         <>
           <div className="gp-menu-backdrop" onClick={() => setMenuOpen(false)} />
           <div className="gp-pill-menu" onClick={(e) => e.stopPropagation()}>
