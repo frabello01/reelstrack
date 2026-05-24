@@ -1,12 +1,9 @@
 /* ============================================================
-   PHASE 2 — append these rules to your existing
-   frontend/src/pages/LessonDetailPage.css
-   ============================================================
-   Adds styles for: editable-vs-readonly title/description states,
-   and the admin-only "Completed by" list.
-*/
+   PHASE 2 fix — append to your existing LessonDetailPage.css
+   (or replace any earlier "phase 2 additions" block you pasted)
+   ============================================================ */
 
-/* Title is only "click to edit" cursor when admin */
+/* Title editable / readonly states */
 .lesson-title-editable {
   cursor: pointer;
 }
@@ -20,7 +17,7 @@
   vertical-align: middle;
 }
 
-/* Description shown to members (no hover, no edit hint, plain prose) */
+/* Description readonly (members) — no hover affordance, no click action */
 .lesson-desc-readonly {
   cursor: default !important;
 }
@@ -28,7 +25,20 @@
   background: inherit !important;
 }
 
-/* Admin-only "Completed by" list */
+/* Auto-linkified URLs in the description */
+.lesson-desc-link {
+  color: #a78bfa;
+  text-decoration: underline;
+  text-decoration-color: rgba(167, 139, 250, 0.4);
+  text-underline-offset: 2px;
+  word-break: break-word;
+}
+.lesson-desc-link:hover {
+  color: #c4b5fd;
+  text-decoration-color: #c4b5fd;
+}
+
+/* "Completion progress" block (admin only) */
 .lesson-completions {
   margin-top: 24px;
   padding: 14px 16px;
@@ -48,6 +58,16 @@
   margin-bottom: 10px;
 }
 .lesson-completions-header svg { color: #c4b5fd; }
+.lesson-completions-count {
+  color: rgba(255, 255, 255, 0.4);
+  font-weight: 400;
+}
+.lesson-completions-empty {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 12px;
+  font-style: italic;
+}
 .lesson-completions-list {
   list-style: none;
   margin: 0;
@@ -60,9 +80,10 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 6px 8px;
+  padding: 6px 10px;
   border-radius: 6px;
-  background: rgba(74, 222, 128, 0.04);
+  background: rgba(74, 222, 128, 0.06);
+  border: 1px solid rgba(74, 222, 128, 0.12);
   font-size: 13px;
 }
 .lesson-completion-name {

@@ -76,6 +76,13 @@
 .log-filter select:focus,
 .log-filter input:focus { outline: none; }
 .log-filter select { cursor: pointer; padding-right: 4px; }
+/* The native dropdown popup uses the OS default theme by default —
+   force a readable dark background + light text on the options.
+   (Firefox supports this directly; Chrome/Safari respect it on Mac.) */
+.log-filter select option {
+  background: #1a1a22;
+  color: white;
+}
 .log-filter-search { min-width: 200px; flex: 1; max-width: 320px; }
 .log-filter-search input { flex: 1; }
 

@@ -224,7 +224,7 @@ export default function LessonDetailPage() {
             className={`lesson-desc ${isAdmin ? '' : 'lesson-desc-readonly'}`}
             onClick={isAdmin ? () => setEditingDesc(true) : undefined}
           >
-            {lesson.description}
+            <LinkifiedText text={lesson.description} />
             {isAdmin && <span className="lesson-desc-edit-hint">click to edit</span>}
           </div>
         ) : isAdmin ? (
@@ -254,24 +254,86 @@ export default function LessonDetailPage() {
         </div>
       )}
 
-      {/* Admin-only "Completed by" list */}
-      {isAdmin && completions.length > 0 && (
+      {/* Admin-only "Completed by" list (always shown for admins so the
+          progress is visible even when nobody has completed it yet) */}
+      {isAdmin && (
         <div className="lesson-completions">
           <div className="lesson-completions-header">
-            <UsersIcon size={13} /> Completed by ({completions.length})
+            <UsersIcon size={13} /> Completion progress
+            {completions.length > 0 && <span className="lesson-completions-count">({completions.length})</span>}
           </div>
-          <ul className="lesson-completions-list">
-            {completions.map((c) => (
-              <li key={c.user_id}>
-                <span className="lesson-completion-name">{c.user_name || 'Unknown'}</span>
-                <span className="lesson-completion-time">{timeAgo(c.completed_at)}</span>
-              </li>
-            ))}
-          </ul>
+          {completions.length === 0 ? (
+            <p className="lesson-completions-empty">No team members have marked this complete yet.</p>
+          ) : (
+            <ul className="lesson-completions-list">
+              {completions.map((c) => (
+                <li key={c.user_id}>
+                  <span className="lesson-completion-name">{c.user_name || 'Unknown'}</span>
+                  <span className="lesson-completion-time">{timeAgo(c.completed_at)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
     </div>
   );
+}
+
+// ---------- LinkifiedText ----------
+// Renders plain text with URLs converted to clickable links.
+// Recognizes http(s):// URLs and bare www. URLs.
+function LinkifiedText({ text }) {
+  if (!text) return null;
+  // Match http(s) or www. URLs. Stops at whitespace.
+  // Trailing punctuation like .,;:!?) is excluded from the link so
+  // pasting "see https://x.com." doesn't include the trailing dot.
+  const URL_RE = /(https?:\/\/[^\s<>"']+|www\.[^\s<>"']+)/gi;
+  const parts = [];
+  let lastIndex = 0;
+  let m;
+  let key = 0;
+  while ((m = URL_RE.exec(text)) !== null) {
+    if (m.index > lastIndex) {
+      parts.push(text.slice(lastIndex, m.index));
+    }
+    let url = m[0];
+    // Strip trailing punctuation that's probably sentence-ending
+    let trailing = '';
+    while (/[.,;:!?)]/.test(url[url.length - 1])) {
+      trailing = url[url.length - 1] + trailing;
+      url = url.slice(0, -1);
+    }
+    const href = url.startsWith('http') ? url : `https://${url}`;
+    parts.push(
+      <a
+        key={`url-${key++}`}
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(e) => e.stopPropagation()}
+        className="lesson-desc-link"
+      >
+        {url}
+      </a>
+    );
+    if (trailing) parts.push(trailing);
+    lastIndex = m.index + m[0].length;
+  }
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+  // Preserve newlines in the original text
+  return parts.map((part, i) => {
+    if (typeof part !== 'string') return part;
+    const lines = part.split('\n');
+    return lines.map((line, j) => (
+      <span key={`${i}-${j}`}>
+        {line}
+        {j < lines.length - 1 && <br />}
+      </span>
+    ));
+  });
 }
 
 // ---------- Player ----------
