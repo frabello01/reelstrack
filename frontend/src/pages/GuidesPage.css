@@ -693,3 +693,209 @@
   justify-content: center;
   box-shadow: 0 0 0 2px #15151a;
 }
+
+/* ============================================================
+   Progress Matrix (admin only)
+   ============================================================ */
+.gp-matrix-wrap {
+  margin-bottom: 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.gp-matrix-header-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+  font-weight: 500;
+}
+.gp-matrix-header-row svg { color: #c4b5fd; flex-shrink: 0; }
+.gp-matrix-total-count {
+  margin-left: auto;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  font-variant-numeric: tabular-nums;
+}
+
+.gp-matrix-loading {
+  padding: 24px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.gp-matrix-loading svg { color: #c4b5fd; }
+
+.gp-matrix-empty {
+  padding: 24px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 12px;
+  font-style: italic;
+}
+
+.gp-matrix-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.gp-matrix {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+}
+
+/* Column header: rotated 45° for compact display */
+.gp-matrix-col-header {
+  vertical-align: bottom;
+  height: 110px;
+  min-width: 30px;
+  max-width: 30px;
+  padding: 0 2px;
+  position: relative;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.gp-matrix-col-label {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform-origin: left bottom;
+  transform: translateX(-50%) rotate(-45deg);
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 400;
+  /* keep titles short visually */
+  max-width: 130px;
+}
+.gp-matrix-col-type { font-size: 11px; }
+.gp-matrix-col-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 110px;
+}
+
+.gp-matrix-corner {
+  text-align: left;
+  padding: 0 12px 8px;
+  color: rgba(255, 255, 255, 0.4);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  font-size: 10px;
+  min-width: 140px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  vertical-align: bottom;
+  height: 110px;
+}
+.gp-matrix-total-header {
+  text-align: center;
+  padding: 0 8px 8px;
+  color: rgba(255, 255, 255, 0.4);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  font-size: 10px;
+  min-width: 90px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  vertical-align: bottom;
+  height: 110px;
+}
+
+/* Row */
+.gp-matrix tbody tr {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.gp-matrix tbody tr:last-child { border-bottom: none; }
+.gp-matrix tbody tr:hover { background: rgba(255, 255, 255, 0.02); }
+
+.gp-matrix-row-header {
+  padding: 10px 12px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.gp-matrix-member-name {
+  color: white;
+  font-weight: 500;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.gp-matrix-admin-tag {
+  background: rgba(252, 211, 77, 0.15);
+  color: #fcd34d;
+  font-size: 9px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.gp-matrix-cell {
+  text-align: center;
+  width: 30px;
+  min-width: 30px;
+  max-width: 30px;
+  padding: 6px 0;
+  font-size: 14px;
+  cursor: pointer;
+  user-select: none;
+}
+.gp-matrix-cell:hover {
+  background: rgba(167, 139, 250, 0.08);
+}
+.gp-matrix-cell.done {
+  color: #4ade80;
+  font-weight: 700;
+}
+.gp-matrix-cell.todo {
+  color: rgba(255, 255, 255, 0.2);
+}
+
+.gp-matrix-total-cell {
+  padding: 10px 10px;
+  text-align: center;
+  min-width: 90px;
+  vertical-align: middle;
+}
+.gp-matrix-total-frac {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 4px;
+  font-weight: 500;
+}
+.gp-matrix-progress-bar {
+  width: 70px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+  margin: 0 auto;
+}
+.gp-matrix-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #a78bfa, #4ade80);
+  transition: width 0.3s ease;
+}
+
+@media (max-width: 600px) {
+  /* On very small screens, scrolling is essential */
+  .gp-matrix-corner,
+  .gp-matrix-row-header { min-width: 110px; }
+  .gp-matrix-col-label { max-width: 100px; }
+}

@@ -45,6 +45,10 @@ export default function GuidesPage() {
   // Per-user completion tracking (for the green check on each item)
   const [myCompletions, setMyCompletions] = useState({ articles: new Set(), videos: new Set() });
 
+  // Admin-only progress matrix (members × items)
+  const [matrix, setMatrix] = useState(null);  // { members, items, completions } | null
+  const [loadingMatrix, setLoadingMatrix] = useState(false);
+
   // Drag state for items
   const draggedItemRef = useRef(null);
 
@@ -52,6 +56,16 @@ export default function GuidesPage() {
   useEffect(() => {
     if (selectedCategoryId) loadItems(selectedCategoryId);
   }, [selectedCategoryId]);
+
+  // Admin-only: refresh the progress matrix whenever the category changes
+  // OR when items change (e.g. after a completion toggle by viewing in another tab).
+  useEffect(() => {
+    if (!isAdmin || !selectedCategoryId) {
+      setMatrix(null);
+      return;
+    }
+    loadMatrix(selectedCategoryId);
+  }, [isAdmin, selectedCategoryId]);
 
   // Note: "New" dropdown closes via backdrop overlay rendered inside the
   // JSX (gp-menu-backdrop), not via document listener.
@@ -65,6 +79,19 @@ export default function GuidesPage() {
       });
     } catch (err) {
       console.warn('Could not load completions:', err.message);
+    }
+  };
+
+  const loadMatrix = async (catId) => {
+    setLoadingMatrix(true);
+    try {
+      const r = await api.getGuideCompletionsMatrix(catId);
+      setMatrix(r);
+    } catch (err) {
+      console.warn('Could not load progress matrix:', err.message);
+      setMatrix(null);
+    } finally {
+      setLoadingMatrix(false);
     }
   };
 
@@ -355,6 +382,15 @@ export default function GuidesPage() {
 
       {error && (
         <div className="gp-error"><AlertCircle size={14} /> {error}</div>
+      )}
+
+      {/* Admin-only: team progress matrix for the current category */}
+      {isAdmin && (
+        <ProgressMatrix
+          matrix={matrix}
+          loading={loadingMatrix}
+          onCellClick={(item) => handleOpenItem({ id: item.item_id, item_type: item.item_type })}
+        />
       )}
 
       {/* Items pane */}
@@ -855,6 +891,156 @@ function AddVideoModal({ onClose, onCreated }) {
       </div>
     </div>
   );
+}
+
+// ============================================================
+// PROGRESS MATRIX (admin only)
+// ============================================================
+// Compact table: rows = active team members, columns = items in the
+// currently-selected category, cells = ✓ green (completed) or — gray.
+// Click any cell to open that item in detail view.
+// Item titles in column headers are rotated for compact display.
+// ============================================================
+function ProgressMatrix({ matrix, loading, onCellClick }) {
+  if (loading) {
+    return (
+      <div className="gp-matrix-wrap">
+        <div className="gp-matrix-loading"><Loader2 size={16} className="spin" /> Loading progress…</div>
+      </div>
+    );
+  }
+  if (!matrix) return null;
+
+  const members = matrix.members || [];
+  const items = matrix.items || [];
+  const completions = matrix.completions || [];
+
+  // Index: "userId|type|id" → completedAt iso
+  const map = new Map();
+  for (const c of completions) {
+    map.set(`${c.user_id}|${c.item_type}|${c.item_id}`, c.completed_at);
+  }
+
+  if (members.length === 0) {
+    return (
+      <div className="gp-matrix-wrap">
+        <div className="gp-matrix-header-row">
+          <UsersIconSafe /> Team progress
+        </div>
+        <div className="gp-matrix-empty">
+          No active team members yet. Invite some from the Team page.
+        </div>
+      </div>
+    );
+  }
+
+  if (items.length === 0) {
+    return (
+      <div className="gp-matrix-wrap">
+        <div className="gp-matrix-header-row">
+          <UsersIconSafe /> Team progress
+        </div>
+        <div className="gp-matrix-empty">
+          No items in this category yet. Add an article or video first.
+        </div>
+      </div>
+    );
+  }
+
+  // Totals: per-member completed count in this category
+  const memberTotals = members.map((m) => ({
+    member: m,
+    completed: items.filter((it) =>
+      map.has(`${m.user_id}|${it.item_type}|${it.item_id}`)
+    ).length,
+  }));
+
+  return (
+    <div className="gp-matrix-wrap">
+      <div className="gp-matrix-header-row">
+        <UsersIconSafe />
+        <span>Team progress</span>
+        <span className="gp-matrix-total-count">
+          {members.length} member{members.length === 1 ? '' : 's'} · {items.length} item{items.length === 1 ? '' : 's'}
+        </span>
+      </div>
+
+      <div className="gp-matrix-scroll">
+        <table className="gp-matrix">
+          <thead>
+            <tr>
+              <th className="gp-matrix-corner">Member</th>
+              {items.map((it) => (
+                <th
+                  key={`${it.item_type}-${it.item_id}`}
+                  className="gp-matrix-col-header"
+                  title={`${it.title} (${it.item_type})`}
+                >
+                  <div className="gp-matrix-col-label">
+                    <span className="gp-matrix-col-type">
+                      {it.item_type === 'article' ? '📄' : '🎬'}
+                    </span>
+                    <span className="gp-matrix-col-title">{it.title}</span>
+                  </div>
+                </th>
+              ))}
+              <th className="gp-matrix-total-header">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {memberTotals.map(({ member, completed }) => {
+              const pct = items.length > 0 ? Math.round((completed / items.length) * 100) : 0;
+              return (
+                <tr key={member.id}>
+                  <td className="gp-matrix-row-header">
+                    <div className="gp-matrix-member-name">
+                      {member.display_name}
+                      {member.role === 'admin' && <span className="gp-matrix-admin-tag">admin</span>}
+                    </div>
+                  </td>
+                  {items.map((it) => {
+                    const completedAt = map.get(`${member.user_id}|${it.item_type}|${it.item_id}`);
+                    return (
+                      <td
+                        key={`${member.id}-${it.item_type}-${it.item_id}`}
+                        className={`gp-matrix-cell ${completedAt ? 'done' : 'todo'}`}
+                        title={
+                          completedAt
+                            ? `${member.display_name} completed "${it.title}" on ${new Date(completedAt).toLocaleString()}`
+                            : `${member.display_name} has not completed "${it.title}"`
+                        }
+                        onClick={() => onCellClick && onCellClick(it)}
+                      >
+                        {completedAt ? '✓' : '·'}
+                      </td>
+                    );
+                  })}
+                  <td className="gp-matrix-total-cell">
+                    <div className="gp-matrix-total-frac">
+                      {completed}/{items.length}
+                    </div>
+                    <div className="gp-matrix-progress-bar">
+                      <div
+                        className="gp-matrix-progress-fill"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// Small wrapper so we don't have to add another lucide import alias collision.
+// (UsersIcon is already used inside LessonDetailPage with alias `UsersIcon`,
+// but in this file we just use `Users` from lucide — re-export under the safe name.)
+function UsersIconSafe() {
+  return <span aria-hidden style={{ display: 'inline-flex' }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>;
 }
 
 // ============================================================

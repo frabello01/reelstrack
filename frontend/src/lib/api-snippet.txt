@@ -1,0 +1,11 @@
+// ============================================================
+// SMALL ADDITION to frontend/src/lib/api.js
+// ============================================================
+// Find the Phase 2 "Guide completions (per-user)" section in your existing
+// api.js. Look for `getMyGuideCompletions:` or `getGuideCompletionsForItem:`.
+// Add this ONE new method anywhere alongside them inside the `export const api = { ... }` block.
+
+  getGuideCompletionsMatrix: (categoryId) => {
+    const qs = categoryId ? `?category_id=${encodeURIComponent(categoryId)}` : '';
+    return request(`/api/guide-completions/matrix${qs}`);
+  },
