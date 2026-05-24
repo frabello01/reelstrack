@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Trash2, CheckCircle2, Loader2, AlertCircle, Pencil, Check, FileText } from 'lucide-react';
+import {
+  ArrowLeft, Trash2, CheckCircle2, Circle, Loader2, AlertCircle, Pencil, Check,
+  FileText, Users as UsersIcon,
+} from 'lucide-react';
 import { api } from '../lib/api';
+import { useAuth } from '../hooks/useAuth';
 import GuideEditor from '../components/GuideEditor';
 import './GuideDetailPage.css';
 
@@ -18,7 +22,6 @@ function useDebouncedCallback(fn, delay) {
 function isEmptyContent(content) {
   if (!content) return true;
   if (!content.content || content.content.length === 0) return true;
-  // A doc with one empty paragraph is still "empty"
   if (content.content.length === 1) {
     const node = content.content[0];
     if (node.type === 'paragraph' && (!node.content || node.content.length === 0)) {
@@ -28,19 +31,35 @@ function isEmptyContent(content) {
   return false;
 }
 
+function timeAgo(iso) {
+  if (!iso) return '';
+  const sec = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+  if (sec < 60) return 'just now';
+  if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
+  if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`;
+  return `${Math.floor(sec / 86400)}d ago`;
+}
+
 export default function GuideDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { isAdmin } = useAuth();
+
   const [article, setArticle] = useState(null);
   const [loading, setLoading] = useState(true);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState(null);
-  const [saveState, setSaveState] = useState('idle'); // 'idle' | 'saving' | 'saved' | 'error'
+  const [saveState, setSaveState] = useState('idle');
   const [error, setError] = useState('');
 
-  // Edit mode is OFF by default. Brand-new articles (untitled, empty) auto-open
-  // in edit mode so users don't have to click Edit on something they just created.
+  // Edit mode is OFF by default. Auto-opens for admins on fresh articles.
+  // Members never see edit mode.
   const [editing, setEditing] = useState(false);
+
+  // Per-user completion state
+  const [completedByMe, setCompletedByMe] = useState(false);
+  const [completions, setCompletions] = useState([]);
+  const [togglingComplete, setTogglingComplete] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -50,12 +69,28 @@ export default function GuideDetailPage() {
         setArticle(a);
         setTitle(a.title || '');
         setContent(a.content);
-        // Auto-open editor if this looks like a fresh, untouched article
-        const isFresh = (a.title === 'Untitled article' || !a.title) && isEmptyContent(a.content);
-        if (isFresh) setEditing(true);
+        // Auto-open editor only for admins on fresh untouched articles
+        if (isAdmin) {
+          const isFresh = (a.title === 'Untitled article' || !a.title) && isEmptyContent(a.content);
+          if (isFresh) setEditing(true);
+        }
       })
       .catch((err) => !cancelled && setError(err.message))
       .finally(() => !cancelled && setLoading(false));
+    return () => { cancelled = true; };
+  }, [id, isAdmin]);
+
+  // Load completion state
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      api.getMyGuideCompletions().catch(() => ({ articles: [] })),
+      api.getGuideCompletionsForItem('article', id).catch(() => ({ completions: [] })),
+    ]).then(([mine, all]) => {
+      if (cancelled) return;
+      setCompletedByMe((mine.articles || []).includes(id));
+      setCompletions(all.completions || []);
+    });
     return () => { cancelled = true; };
   }, [id]);
 
@@ -74,17 +109,20 @@ export default function GuideDetailPage() {
   const debouncedSave = useDebouncedCallback(save, 1000);
 
   const handleTitleChange = (e) => {
+    if (!isAdmin) return;
     const newTitle = e.target.value;
     setTitle(newTitle);
     debouncedSave({ title: newTitle });
   };
 
   const handleContentChange = ({ content: newContent, content_text: newText }) => {
+    if (!isAdmin) return;
     setContent(newContent);
     debouncedSave({ content: newContent, content_text: newText });
   };
 
   const handleImageUpload = async (file) => {
+    if (!isAdmin) throw new Error('Members cannot upload images');
     const dataUrl = await new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result);
@@ -101,6 +139,28 @@ export default function GuideDetailPage() {
     navigate('/guides');
   };
 
+  const handleToggleMyCompletion = async () => {
+    setTogglingComplete(true);
+    try {
+      if (completedByMe) {
+        await api.unmarkGuideComplete('article', id);
+      } else {
+        await api.markGuideComplete('article', id);
+      }
+      // Refresh both states
+      const [mine, all] = await Promise.all([
+        api.getMyGuideCompletions(),
+        api.getGuideCompletionsForItem('article', id),
+      ]);
+      setCompletedByMe((mine.articles || []).includes(id));
+      setCompletions(all.completions || []);
+    } catch (err) {
+      alert(`Failed: ${err.message}`);
+    } finally {
+      setTogglingComplete(false);
+    }
+  };
+
   if (loading) return <div className="loading"><div className="spinner" /></div>;
   if (error && !article) return <div className="guide-detail-error"><AlertCircle size={14} /> {error}</div>;
 
@@ -113,23 +173,39 @@ export default function GuideDetailPage() {
           <ArrowLeft size={14} /> All guides
         </button>
         <div className="guide-detail-actions">
-          <SaveIndicator state={saveState} />
-          {editing ? (
-            <button className="btn btn-primary btn-sm" onClick={() => setEditing(false)}>
-              <Check size={13} /> Done
-            </button>
-          ) : (
-            <button className="btn btn-secondary btn-sm" onClick={() => setEditing(true)}>
-              <Pencil size={13} /> Edit
-            </button>
-          )}
-          <button className="btn btn-ghost btn-sm danger-hover" onClick={handleDelete} title="Delete article">
-            <Trash2 size={13} />
+          {/* Per-user "Mark complete" — visible to everyone */}
+          <button
+            className={`btn btn-sm ${completedByMe ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={handleToggleMyCompletion}
+            disabled={togglingComplete}
+          >
+            {completedByMe ? <CheckCircle2 size={13} /> : <Circle size={13} />}
+            {completedByMe ? 'Completed by you' : 'Mark complete'}
           </button>
+
+          {/* Admin-only: save indicator + edit toggle + delete */}
+          {isAdmin && (
+            <>
+              <SaveIndicator state={saveState} />
+              {editing ? (
+                <button className="btn btn-primary btn-sm" onClick={() => setEditing(false)}>
+                  <Check size={13} /> Done
+                </button>
+              ) : (
+                <button className="btn btn-secondary btn-sm" onClick={() => setEditing(true)}>
+                  <Pencil size={13} /> Edit
+                </button>
+              )}
+              <button className="btn btn-ghost btn-sm danger-hover" onClick={handleDelete} title="Delete article">
+                <Trash2 size={13} />
+              </button>
+            </>
+          )}
         </div>
       </div>
 
-      {editing ? (
+      {/* Title — editable input for admin in edit mode, read-only display otherwise */}
+      {editing && isAdmin ? (
         <input
           type="text"
           className="guide-title-input"
@@ -140,27 +216,62 @@ export default function GuideDetailPage() {
           autoFocus={!title}
         />
       ) : (
-        <h1 className="guide-title-display" onClick={() => setEditing(true)} title="Click to edit">
+        <h1
+          className={`guide-title-display ${isAdmin ? 'guide-title-editable' : ''}`}
+          onClick={isAdmin ? () => setEditing(true) : undefined}
+          title={isAdmin ? 'Click to edit' : undefined}
+        >
           {title || 'Untitled article'}
         </h1>
       )}
 
+      {/* Body */}
       {!editing && empty ? (
-        <div className="guide-empty-body" onClick={() => setEditing(true)}>
-          <FileText size={32} />
-          <p>This article is empty.</p>
-          <button className="btn btn-primary btn-sm">
-            <Pencil size={13} /> Start writing
-          </button>
-        </div>
+        isAdmin ? (
+          <div className="guide-empty-body" onClick={() => setEditing(true)}>
+            <FileText size={32} />
+            <p>This article is empty.</p>
+            <button className="btn btn-primary btn-sm">
+              <Pencil size={13} /> Start writing
+            </button>
+          </div>
+        ) : (
+          <div className="guide-empty-body guide-empty-body-readonly">
+            <FileText size={32} />
+            <p>This article is empty.</p>
+            <p className="guide-empty-body-hint">Ask the admin to add content.</p>
+          </div>
+        )
       ) : (
         <GuideEditor
           content={content}
           onChange={handleContentChange}
           onImageUpload={handleImageUpload}
-          editable={editing}
+          editable={editing && isAdmin}
           placeholder="Start writing your SOP — use the toolbar above for formatting…"
         />
+      )}
+
+      {/* Admin-only: who's completed this article */}
+      {isAdmin && (
+        <div className="guide-completions">
+          <div className="guide-completions-header">
+            <UsersIcon size={13} /> Completion progress
+            {completions.length > 0 && <span className="guide-completions-count">({completions.length})</span>}
+          </div>
+          {completions.length === 0 ? (
+            <p className="guide-completions-empty">No team members have marked this complete yet.</p>
+          ) : (
+            <ul className="guide-completions-list">
+              {completions.map((c) => (
+                <li key={c.user_id}>
+                  <span className="guide-completion-name">{c.user_name || 'Unknown'}</span>
+                  <span className="guide-completion-time">{timeAgo(c.completed_at)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
 
       {error && <div className="guide-detail-error"><AlertCircle size={14} /> {error}</div>}
