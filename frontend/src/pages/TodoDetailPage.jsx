@@ -28,6 +28,9 @@ export default function TodoDetailPage() {
   const [linkError, setLinkError] = useState('');
   const [playingVideoUrl, setPlayingVideoUrl] = useState(null);
 
+  // Active vs Edited (hidden) tab. Defaults to 'active' on every page load.
+  const [tab, setTab] = useState('active'); // 'active' | 'edited'
+
   // Editor state for the per-reel note. We track which reel and which kind ('public' | 'private').
   const [editingNote, setEditingNote] = useState(null); // { reelId, kind } or null
   const [noteDraft, setNoteDraft] = useState('');
@@ -602,26 +605,44 @@ export default function TodoDetailPage() {
 
           return (
             <>
-              <div className="todo-items">
-                {activeItems.length === 0 ? (
-                  <div className="empty-state-inline">
-                    <p>No active reels — all reels in this list have been hidden.</p>
-                  </div>
-                ) : (
-                  activeItems.map(renderItem)
-                )}
+              {/* Tab switcher: Active vs Edited (hidden) */}
+              <div className="todo-tabs">
+                <button
+                  type="button"
+                  className={`todo-tab ${tab === 'active' ? 'active' : ''}`}
+                  onClick={() => setTab('active')}
+                >
+                  Active <span className="todo-tab-count">{activeItems.length}</span>
+                </button>
+                <button
+                  type="button"
+                  className={`todo-tab ${tab === 'edited' ? 'active' : ''}`}
+                  onClick={() => setTab('edited')}
+                >
+                  <EyeOff size={13} /> Edited <span className="todo-tab-count">{hiddenItems.length}</span>
+                </button>
               </div>
 
-              {hiddenItems.length > 0 && (
-                <details className="hidden-section">
-                  <summary>
-                    <EyeOff size={14} />
-                    <span>Hidden ({hiddenItems.length})</span>
-                  </summary>
-                  <div className="todo-items todo-items-hidden">
-                    {hiddenItems.map(renderItem)}
-                  </div>
-                </details>
+              {tab === 'active' ? (
+                <div className="todo-items">
+                  {activeItems.length === 0 ? (
+                    <div className="empty-state-inline">
+                      <p>No active reels — all reels in this list have been edited.</p>
+                    </div>
+                  ) : (
+                    activeItems.map(renderItem)
+                  )}
+                </div>
+              ) : (
+                <div className="todo-items todo-items-hidden">
+                  {hiddenItems.length === 0 ? (
+                    <div className="empty-state-inline">
+                      <p>No edited reels yet. Hide reels from the Active tab to move them here.</p>
+                    </div>
+                  ) : (
+                    hiddenItems.map(renderItem)
+                  )}
+                </div>
               )}
             </>
           );
