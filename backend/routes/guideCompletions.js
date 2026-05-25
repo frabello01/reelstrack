@@ -151,22 +151,20 @@ router.delete('/', async (req, res) => {
 });
 
 // ============================================================
-// /matrix — admin-only progress matrix for a category
+// /matrix — admin-only team progress across ALL guides + videos
 // ============================================================
-// Returns the data needed to render a "team progress" matrix on the
-// Guides page: list of active members, list of items in the category,
-// and the sparse set of completions linking them.
-//
-// Query: ?category_id=<uuid|uncategorized|null-omitted-for-all>
+// Returns ALL items (across all categories) and the list of active
+// MEMBERS (admins excluded — they're tracking the team, not themselves).
 //
 // Response shape:
 //   {
-//     members: [{ id, user_id, display_name, role }],
-//     items: [{ item_type, item_id, title }],
+//     members: [{ id, user_id, display_name, role }],          // role always 'member'
+//     items: [{ item_type, item_id, title, category_id, category_name }],
 //     completions: [{ user_id, item_type, item_id, completed_at }]
 //   }
 //
-// Frontend builds the per-cell ✓/✗ by intersecting these three arrays.
+// The `category_id` query param is IGNORED — kept for backwards compat
+// but the endpoint always returns everything.
 // ============================================================
 router.get('/matrix', async (req, res) => {
   // Admin check (defensive — the auth middleware doesn't gate per-route here)
@@ -174,34 +172,30 @@ router.get('/matrix', async (req, res) => {
     return res.status(403).json({ error: 'Admin only' });
   }
 
-  const categoryId = req.query.category_id || null;
-
-  // 1) Active team members
+  // 1) Active MEMBERS only (no admins — admins don't track themselves)
   const { data: members, error: mErr } = await supabase
     .from('team_members')
     .select('id, user_id, display_name, role, email')
     .eq('is_active', true)
-    .order('role', { ascending: true })          // admins first
+    .eq('role', 'member')                          // ← exclude admins
     .order('display_name', { ascending: true });
   if (mErr) return res.status(500).json({ error: `Members query: ${mErr.message}` });
 
-  // 2) Items in this category (articles + videos)
-  let articlesQ = supabase
-    .from('guide_articles')
-    .select('id, title, sort_order, is_pinned, updated_at, category_id');
-  let lessonsQ = supabase
-    .from('lessons')
-    .select('id, title, sort_order, is_pinned, updated_at, category_id');
+  // 2) Categories — for labelling items
+  const { data: categories, error: cErr } = await supabase
+    .from('guide_categories')
+    .select('id, name, icon');
+  if (cErr) return res.status(500).json({ error: `Categories query: ${cErr.message}` });
+  const catMap = new Map();
+  for (const c of categories || []) catMap.set(c.id, c);
 
-  if (categoryId === 'uncategorized') {
-    articlesQ = articlesQ.is('category_id', null);
-    lessonsQ = lessonsQ.is('category_id', null);
-  } else if (categoryId && categoryId !== 'all') {
-    articlesQ = articlesQ.eq('category_id', categoryId);
-    lessonsQ = lessonsQ.eq('category_id', categoryId);
-  }
-
-  const [aRes, lRes] = await Promise.all([articlesQ, lessonsQ]);
+  // 3) ALL items (articles + videos), every category
+  const [aRes, lRes] = await Promise.all([
+    supabase.from('guide_articles')
+      .select('id, title, sort_order, is_pinned, updated_at, category_id'),
+    supabase.from('lessons')
+      .select('id, title, sort_order, is_pinned, updated_at, category_id'),
+  ]);
   if (aRes.error) return res.status(500).json({ error: `Articles query: ${aRes.error.message}` });
   if (lRes.error) return res.status(500).json({ error: `Lessons query: ${lRes.error.message}` });
 
@@ -210,6 +204,9 @@ router.get('/matrix', async (req, res) => {
       item_type: 'article',
       item_id: a.id,
       title: a.title || 'Untitled',
+      category_id: a.category_id || null,
+      category_name: a.category_id ? (catMap.get(a.category_id)?.name || 'Unknown') : 'General',
+      category_icon: a.category_id ? (catMap.get(a.category_id)?.icon || '📁') : '📁',
       sort_order: a.sort_order ?? 0,
       is_pinned: !!a.is_pinned,
       updated_at: a.updated_at,
@@ -218,21 +215,25 @@ router.get('/matrix', async (req, res) => {
       item_type: 'video',
       item_id: l.id,
       title: l.title || 'Untitled',
+      category_id: l.category_id || null,
+      category_name: l.category_id ? (catMap.get(l.category_id)?.name || 'Unknown') : 'General',
+      category_icon: l.category_id ? (catMap.get(l.category_id)?.icon || '📁') : '📁',
       sort_order: l.sort_order ?? 0,
       is_pinned: !!l.is_pinned,
       updated_at: l.updated_at,
     })),
   ];
 
-  // Same sort as the items list: pinned → sort_order → updated_at desc
+  // Sort: by category name, then pinned, then sort_order, then updated_at desc
   items.sort((a, b) => {
+    const catCmp = (a.category_name || '').localeCompare(b.category_name || '');
+    if (catCmp !== 0) return catCmp;
     if ((b.is_pinned ? 1 : 0) !== (a.is_pinned ? 1 : 0)) {
       return (b.is_pinned ? 1 : 0) - (a.is_pinned ? 1 : 0);
     }
     if (a.sort_order !== b.sort_order) return a.sort_order - b.sort_order;
     return new Date(b.updated_at) - new Date(a.updated_at);
   });
-
   // 3) Completions for those items (only — no point fetching for items we
   //    aren't displaying). Use the .in() filter on both type and id.
   let completions = [];

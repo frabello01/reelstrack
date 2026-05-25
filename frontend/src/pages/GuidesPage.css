@@ -994,3 +994,34 @@
   .gp-progress-mode-toggle { width: 100%; margin-left: 0; }
   .gp-progress-row-body { padding: 0 10px 12px 24px; }
 }
+
+/* Category label inside progress rows and sublist items */
+.gp-progress-row-cat {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 8px;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.45);
+  font-weight: 400;
+  font-style: normal;
+  padding: 1px 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 3px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.gp-progress-subrow-cat {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 6px;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.4);
+  font-weight: 400;
+  padding: 0 5px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 3px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}

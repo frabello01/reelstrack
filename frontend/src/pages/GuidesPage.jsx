@@ -57,15 +57,16 @@ export default function GuidesPage() {
     if (selectedCategoryId) loadItems(selectedCategoryId);
   }, [selectedCategoryId]);
 
-  // Admin-only: refresh the progress matrix whenever the category changes
-  // OR when items change (e.g. after a completion toggle by viewing in another tab).
+  // Admin-only: load the progress matrix ONCE on mount.
+  // It shows ALL items across ALL categories — independent of the pill the
+  // admin is currently viewing in the items list above.
   useEffect(() => {
-    if (!isAdmin || !selectedCategoryId) {
+    if (!isAdmin) {
       setMatrix(null);
       return;
     }
-    loadMatrix(selectedCategoryId);
-  }, [isAdmin, selectedCategoryId]);
+    loadMatrix();
+  }, [isAdmin]);
 
   // Note: "New" dropdown closes via backdrop overlay rendered inside the
   // JSX (gp-menu-backdrop), not via document listener.
@@ -82,10 +83,11 @@ export default function GuidesPage() {
     }
   };
 
-  const loadMatrix = async (catId) => {
+  const loadMatrix = async () => {
     setLoadingMatrix(true);
     try {
-      const r = await api.getGuideCompletionsMatrix(catId);
+      // No category filter — backend returns ALL items across all categories.
+      const r = await api.getGuideCompletionsMatrix();
       setMatrix(r);
     } catch (err) {
       console.warn('Could not load progress matrix:', err.message);
@@ -1099,7 +1101,14 @@ function MemberRow({ member, items, completionMap, expanded, onToggle, search, o
                   <span className="gp-progress-subrow-type">
                     {it.item_type === 'article' ? '📄' : '🎬'}
                   </span>
-                  <span className="gp-progress-subrow-title">{it.title}</span>
+                  <span className="gp-progress-subrow-title">
+                    {it.title}
+                    {it.category_name && (
+                      <span className="gp-progress-subrow-cat">
+                        {it.category_icon || '📁'} {it.category_name}
+                      </span>
+                    )}
+                  </span>
                   <span className="gp-progress-subrow-time">
                     {it.completedAt ? timeAgoShort(it.completedAt) : 'not yet'}
                   </span>
@@ -1142,7 +1151,14 @@ function ItemRow({ item, members, completionMap, expanded, onToggle, search, onS
         <span className="gp-progress-row-type">
           {item.item_type === 'article' ? '📄' : '🎬'}
         </span>
-        <span className="gp-progress-row-title">{item.title}</span>
+        <span className="gp-progress-row-title">
+          {item.title}
+          {item.category_name && (
+            <span className="gp-progress-row-cat">
+              {item.category_icon || '📁'} {item.category_name}
+            </span>
+          )}
+        </span>
         <span className="gp-progress-row-frac">{completedCount} / {members.length}</span>
         <div className="gp-progress-bar">
           <div className="gp-progress-bar-fill" style={{ width: `${pct}%` }} />
