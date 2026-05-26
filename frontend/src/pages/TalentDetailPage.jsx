@@ -361,6 +361,14 @@ export default function TalentDetailPage() {
                   <div><Eye size={11} /> {formatNum(b.cumulative_views)}</div>
                   <div><Film size={11} /> {b.reels_published}</div>
                   <div><Users size={11} /> {formatNum(b.follower_count)}</div>
+                  <div
+                    title={(b.landings_count ?? 0) === 0
+                      ? 'Nessuna landing collegata a questo profilo'
+                      : `${b.landings_count} landing${b.landings_count === 1 ? '' : 's'} collegate`}
+                    style={{ color: (b.landing_clicks ?? 0) > 0 ? '#f472b6' : undefined }}
+                  >
+                    <MousePointerClick size={11} /> {formatNum(b.landing_clicks ?? 0)}
+                  </div>
                 </div>
               </div>
             ))}

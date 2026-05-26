@@ -54,6 +54,37 @@ async function computeTalentMetrics(talentId, days) {
   const reels = thisReels || [];
   const reelsPrev = prevReels || [];
 
+  // ---- Per-profile clicks in THIS period ----
+  // Resolve landings → owner profile, then bucket the period's clicks.
+  const { data: talentLandingsWithProfile } = await supabase
+    .from('landings')
+    .select('id, my_account_id')
+    .eq('talent_id', talentId);
+
+  const landingsByProfile = new Map(); // profileId -> [landingId, ...]
+  const allLandingIdsForBreakdown = [];
+  (talentLandingsWithProfile || []).forEach((l) => {
+    allLandingIdsForBreakdown.push(l.id);
+    if (!l.my_account_id) return;
+    if (!landingsByProfile.has(l.my_account_id)) landingsByProfile.set(l.my_account_id, []);
+    landingsByProfile.get(l.my_account_id).push(l.id);
+  });
+
+  let clicksByLanding = {};
+  if (allLandingIdsForBreakdown.length > 0) {
+    const { data: clickRows } = await supabase
+      .from('landing_link_clicks')
+      .select('landing_id')
+      .in('landing_id', allLandingIdsForBreakdown)
+      .gte('clicked_at', sinceISO);
+    (clickRows || []).forEach((c) => {
+      clicksByLanding[c.landing_id] = (clicksByLanding[c.landing_id] || 0) + 1;
+    });
+  }
+  const clicksForProfile = (pid) => (landingsByProfile.get(pid) || [])
+    .reduce((s, lid) => s + (clicksByLanding[lid] || 0), 0);
+  const landingsForProfile = (pid) => (landingsByProfile.get(pid) || []).length;
+
   // Per-profile breakdown of THIS period
   const breakdown = profiles.map((p) => {
     const myReels = reels.filter((r) => r.account_id === p.id);
@@ -68,6 +99,8 @@ async function computeTalentMetrics(talentId, days) {
       above_10k: countAbove(myReels, 10_000),
       above_50k: countAbove(myReels, 50_000),
       above_100k: countAbove(myReels, 100_000),
+      landing_clicks: clicksForProfile(p.id),
+      landings_count: landingsForProfile(p.id),
     };
   });
 
