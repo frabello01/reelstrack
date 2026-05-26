@@ -278,6 +278,11 @@ textarea:focus { border-color: var(--accent); }
   border-color: rgba(34, 211, 165, 0.3);
   color: var(--green);
 }
+.link-pill-on-purple {
+  background: var(--accent-glow);
+  border-color: rgba(124, 107, 255, 0.4);
+  color: var(--accent2);
+}
 .link-click-count {
   font-size: 11px;
   color: var(--text2);

@@ -173,7 +173,7 @@
   box-shadow:
     0 1px 0 rgba(255,255,255,0.08) inset,
     0 12px 32px -8px rgba(0,0,0,0.55);
-  transition: transform 0.22s ease, background 0.22s ease, border-color 0.22s ease;
+  transition: transform 0.22s ease, background 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
   opacity: 0;
   animation: pl-link-rise 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
@@ -190,6 +190,45 @@
 }
 .pl-link:active {
   transform: translateY(0) scale(0.985);
+}
+
+/* -----------------------------------------------------------
+   Soft loop bounce — only applied when admin sets animation='bounce'
+   on the link in the editor. Pattern: tall bounce, short bounce,
+   long rest, repeat. Subtle enough to feel premium, attention-
+   grabbing enough to draw the eye to a primary CTA.
+   ----------------------------------------------------------- */
+.pl-link-bounce {
+  animation:
+    pl-link-rise 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards,
+    pl-link-bounce-loop 2.6s cubic-bezier(0.28, 0.84, 0.42, 1) 1.4s infinite;
+  /* Tiny accent-coloured glow so bouncing links also look distinct
+     when paused on hover or for users with reduced motion. */
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.10) inset,
+    0 12px 32px -8px rgba(0,0,0,0.55),
+    0 0 0 1px color-mix(in srgb, var(--pl-accent) 22%, transparent),
+    0 6px 28px -10px color-mix(in srgb, var(--pl-accent) 60%, transparent);
+}
+
+@keyframes pl-link-bounce-loop {
+  0%, 55%, 100% { transform: translateY(0); }
+  10%          { transform: translateY(-8px); }
+  20%          { transform: translateY(0); }
+  28%          { transform: translateY(-4px); }
+  36%          { transform: translateY(0); }
+}
+
+/* Pause the bounce on hover so the manual lift transform takes over. */
+.pl-link-bounce:hover {
+  animation-play-state: running, paused;
+}
+
+/* Respect users who prefer no motion */
+@media (prefers-reduced-motion: reduce) {
+  .pl-link-bounce {
+    animation: pl-link-rise 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
 }
 
 .pl-link-icon {

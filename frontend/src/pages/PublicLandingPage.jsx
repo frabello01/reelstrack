@@ -113,7 +113,7 @@ export default function PublicLandingPage() {
           {landing.links.map((link, i) => (
             <button
               key={link.id}
-              className="pl-link"
+              className={`pl-link ${link.animation === 'bounce' ? 'pl-link-bounce' : ''}`}
               style={{ animationDelay: `${0.18 + i * 0.06}s` }}
               onClick={() => handleLinkClick(link)}
               type="button"

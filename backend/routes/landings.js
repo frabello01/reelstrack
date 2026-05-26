@@ -54,6 +54,7 @@ router.get('/public/lookup', async (req, res) => {
     url: l.url,
     icon: l.icon,
     age_gate: l.age_gate,
+    animation: l.animation || null,
   }));
 
   res.json({
@@ -262,7 +263,7 @@ router.post('/:id/background', async (req, res) => {
 
 // POST /api/landings/:id/links — create
 router.post('/:id/links', async (req, res) => {
-  const { label, url, icon, age_gate } = req.body || {};
+  const { label, url, icon, age_gate, animation } = req.body || {};
   if (!label || !url) return res.status(400).json({ error: 'label and url required' });
 
   // Place at the end: sort_order = max(existing) + 1
@@ -282,6 +283,7 @@ router.post('/:id/links', async (req, res) => {
       url,
       icon: icon || null,
       age_gate: !!age_gate,
+      animation: animation || null,
       enabled: true,
       sort_order: nextSort,
     })
@@ -293,7 +295,7 @@ router.post('/:id/links', async (req, res) => {
 
 // PATCH /api/landings/links/:linkId
 router.patch('/links/:linkId', async (req, res) => {
-  const allowed = ['label', 'url', 'icon', 'enabled', 'age_gate', 'sort_order'];
+  const allowed = ['label', 'url', 'icon', 'enabled', 'age_gate', 'sort_order', 'animation'];
   const updates = {};
   for (const k of allowed) {
     if (k in (req.body || {})) updates[k] = req.body[k];

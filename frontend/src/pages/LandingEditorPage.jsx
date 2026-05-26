@@ -288,7 +288,7 @@ function ProfileTab({ landing, saveField, savingField, reload }) {
 // ------------------------------------------------------------
 function LinksTab({ landing, reload }) {
   const [adding, setAdding] = useState(false);
-  const [form, setForm] = useState({ label: '', url: '', age_gate: false, icon: '' });
+  const [form, setForm] = useState({ label: '', url: '', age_gate: false, icon: '', bounce: false });
   const [busy, setBusy] = useState(null); // link id being mutated
   const links = (landing.landing_links || []).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
 
@@ -301,8 +301,9 @@ function LinksTab({ landing, reload }) {
         url: form.url.trim(),
         age_gate: form.age_gate,
         icon: form.icon || null,
+        animation: form.bounce ? 'bounce' : null,
       });
-      setForm({ label: '', url: '', age_gate: false, icon: '' });
+      setForm({ label: '', url: '', age_gate: false, icon: '', bounce: false });
       reload();
     } catch (err) {
       alert(err.message);
@@ -380,6 +381,14 @@ function LinksTab({ landing, reload }) {
               />
               <span>Age-gate 18+</span>
             </label>
+            <label className="editor-toggle" style={{ margin: 0 }}>
+              <input
+                type="checkbox"
+                checked={form.bounce}
+                onChange={(e) => setForm({ ...form, bounce: e.target.checked })}
+              />
+              <span>Bounce</span>
+            </label>
             <button
               className="btn btn-primary"
               onClick={handleAdd}
@@ -434,6 +443,12 @@ function LinksTab({ landing, reload }) {
                     title="Age-gate 18+"
                     disabled={busy === link.id}
                   >18+</button>
+                  <button
+                    className={`link-pill ${link.animation === 'bounce' ? 'link-pill-on-purple' : ''}`}
+                    onClick={() => handleUpdate(link.id, { animation: link.animation === 'bounce' ? null : 'bounce' })}
+                    title="Bounce — il link si muove dolcemente per attirare l'attenzione"
+                    disabled={busy === link.id}
+                  >BOUNCE</button>
                   <button
                     className={`link-pill ${link.enabled ? 'link-pill-on-green' : ''}`}
                     onClick={() => handleUpdate(link.id, { enabled: !link.enabled })}
