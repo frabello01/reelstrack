@@ -24,6 +24,7 @@ import ImageCleanerPage from './pages/ImageCleanerPage';
 import BatchCleanerPage from './pages/BatchCleanerPage';
 import CharactersPage from './pages/CharactersPage';
 import StudioPage from './pages/StudioPage';
+import ExplorePage from './pages/ExplorePage';
 import TeamPage from './pages/TeamPage';
 import LogPage from './pages/LogPage';
 import Layout from './components/Layout';
@@ -82,6 +83,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route index element={<DashboardPage />} />
             <Route path="lists" element={<ListsPage />} />
             <Route path="lists/:id" element={<ListDetailPage />} />
+            <Route path="explore" element={<ExplorePage />} />
             <Route path="todos" element={<TodosPage />} />
             <Route path="todos/:id" element={<TodoDetailPage />} />
             <Route path="my-accounts" element={<MyAccountsPage />} />

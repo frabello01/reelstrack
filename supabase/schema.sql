@@ -93,3 +93,54 @@ create policy "Authenticated full access" on list_creators for all using (auth.r
 create policy "Authenticated full access" on reels for all using (auth.role() = 'authenticated');
 create policy "Authenticated full access" on reel_scores for all using (auth.role() = 'authenticated');
 create policy "Authenticated full access" on fetch_jobs for all using (auth.role() = 'authenticated');
+
+-- ============================================================
+-- Explore Creators (suggestion-scan feature)
+-- ============================================================
+
+-- One row per scan-run for a list. Mirrors fetch_jobs so the UI can
+-- show progress (X of N creators processed).
+create table creator_suggestion_jobs (
+  id uuid primary key default uuid_generate_v4(),
+  list_id uuid references lists(id) on delete cascade,
+  status text default 'running',          -- running | done | failed
+  started_at timestamptz default now(),
+  finished_at timestamptz,
+  total_creators integer default 0,
+  creators_processed integer default 0,
+  suggestions_new integer default 0,      -- brand-new suggested profiles added in this run
+  suggestions_updated integer default 0,  -- existing rows whose count went up in this run
+  error text
+);
+
+-- One row per (list, suggested IG username). Accumulates across scans.
+-- recommendation_count = total times this profile has been suggested
+-- (each source-creator-rec counts once, summed across all runs).
+create table creator_suggestions (
+  id uuid primary key default uuid_generate_v4(),
+  list_id uuid references lists(id) on delete cascade,
+  username text not null,
+  instagram_pk text,
+  full_name text,
+  profile_pic_url text,
+  is_verified boolean default false,
+  is_private boolean default false,
+  follower_count integer,
+  recommendation_count integer default 0,
+  hidden boolean default false,
+  new_in_last_run boolean default true,   -- true only if first appeared in the latest scan
+  first_suggested_at timestamptz default now(),
+  last_suggested_at timestamptz default now(),
+  last_scan_id uuid references creator_suggestion_jobs(id) on delete set null,
+  created_at timestamptz default now(),
+  unique (list_id, username)
+);
+
+create index on creator_suggestions(list_id, recommendation_count desc);
+create index on creator_suggestions(list_id, hidden);
+create index on creator_suggestion_jobs(list_id, started_at desc);
+
+alter table creator_suggestions enable row level security;
+alter table creator_suggestion_jobs enable row level security;
+create policy "Authenticated full access" on creator_suggestions for all using (auth.role() = 'authenticated');
+create policy "Authenticated full access" on creator_suggestion_jobs for all using (auth.role() = 'authenticated');

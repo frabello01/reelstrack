@@ -349,4 +349,22 @@ export const api = {
     const qs = new URLSearchParams({ item_type, item_id }).toString();
     return request(`/api/guide-completions?${qs}`, { method: 'DELETE' });
   },
+
+  // Explore Creators (suggestion scans)
+  getSuggestions: (listId) => request(`/api/suggestions/lists/${listId}`),
+  triggerSuggestionScan: (listId) =>
+    request(`/api/suggestions/lists/${listId}/scan`, { method: 'POST' }),
+  getActiveSuggestionScan: (listId) =>
+    request(`/api/suggestions/lists/${listId}/active`),
+  getSuggestionJobs: (listId) =>
+    request(`/api/suggestions/lists/${listId}/jobs`),
+  setSuggestionHidden: (id, hidden) =>
+    request(`/api/suggestions/${id}`, { method: 'PATCH', body: JSON.stringify({ hidden }) }),
+  addSuggestionToList: (id, list_id) =>
+    request(`/api/suggestions/${id}/add-to-list`, {
+      method: 'POST',
+      body: JSON.stringify(list_id ? { list_id } : {}),
+    }),
+  deleteSuggestion: (id) =>
+    request(`/api/suggestions/${id}`, { method: 'DELETE' }),
 };

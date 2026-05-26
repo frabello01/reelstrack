@@ -24,6 +24,7 @@ const teamRouter = require('./routes/team');
 const invitesRouter = require('./routes/invites');
 const activityLogRouter = require('./routes/activityLog');
 const guideCompletionsRouter = require('./routes/guideCompletions');
+const suggestionsRouter = require('./routes/suggestions');
 const { requireAuth } = require('./middleware/auth');
 const { requireAdminForWrites } = require('./middleware/requireAdminForWrites');
 const { autoLogMiddleware } = require('./middleware/autoLogMiddleware');
@@ -117,6 +118,7 @@ app.use('/api/guides-v2', guidesV2Router);
 app.use('/api/team', teamRouter);
 app.use('/api/activity-log', activityLogRouter);
 app.use('/api/guide-completions', guideCompletionsRouter);
+app.use('/api/suggestions', suggestionsRouter);
 
 // ============================================================
 // CRONS (unchanged + new log retention cleanup)
