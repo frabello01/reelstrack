@@ -1,29 +1,248 @@
-/* ============================================================
-   Public landing page (link.me-style, but better)
-   - Full-bleed hero photo with dark fade
-   - Glassmorphism link cards with staggered entrance
-   - Verified checkmark inline with name
-   - Self-contained scope (.pl- prefix) so it doesn't leak
-   ============================================================ */
+/* =============================================================
+   Public landing page — premium creator profile.
+
+   STRUCTURE:
+   The page is ONE composition, not stacked blocks.
+   - .pl-bg       : fixed full-viewport background image
+   - .pl-overlay  : single continuous gradient (transparent → near-black)
+   - .pl-vignette : subtle radial corner shadow for cinematic finish
+   - .pl-stage    : the content layer, scrolls over the fixed background
+
+   The image is never "ended" anywhere — the gradient is what darkens
+   the lower portion. Content (name, bio, glass CTA cards) sits on top
+   of the same image, anchored to its lower portion via flex spacer.
+   ============================================================= */
 
 .pl-shell {
   --pl-accent: #7c6bff;
-  --pl-text: #ffffff;
   position: relative;
   min-height: 100vh;
-  background: #0a0a0f;
-  color: var(--pl-text);
+  min-height: 100dvh;     /* honour mobile dynamic viewport (URL bar collapse) */
+  background: #050507;
+  color: #fff;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
 }
 
-/* Loading state */
-.pl-loading {
+/* Fixed bg image — sits at z:0, never moves, content scrolls over it */
+.pl-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background-size: cover;
+  background-position: center 18%;
+  /* Very subtle initial fade-in so the page feels composed, not abrupt */
+  animation: pl-bg-in 0.7s ease-out;
+}
+@keyframes pl-bg-in {
+  from { opacity: 0; transform: scale(1.04); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* No-image fallback: deep gradient field so the page never looks broken */
+.pl-no-image .pl-bg-tint-fallback,
+.pl-no-image::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background:
+    radial-gradient(80% 60% at 50% 0%, #2a1d4a 0%, transparent 60%),
+    linear-gradient(180deg, #161220 0%, #060406 100%);
+}
+
+/* ONE overlay — the page's whole "darkening" lives here.
+   Top stays mostly transparent so the photo reads as the hero.
+   Bottom approaches near-black for legibility under the CTA cards. */
+.pl-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    rgba(5,5,7,0.00)  0%,
+    rgba(5,5,7,0.05) 30%,
+    rgba(5,5,7,0.18) 48%,
+    rgba(5,5,7,0.42) 62%,
+    rgba(5,5,7,0.68) 74%,
+    rgba(5,5,7,0.86) 84%,
+    rgba(5,5,7,0.95) 93%,
+    rgba(5,5,7,1.00) 100%
+  );
+}
+
+/* Soft corner vignette for the "cinematic" feel — barely perceptible
+   but it pulls the eye to the center and lifts the composition. */
+.pl-vignette {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: radial-gradient(120% 90% at 50% 40%, transparent 55%, rgba(0,0,0,0.45) 100%);
+  mix-blend-mode: multiply;
+}
+
+/* Content stage — flex column that anchors content to the lower portion */
+.pl-stage {
+  position: relative;
+  z-index: 2;
+  min-height: 100vh;
+  min-height: 100dvh;
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 24px 20px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* Pushes the title/bio/links into the lower ~40% of the viewport so
+   the photo's subject (the face) has room to breathe up top. */
+.pl-spacer { flex: 1 1 40vh; min-height: 30vh; }
+
+/* ----- Profile content (name + subtitle + bio) ----- */
+.pl-content {
+  text-align: center;
+  margin-bottom: 22px;
+  animation: pl-rise 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.05s both;
+}
+
+.pl-title {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 34px;
+  font-weight: 700;
+  margin: 0 0 6px;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  text-shadow: 0 2px 24px rgba(0,0,0,0.55);
+}
+.pl-title-text { display: inline-block; }
+.pl-verified { filter: drop-shadow(0 2px 8px rgba(0,0,0,0.4)); }
+
+.pl-subtitle {
+  font-size: 14px;
+  color: rgba(255,255,255,0.78);
+  margin-bottom: 10px;
+  text-shadow: 0 1px 10px rgba(0,0,0,0.5);
+  letter-spacing: 0.01em;
+}
+
+.pl-bio {
+  font-size: 14px;
+  color: rgba(255,255,255,0.85);
+  max-width: 360px;
+  margin: 0 auto;
+  line-height: 1.55;
+  white-space: pre-line;
+  text-shadow: 0 1px 12px rgba(0,0,0,0.55);
+}
+
+/* ----- Links: floating glass cards, NOT a container ----- */
+.pl-links {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pl-link {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 16px 18px;
+  border-radius: 18px;
+  /* True glassmorphism */
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(22px) saturate(160%);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  color: #fff;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  /* Soft floating shadow to lift it off the photo */
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.08) inset,
+    0 12px 32px -8px rgba(0,0,0,0.55);
+  transition: transform 0.22s ease, background 0.22s ease, border-color 0.22s ease;
+  opacity: 0;
+  animation: pl-link-rise 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes pl-link-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.pl-link:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.22);
+  transform: translateY(-2px);
+}
+.pl-link:active {
+  transform: translateY(0) scale(0.985);
+}
+
+.pl-link-icon {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--pl-accent);
+  background: rgba(255, 255, 255, 0.10);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
+
+.pl-link-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: -0.005em;
+}
+
+.pl-link-arrow {
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.5);
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+.pl-link:hover .pl-link-arrow {
+  color: #fff;
+  transform: translateX(3px);
+}
+
+.pl-empty {
+  text-align: center;
+  padding: 30px 20px;
+  color: rgba(255,255,255,0.45);
+  font-size: 14px;
+}
+
+/* ----- Footer ----- */
+.pl-footer {
+  margin-top: 22px;
+  padding: 12px 0 6px;
+  text-align: center;
+  font-size: 11px;
+  color: rgba(255,255,255,0.32);
+  letter-spacing: 0.4px;
+}
+
+/* ----- Loading / error states ----- */
+.pl-loading { display: flex; align-items: center; justify-content: center; background: #050507; }
 .pl-spinner {
   width: 38px; height: 38px;
   border: 2px solid rgba(255,255,255,0.15);
@@ -33,7 +252,6 @@
 }
 @keyframes pl-spin { to { transform: rotate(360deg); } }
 
-/* Error state */
 .pl-error {
   display: flex;
   flex-direction: column;
@@ -42,268 +260,60 @@
   padding: 40px;
   text-align: center;
   color: rgba(255,255,255,0.85);
+  background: #050507;
 }
 .pl-error svg { color: rgba(255,255,255,0.5); margin-bottom: 18px; }
 .pl-error h1 { font-size: 22px; margin-bottom: 8px; font-weight: 600; }
 .pl-error p { font-size: 14px; color: rgba(255,255,255,0.55); max-width: 320px; line-height: 1.5; }
 
-/* Blurred background fill */
-.pl-bg-blur {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  background-size: cover;
-  background-position: center;
-  filter: blur(60px) saturate(1.3);
-  transform: scale(1.15);
-  opacity: 0.55;
-}
-.pl-bg-tint {
-  position: fixed;
-  inset: 0;
-  z-index: 1;
-  background: linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.55) 100%);
+/* ----- Entrance animation for the content block ----- */
+@keyframes pl-rise {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
-/* Main card */
-.pl-card {
-  position: relative;
-  z-index: 2;
-  max-width: 540px;
-  margin: 0 auto;
-  padding: 0 0 32px;
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
-}
-
-@media (min-width: 600px) {
-  .pl-card {
-    margin: 32px auto;
-    border-radius: 28px;
-    overflow: hidden;
-    background: #111118;
-    box-shadow: 0 30px 80px -20px rgba(0,0,0,0.6);
-    min-height: auto;
+/* ----- Larger screens: keep the cinematic feel, just constrain width ----- */
+@media (min-width: 720px) {
+  .pl-stage { max-width: 480px; padding: 32px 24px 40px; }
+  .pl-title { font-size: 38px; }
+  /* On big screens, narrow the bg's focal area a bit so the photo doesn't
+     stretch awkwardly across an ultrawide window. */
+  .pl-bg {
+    background-position: center center;
   }
 }
 
-/* ----- Hero -----
-   Mobile: tighter aspect + viewport cap so the first link button is
-   already visible above the fold. Desktop card stays larger.
-   The fade extends well into the dark area below with many gradient
-   stops for a buttery transition — mirrors the link.me style. */
-.pl-hero {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 4 / 5;
-  max-height: 58vh;
-  overflow: hidden;
-}
-@media (min-width: 600px) {
-  .pl-hero { aspect-ratio: 1 / 1; max-height: 540px; }
-}
-
-.pl-hero-photo {
-  position: absolute;
-  inset: 0;
-  background-size: cover;
-  background-position: center top;
-  transform: scale(1.02);
-}
-
-.pl-hero-fade {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  /* Many granular stops in the lower half = buttery link.me-style fade.
-     Bottom colour is the exact card bg so the seam into .pl-links is
-     visually invisible without needing to overflow the hero. */
-  background: linear-gradient(
-    to bottom,
-    transparent 0%,
-    transparent 28%,
-    rgba(17,17,24,0.06) 44%,
-    rgba(17,17,24,0.20) 58%,
-    rgba(17,17,24,0.42) 70%,
-    rgba(17,17,24,0.68) 80%,
-    rgba(17,17,24,0.86) 88%,
-    rgba(17,17,24,0.96) 95%,
-    #111118 100%
-  );
-}
-
-.pl-hero-content {
-  position: absolute;
-  left: 0; right: 0; bottom: 0;
-  padding: 22px 24px 14px;
-  text-align: center;
-  animation: pl-rise 0.6s ease-out;
-}
-
-@keyframes pl-rise {
-  from { opacity: 0; transform: translateY(20px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-.pl-title {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 32px;
-  font-weight: 700;
-  margin: 0 0 6px;
-  letter-spacing: -0.01em;
-  line-height: 1.1;
-  color: #fff;
-  text-shadow: 0 2px 12px rgba(0,0,0,0.4);
-}
-
-.pl-verified {
-  flex-shrink: 0;
-  filter: drop-shadow(0 1px 4px rgba(0,0,0,0.35));
-}
-
-.pl-subtitle {
-  font-size: 14px;
-  color: rgba(255,255,255,0.7);
-  margin-bottom: 10px;
-}
-
-.pl-bio {
-  font-size: 14px;
-  color: rgba(255,255,255,0.85);
-  max-width: 380px;
-  margin: 0 auto;
-  line-height: 1.5;
-  white-space: pre-line;
-}
-
-/* ----- Links list ----- */
-.pl-links {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 24px 20px 8px;
-}
-
-@media (min-width: 600px) {
-  .pl-links { padding: 28px 28px 8px; }
-}
-
-.pl-link {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  width: 100%;
-  padding: 16px 18px;
-  border-radius: 16px;
-  border: 1px solid;
-  color: var(--pl-text);
-  text-decoration: none;
-  text-align: left;
-  font-family: inherit;
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease;
-  opacity: 0;
-  animation: pl-link-in 0.5s ease-out forwards;
-}
-
-@keyframes pl-link-in {
-  from { opacity: 0; transform: translateY(14px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-.pl-link:hover {
-  background: rgba(255,255,255,0.14) !important;
-  border-color: rgba(255,255,255,0.22) !important;
-  transform: translateY(-1px);
-}
-.pl-link:active {
-  transform: scale(0.985);
-}
-
-.pl-link-icon {
-  flex-shrink: 0;
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  font-weight: 700;
-}
-
-.pl-link-label {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.pl-link-arrow {
-  flex-shrink: 0;
-  color: rgba(255,255,255,0.4);
-  transition: transform 0.18s ease, color 0.18s ease;
-}
-.pl-link:hover .pl-link-arrow {
-  color: rgba(255,255,255,0.8);
-  transform: translateX(2px);
-}
-
-.pl-empty {
-  text-align: center;
-  padding: 40px 20px;
-  color: rgba(255,255,255,0.45);
-  font-size: 14px;
-}
-
-/* ----- Footer ----- */
-.pl-footer {
-  margin-top: 20px;
-  padding: 16px 24px 8px;
-  text-align: center;
-  font-size: 11px;
-  color: rgba(255,255,255,0.35);
-  letter-spacing: 0.3px;
-}
-
-/* ----- Age-gate modal ----- */
+/* ----- Age-gate modal (kept from previous design, tightened) ----- */
 .pl-modal-backdrop {
   position: fixed;
   inset: 0;
   z-index: 9999;
-  background: rgba(0,0,0,0.7);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  background: rgba(0,0,0,0.72);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 20px;
-  animation: pl-fade-in 0.18s ease-out;
+  animation: pl-fade-in 0.2s ease-out;
 }
 @keyframes pl-fade-in { from { opacity: 0; } to { opacity: 1; } }
 
 .pl-modal {
-  background: #1a1a24;
+  background: rgba(20, 20, 26, 0.92);
   border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 20px;
-  padding: 28px 24px 22px;
+  border-radius: 22px;
+  padding: 30px 26px 24px;
   width: 100%;
   max-width: 380px;
   text-align: center;
-  box-shadow: 0 24px 60px rgba(0,0,0,0.5);
-  animation: pl-modal-in 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 30px 80px rgba(0,0,0,0.6);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  animation: pl-modal-in 0.24s cubic-bezier(0.16, 1, 0.3, 1);
 }
 @keyframes pl-modal-in {
-  from { opacity: 0; transform: scale(0.92) translateY(10px); }
+  from { opacity: 0; transform: scale(0.94) translateY(10px); }
   to   { opacity: 1; transform: scale(1) translateY(0); }
 }
 
@@ -329,7 +339,7 @@
 
 .pl-modal-body {
   font-size: 14px;
-  color: rgba(255,255,255,0.7);
+  color: rgba(255,255,255,0.72);
   line-height: 1.55;
   margin: 0 0 22px;
 }
@@ -358,7 +368,5 @@
 }
 .pl-modal-cancel:hover { background: rgba(255,255,255,0.14); }
 
-.pl-modal-confirm {
-  color: #fff;
-}
+.pl-modal-confirm { color: #fff; }
 .pl-modal-confirm:hover { filter: brightness(1.1); }

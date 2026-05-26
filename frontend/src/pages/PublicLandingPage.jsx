@@ -11,10 +11,9 @@ export default function PublicLandingPage() {
   const [landing, setLanding] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
-  const [ageGateLink, setAgeGateLink] = useState(null); // the link awaiting confirmation
+  const [ageGateLink, setAgeGateLink] = useState(null);
   const metaPlatformRef = useRef(null);
 
-  // ---- Bootstrap: detect platform once, fetch landing ----
   useEffect(() => {
     metaPlatformRef.current = detectMetaWebview();
   }, []);
@@ -28,7 +27,6 @@ export default function PublicLandingPage() {
         const data = await api.getPublicLanding(host, slug);
         if (cancelled) return;
         setLanding(data);
-        // Set <title> and og tags so when shared the page looks right
         document.title = data.title || 'Profile';
       } catch (err) {
         if (cancelled) return;
@@ -40,9 +38,7 @@ export default function PublicLandingPage() {
     return () => { cancelled = true; };
   }, [slug]);
 
-  // ---- Click handling ----
   const handleLinkClick = (link) => {
-    // Always re-confirm on every click — no session memory (per spec).
     if (link.age_gate || landing?.age_gate_default) {
       setAgeGateLink(link);
       return;
@@ -51,15 +47,10 @@ export default function PublicLandingPage() {
   };
 
   const fireLinkOpen = (link) => {
-    // Record the click — fire and forget, don't block navigation.
-    try {
-      api.recordLandingClick(link.id, metaPlatformRef.current);
-    } catch {}
-    // Small delay to let the POST start before we navigate away.
+    try { api.recordLandingClick(link.id, metaPlatformRef.current); } catch {}
     setTimeout(() => openExternal(link.url), 30);
   };
 
-  // ---- Render ----
   if (loading) {
     return (
       <div className="pl-shell pl-loading">
@@ -78,47 +69,44 @@ export default function PublicLandingPage() {
   }
 
   const accent = landing.theme?.accent || '#7c6bff';
-  const cardBg = landing.theme?.cardBg || 'rgba(255,255,255,0.08)';
-  const cardBorder = landing.theme?.cardBorder || 'rgba(255,255,255,0.12)';
-  const textColor = landing.theme?.textColor || '#ffffff';
   const bgImage = landing.background_url || landing.avatar_url;
 
   return (
-    <div className="pl-shell" style={{ '--pl-accent': accent, '--pl-text': textColor }}>
-      {/* Full-bleed background — blurred copy of bg/avatar for visual richness */}
+    <div
+      className={`pl-shell ${bgImage ? 'pl-has-image' : 'pl-no-image'}`}
+      style={{ '--pl-accent': accent }}
+    >
+      {/* Fixed full-viewport image — content scrolls over it (parallax-ish feel) */}
       {bgImage && (
         <div
-          className="pl-bg-blur"
+          className="pl-bg"
           style={{ backgroundImage: `url(${bgImage})` }}
           aria-hidden
         />
       )}
-      <div className="pl-bg-tint" aria-hidden />
 
-      <main className="pl-card">
-        {/* Hero photo + dark fade */}
-        <div className="pl-hero">
-          {bgImage && (
-            <div
-              className="pl-hero-photo"
-              style={{ backgroundImage: `url(${bgImage})` }}
-            />
-          )}
-          <div className="pl-hero-fade" />
-          <div className="pl-hero-content">
-            <h1 className="pl-title">
-              <span>{landing.title}</span>
-              {landing.verified && (
-                <VerifiedBadge size={28} color={accent} className="pl-verified" />
-              )}
-            </h1>
-            {landing.subtitle && <div className="pl-subtitle">{landing.subtitle}</div>}
-            {landing.bio && <p className="pl-bio">{landing.bio}</p>}
-          </div>
-        </div>
+      {/* ONE continuous gradient overlay — transparent up top, deep at bottom */}
+      <div className="pl-overlay" aria-hidden />
 
-        {/* Links */}
-        <div className="pl-links">
+      {/* Subtle corner vignette for cinematic finish */}
+      <div className="pl-vignette" aria-hidden />
+
+      <main className="pl-stage">
+        {/* Spacer pushes content downward — content sits in lower portion of hero */}
+        <div className="pl-spacer" />
+
+        <section className="pl-content">
+          <h1 className="pl-title">
+            <span className="pl-title-text">{landing.title}</span>
+            {landing.verified && (
+              <VerifiedBadge size={28} color={accent} className="pl-verified" />
+            )}
+          </h1>
+          {landing.subtitle && <div className="pl-subtitle">{landing.subtitle}</div>}
+          {landing.bio && <p className="pl-bio">{landing.bio}</p>}
+        </section>
+
+        <section className="pl-links">
           {landing.links.length === 0 && (
             <div className="pl-empty">Nessun link disponibile.</div>
           )}
@@ -126,25 +114,21 @@ export default function PublicLandingPage() {
             <button
               key={link.id}
               className="pl-link"
-              style={{
-                animationDelay: `${0.05 + i * 0.05}s`,
-                background: cardBg,
-                borderColor: cardBorder,
-              }}
+              style={{ animationDelay: `${0.18 + i * 0.06}s` }}
               onClick={() => handleLinkClick(link)}
               type="button"
             >
-              <span className="pl-link-icon" style={{ background: `${accent}22`, color: accent }}>
-                {link.icon || '›'}
+              <span className="pl-link-icon">
+                {link.icon || <ChevronRight size={16} strokeWidth={2.5} />}
               </span>
               <span className="pl-link-label">{link.label}</span>
-              <ChevronRight size={18} className="pl-link-arrow" />
+              <ChevronRight size={18} className="pl-link-arrow" strokeWidth={2.25} />
             </button>
           ))}
-        </div>
+        </section>
 
         <footer className="pl-footer">
-          <span>© {new Date().getFullYear()} {landing.title}</span>
+          <span>© {new Date().getFullYear()} · {landing.title}</span>
         </footer>
       </main>
 
