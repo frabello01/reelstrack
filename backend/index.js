@@ -44,7 +44,8 @@ const allowedOrigins = (process.env.FRONTEND_URL || '*')
   .map((o) => o.trim())
   .filter(Boolean);
 
-app.use(cors({
+// Strict CORS for the admin app — only origins in FRONTEND_URL allowed.
+const strictCors = cors({
   origin: (origin, callback) => {
     if (!origin) return callback(null, true);
     if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
@@ -53,7 +54,20 @@ app.use(cors({
     callback(new Error(`Origin ${origin} not allowed by CORS`));
   },
   credentials: true,
-}));
+});
+
+// Permissive CORS for public landing endpoints — any origin allowed.
+// These routes are intentionally public (no auth) so any custom domain
+// pointing at the SPA can fetch its landing data without us having to
+// add it to FRONTEND_URL on Render.
+const publicLandingsCors = cors({ origin: '*' });
+
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/landings/public/')) {
+    return publicLandingsCors(req, res, next);
+  }
+  return strictCors(req, res, next);
+});
 app.use(express.json({ limit: '15mb' }));
 
 // ============================================================

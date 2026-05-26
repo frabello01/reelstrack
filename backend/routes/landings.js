@@ -3,6 +3,22 @@ const router = express.Router();
 const supabase = require('../lib/supabase');
 const { uploadImageDataUrl } = require('../lib/imageUpload');
 
+// Normalise any user-pasted hostname to a canonical form:
+//   "https://www.Example.com:443/" → "example.com"
+// We store and look up landings using this canonical form so the
+// "with www" and "without www" variants always match the same row.
+function normaliseHost(h) {
+  if (!h) return null;
+  const trimmed = h.toString().toLowerCase().trim();
+  if (!trimmed) return null;
+  return trimmed
+    .replace(/^https?:\/\//, '')
+    .replace(/\/.*$/, '')
+    .replace(/:\d+$/, '')
+    .replace(/^www\./, '')
+    || null;
+}
+
 // ============================================================
 // PUBLIC ENDPOINTS (whitelisted before the auth gate in index.js)
 //   Mounted under /api/landings — the whitelist matches paths
@@ -16,8 +32,7 @@ router.get('/public/lookup', async (req, res) => {
   const slug = (req.query.slug || '').toString().toLowerCase().trim();
   if (!slug) return res.status(400).json({ error: 'slug required' });
 
-  // Normalize host: drop port, drop "www."
-  const host = rawHost.replace(/:\d+$/, '').replace(/^www\./, '');
+  const host = normaliseHost(rawHost) || '';
   const DEFAULT_HOSTS = new Set([
     'app.reelstrack.io',
     'localhost',
@@ -152,7 +167,7 @@ router.post('/', async (req, res) => {
 
   const insert = {
     talent_id: body.talent_id || null,
-    host: body.host?.toLowerCase().trim() || null,
+    host: normaliseHost(body.host),
     slug,
     title,
     subtitle: body.subtitle || null,
@@ -194,8 +209,8 @@ router.patch('/:id', async (req, res) => {
     }
     updates.slug = s;
   }
-  if (updates.host !== undefined && updates.host) {
-    updates.host = updates.host.toString().toLowerCase().trim();
+  if (updates.host !== undefined) {
+    updates.host = normaliseHost(updates.host);
   }
   updates.updated_at = new Date().toISOString();
 
