@@ -98,9 +98,11 @@
   gap: 0;
 }
 
-/* Pushes the title/bio/links into the lower ~40% of the viewport so
-   the photo's subject (the face) has room to breathe up top. */
-.pl-spacer { flex: 1 1 40vh; min-height: 30vh; }
+/* Anchors the title around the 55% line — same proportional sweet spot
+   the previous 4:5 hero produced (top ~60% photo / bottom ~40% content).
+   Fixed value (not flex-grow) so adding links doesn't squash the photo —
+   they just extend the page and scroll if needed. */
+.pl-spacer { flex: 0 0 auto; height: 52vh; min-height: 280px; }
 
 /* ----- Profile content (name + subtitle + bio) ----- */
 .pl-content {
