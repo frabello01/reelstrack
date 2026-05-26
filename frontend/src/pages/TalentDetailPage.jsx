@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   ArrowLeft, Plus, Trash2, RefreshCw, ExternalLink,
   TrendingUp, TrendingDown, Eye, Heart, Users, Film, Trophy, AlertTriangle, CheckCircle2,
-  StickyNote, Check, X, ListChecks
+  StickyNote, Check, X, ListChecks, MousePointerClick
 } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid } from 'recharts';
 import { api } from '../lib/api';
@@ -337,6 +337,13 @@ export default function TalentDetailPage() {
           <div className="metric-card-value">{m.above_100k ?? 0}</div>
           <Delta current={m.above_100k} previous={m.above_100k_prev} label={compareLabel} />
         </div>
+        <div className="metric-card">
+          <div className="metric-card-label"><MousePointerClick size={14} /> Landing clicks</div>
+          <div className="metric-card-value">{formatNum(m.landing_clicks ?? 0)}</div>
+          {(m.landings_count ?? 0) === 0
+            ? <span className="delta-text delta-neutral">no landings yet</span>
+            : <Delta current={m.landing_clicks} previous={m.landing_clicks_prev} label={compareLabel} />}
+        </div>
       </div>
 
       {/* Per-profile contribution breakdown */}
@@ -366,6 +373,14 @@ export default function TalentDetailPage() {
         <ChartCard title="Combined views per day (last 30 days)" data={talent.charts.views_per_day} type="line" color="#a78bfa" />
         <ChartCard title="Active-profile followers (last 30 days)" data={talent.charts.followers_per_day} type="line" color="#60a5fa" />
         <ChartCard title="Reels published per day (last 30 days)" data={talent.charts.reels_per_day} type="bar" color="#34d399" />
+        {talent.charts.clicks_per_day && (
+          <ChartCard
+            title="Combined landing clicks per day (last 30 days)"
+            data={talent.charts.clicks_per_day}
+            type="bar"
+            color="#f472b6"
+          />
+        )}
       </div>
 
       {/* Top reels */}

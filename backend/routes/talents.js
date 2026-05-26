@@ -136,6 +136,35 @@ async function computeTalentMetrics(talentId, days) {
     if (havePrevPairs > 0) followerDeltaPrev = prevDeltaSum;
   }
 
+  // Landing clicks across THIS period and the PREVIOUS period, summed across
+  // every landing the talent owns (regardless of which IG profile each landing
+  // is linked to — the talent owns all of them).
+  const { data: talentLandings } = await supabase
+    .from('landings')
+    .select('id')
+    .eq('talent_id', talentId);
+  const landingIds = (talentLandings || []).map((l) => l.id);
+
+  let clicks = 0;
+  let clicksPrev = 0;
+  if (landingIds.length > 0) {
+    const [{ count: c1 }, { count: c2 }] = await Promise.all([
+      supabase
+        .from('landing_link_clicks')
+        .select('*', { count: 'exact', head: true })
+        .in('landing_id', landingIds)
+        .gte('clicked_at', sinceISO),
+      supabase
+        .from('landing_link_clicks')
+        .select('*', { count: 'exact', head: true })
+        .in('landing_id', landingIds)
+        .gte('clicked_at', sincePrevISO)
+        .lt('clicked_at', sinceISO),
+    ]);
+    clicks = c1 || 0;
+    clicksPrev = c2 || 0;
+  }
+
   return {
     profiles_count: profiles.length,
     active_profiles_count: activeProfiles.length,
@@ -153,8 +182,47 @@ async function computeTalentMetrics(talentId, days) {
     lost_to_bans: lostToBans,
     follower_delta: followerDelta,
     follower_delta_prev: followerDeltaPrev,
+    landing_clicks: clicks,
+    landing_clicks_prev: clicksPrev,
+    landings_count: landingIds.length,
     breakdown,
   };
+}
+
+// Combined clicks per day across every landing owned by this talent.
+async function getCombinedClicksPerDay(talentId, days) {
+  const { data: talentLandings } = await supabase
+    .from('landings')
+    .select('id')
+    .eq('talent_id', talentId);
+  const landingIds = (talentLandings || []).map((l) => l.id);
+
+  // Zero-filled buckets so the chart still renders even with no data.
+  const buckets = {};
+  for (let i = 0; i < days; i++) {
+    const d = new Date(); d.setDate(d.getDate() - i);
+    buckets[d.toISOString().slice(0, 10)] = 0;
+  }
+  if (landingIds.length === 0) {
+    return Object.entries(buckets)
+      .map(([date, value]) => ({ date, value }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  const since = periodStart(days);
+  const { data } = await supabase
+    .from('landing_link_clicks')
+    .select('clicked_at')
+    .in('landing_id', landingIds)
+    .gte('clicked_at', since);
+
+  (data || []).forEach((c) => {
+    const day = c.clicked_at.slice(0, 10);
+    if (buckets[day] !== undefined) buckets[day] += 1;
+  });
+  return Object.entries(buckets)
+    .map(([date, value]) => ({ date, value }))
+    .sort((a, b) => a.date.localeCompare(b.date));
 }
 
 // Sparkline: combined views per day across all profiles for last N days
@@ -278,13 +346,14 @@ router.get('/:id', async (req, res) => {
     computeTalentMetrics(talent.id, 30),
   ]);
 
-  const [viewsSeries, followersSeries, reelsSeries] = await Promise.all([
+  const [viewsSeries, followersSeries, reelsSeries, clicksSeries] = await Promise.all([
     getCombinedViewsPerDay(profileIds, 30),
     getCombinedFollowersPerDay(profileIds.filter((pid) => {
       const p = profiles.find((x) => x.id === pid);
       return p?.status === 'active';
     }), 30),
     getCombinedReelsPerDay(profileIds, 30),
+    getCombinedClicksPerDay(talent.id, 30),
   ]);
 
   // Top reels of last 30 days across all profiles
@@ -315,6 +384,7 @@ router.get('/:id', async (req, res) => {
       views_per_day: viewsSeries,
       followers_per_day: followersSeries,
       reels_per_day: reelsSeries,
+      clicks_per_day: clicksSeries,
     },
     top_reels: topReelsAnnotated,
   });
