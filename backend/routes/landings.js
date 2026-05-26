@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const supabase = require('../lib/supabase');
 const { uploadImageDataUrl } = require('../lib/imageUpload');
+const { encodeUrl } = require('../lib/linkCipher');
 
 // Normalise any user-pasted hostname to a canonical form:
 //   "https://www.Example.com:443/" → "example.com"
@@ -63,10 +64,14 @@ router.get('/public/lookup', async (req, res) => {
     .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
   // Strip click_count from the public payload — admins see it in the editor, but
   // there's no reason to leak counters to every visitor.
+  // URL is NEVER returned in plain form on the public endpoint. We ship
+  // an obfuscated blob under a non-obvious key ("u") so grep-style
+  // scrapers can't find URLs in the response. The client decodes only
+  // at click time. See backend/lib/linkCipher.js for the algorithm.
   const publicLinks = links.map((l) => ({
     id: l.id,
     label: l.label,
-    url: l.url,
+    u: encodeUrl(l.url),
     icon: l.icon,
     age_gate: l.age_gate,
     animation: l.animation || null,

@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { ChevronRight, AlertTriangle } from 'lucide-react';
 import { api } from '../lib/api';
 import { detectMetaWebview, openExternal } from '../lib/metaEscape';
+import { decodeUrl } from '../lib/linkCipher';
 import VerifiedBadge from '../components/VerifiedBadge';
 import './PublicLandingPage.css';
 
@@ -101,7 +102,12 @@ export default function PublicLandingPage() {
 
   const fireLinkOpen = (link) => {
     try { api.recordLandingClick(link.id, metaPlatformRef.current); } catch {}
-    setTimeout(() => openExternal(link.url), 30);
+    // The plaintext URL never lives in React state — decode it ONLY here,
+    // moments before navigating. A bot that dumps the rendered DOM or the
+    // React fiber tree won't find any usable URL anywhere on the page.
+    const dest = decodeUrl(link.u);
+    if (!dest) return;
+    setTimeout(() => openExternal(dest), 30);
   };
 
   if (loading) {
