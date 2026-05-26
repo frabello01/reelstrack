@@ -129,11 +129,11 @@ router.post('/public/click/:linkId', async (req, res) => {
 // AUTHENTICATED ENDPOINTS (admin-only via the existing auth gate)
 // ============================================================
 
-// GET /api/landings — all landings, with link count and talent join
+// GET /api/landings — all landings, with link count and talent + IG profile joins
 router.get('/', async (req, res) => {
   const { data, error } = await supabase
     .from('landings')
-    .select('*, talents(id, name, profile_pic_url), landing_links(count)')
+    .select('*, talents(id, name, profile_pic_url), my_accounts(id, username, profile_pic_url), landing_links(count)')
     .order('created_at', { ascending: false });
   if (error) return res.status(500).json({ error: error.message });
   res.json(data);
@@ -143,7 +143,7 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   const { data, error } = await supabase
     .from('landings')
-    .select('*, talents(id, name, profile_pic_url), landing_links(*)')
+    .select('*, talents(id, name, profile_pic_url), my_accounts(id, username, profile_pic_url), landing_links(*)')
     .eq('id', req.params.id)
     .maybeSingle();
   if (error) return res.status(500).json({ error: error.message });
@@ -167,6 +167,7 @@ router.post('/', async (req, res) => {
 
   const insert = {
     talent_id: body.talent_id || null,
+    my_account_id: body.my_account_id || null,
     host: normaliseHost(body.host),
     slug,
     title,
@@ -196,7 +197,7 @@ router.post('/', async (req, res) => {
 
 // PATCH /api/landings/:id — partial update
 router.patch('/:id', async (req, res) => {
-  const allowed = ['talent_id', 'host', 'slug', 'title', 'subtitle', 'bio', 'avatar_url',
+  const allowed = ['talent_id', 'my_account_id', 'host', 'slug', 'title', 'subtitle', 'bio', 'avatar_url',
     'background_url', 'verified', 'theme', 'published', 'age_gate_default'];
   const updates = {};
   for (const k of allowed) {
@@ -212,6 +213,9 @@ router.patch('/:id', async (req, res) => {
   if (updates.host !== undefined) {
     updates.host = normaliseHost(updates.host);
   }
+  // Coerce empty strings to null for nullable FKs
+  if (updates.talent_id === '') updates.talent_id = null;
+  if (updates.my_account_id === '') updates.my_account_id = null;
   updates.updated_at = new Date().toISOString();
 
   const { data, error } = await supabase

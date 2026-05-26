@@ -130,6 +130,8 @@ function ProfileTab({ landing, saveField, savingField, reload }) {
   const avatarInput = useRef(null);
   const bgInput = useRef(null);
   const [uploading, setUploading] = useState(null);
+  const [talents, setTalents] = useState([]);
+  const [accounts, setAccounts] = useState([]);
 
   // Sync when landing changes
   useEffect(() => {
@@ -139,6 +141,17 @@ function ProfileTab({ landing, saveField, savingField, reload }) {
     setSlug(landing.slug || '');
     setHost(landing.host || '');
   }, [landing]);
+
+  // Load talents + accounts once for the link pickers
+  useEffect(() => {
+    Promise.all([api.getTalents(), api.getMyAccounts()])
+      .then(([ts, accs]) => { setTalents(ts); setAccounts(accs); })
+      .catch(() => {});
+  }, []);
+
+  const accountsForCurrentTalent = (landing.talent_id
+    ? accounts.filter((a) => a.talent_id === landing.talent_id)
+    : []);
 
   const handleUpload = async (e, kind) => {
     const file = e.target.files?.[0];
@@ -200,6 +213,46 @@ function ProfileTab({ landing, saveField, savingField, reload }) {
               {uploading === 'avatar' ? 'Caricamento…' : <><Upload size={13} /> Avatar</>}
             </button>
             <span className="editor-hint">Usato come fallback quando manca lo sfondo.</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Linked creator + IG profile */}
+      <div className="editor-card">
+        <h3 className="editor-card-title">Collegamenti</h3>
+
+        <div className="form-group">
+          <label className="form-label">Creator</label>
+          <select
+            value={landing.talent_id || ''}
+            onChange={(e) => {
+              // Changing the talent invalidates the linked IG profile
+              saveField({ talent_id: e.target.value || null, my_account_id: null });
+            }}
+          >
+            <option value="">— Nessuno —</option>
+            {talents.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Profilo IG collegato</label>
+          <select
+            value={landing.my_account_id || ''}
+            onChange={(e) => saveField({ my_account_id: e.target.value || null })}
+            disabled={!landing.talent_id}
+          >
+            <option value="">— Nessuno —</option>
+            {accountsForCurrentTalent.map((a) => (
+              <option key={a.id} value={a.id}>@{a.username}</option>
+            ))}
+          </select>
+          <div className="form-hint">
+            {!landing.talent_id
+              ? 'Scegli prima un creator.'
+              : accountsForCurrentTalent.length === 0
+                ? 'Questo creator non ha profili IG collegati in My Creators.'
+                : 'I click di questa landing appariranno nel detail del profilo IG selezionato.'}
           </div>
         </div>
       </div>

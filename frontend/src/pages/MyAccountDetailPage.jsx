@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, ExternalLink, TrendingUp, TrendingDown, Eye, Heart, Users, Film, Trophy } from 'lucide-react';
+import { ArrowLeft, ExternalLink, TrendingUp, TrendingDown, Eye, Heart, Users, Film, Trophy, MousePointerClick, Globe } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid } from 'recharts';
 import { api } from '../lib/api';
 import './MyAccountDetailPage.css';
@@ -157,7 +157,20 @@ export default function MyAccountDetailPage() {
         <ChartCard title="Views per day (last 30 days)" data={account.charts.views_per_day} type="line" color="#a78bfa" />
         <ChartCard title="Followers (last 30 days)" data={account.charts.followers_per_day} type="line" color="#60a5fa" />
         <ChartCard title="Reels published per day (last 30 days)" data={account.charts.reels_per_day} type="bar" color="#34d399" />
+        {account.charts.clicks_per_day && (
+          <ChartCard
+            title="Landing clicks per day (last 30 days)"
+            data={account.charts.clicks_per_day}
+            type="bar"
+            color="#f472b6"
+          />
+        )}
       </div>
+
+      {/* Linked landings + activity table */}
+      {(account.linked_landings?.length > 0 || (account.activity && account.activity.length > 0)) && (
+        <LandingsAndActivity account={account} />
+      )}
 
       {account.top_reels && account.top_reels.length > 0 && (
         <div className="top-reels-section">
@@ -218,3 +231,92 @@ const tooltipStyle = {
   fontSize: 12,
   color: 'white',
 };
+
+// ----------------------------------------------------------------
+// Linked landings + per-day activity table (with convert rate).
+// Shown only when this IG profile has at least one landing attached
+// or at least one day of activity data.
+// ----------------------------------------------------------------
+function LandingsAndActivity({ account }) {
+  const landings = account.linked_landings || [];
+  const activity = (account.activity || []).filter((r) => r.views > 0 || r.clicks > 0 || r.new_followers != null);
+
+  return (
+    <div className="landings-activity">
+      {landings.length > 0 && (
+        <div className="linked-landings-section">
+          <h2><Globe size={16} style={{ verticalAlign: -2, marginRight: 6 }} />Landings collegate</h2>
+          <div className="linked-landings-grid">
+            {landings.map((l) => {
+              const host = l.host || window.location.host;
+              const protocol = host.startsWith('localhost') ? 'http' : 'https';
+              const path = l.host ? `/${l.slug}` : `/p/${l.slug}`;
+              const url = `${protocol}://${host}${path}`;
+              return (
+                <div key={l.id} className="linked-landing-card">
+                  <div className="linked-landing-title">
+                    <Link to={`/landings/${l.id}`}>{l.title}</Link>
+                    {!l.published && <span className="linked-landing-draft">bozza</span>}
+                  </div>
+                  <div className="linked-landing-url">
+                    <a href={url} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink size={11} /> {url.replace(/^https?:\/\//, '')}
+                    </a>
+                  </div>
+                  <div className="linked-landing-clicks">
+                    <MousePointerClick size={13} /> {formatNum(l.total_clicks)} click totali
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {activity.length > 0 && (
+        <div className="activity-table-section">
+          <h2>Attività giornaliera</h2>
+          <p className="activity-table-hint">
+            Convert rate = click sulle landing / views totali dei reel pubblicati nel giorno.
+            È una stima approssimata: i reel ricevono views nei giorni successivi alla pubblicazione.
+          </p>
+          <div className="activity-table-wrap">
+            <table className="activity-table">
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th className="num">Views</th>
+                  <th className="num">Nuovi follower</th>
+                  <th className="num">Click landing</th>
+                  <th className="num">Convert rate</th>
+                </tr>
+              </thead>
+              <tbody>
+                {activity.map((row) => (
+                  <tr key={row.date}>
+                    <td>{formatDate(row.date)}</td>
+                    <td className="num">{formatNum(row.views)}</td>
+                    <td className={`num ${row.new_followers != null ? (row.new_followers >= 0 ? 'delta-up' : 'delta-down') : ''}`}>
+                      {row.new_followers == null ? '—' : (row.new_followers >= 0 ? '+' : '') + formatNum(row.new_followers)}
+                    </td>
+                    <td className="num">{formatNum(row.clicks)}</td>
+                    <td className="num">
+                      {row.convert_rate == null
+                        ? '—'
+                        : <span className={row.convert_rate >= 1 ? 'convert-good' : ''}>{row.convert_rate.toFixed(2)}%</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function formatDate(d) {
+  const date = new Date(d);
+  return date.toLocaleDateString(undefined, { day: '2-digit', month: 'short', weekday: 'short' });
+}

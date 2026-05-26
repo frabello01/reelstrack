@@ -136,11 +136,18 @@ router.get('/:id', async (req, res) => {
   ]);
 
   // Chart data — daily series for the last 30 days
-  const [viewsSeries, followersSeries, reelsSeries] = await Promise.all([
+  const [viewsSeries, followersSeries, reelsSeries, clicksSeries, linkedLandings] = await Promise.all([
     getViewsPerDay(account.id, 30),
     getFollowersPerDay(account.id, 30),
     getReelsPerDay(account.id, 30),
+    getLandingClicksPerDay(account.id, 30),
+    getLinkedLandings(account.id),
   ]);
+
+  // Activity table data: row per day with views, new followers, clicks,
+  // and the convert rate so the frontend doesn't have to compute it.
+  // "New followers" is the day-over-day delta of follower_count from snapshots.
+  const activity = buildDailyActivity(viewsSeries, followersSeries, clicksSeries);
 
   // Top 10 reels by views (within last 30 days)
   const { data: topReels } = await supabase
@@ -158,7 +165,10 @@ router.get('/:id', async (req, res) => {
       views_per_day: viewsSeries,
       followers_per_day: followersSeries,
       reels_per_day: reelsSeries,
+      clicks_per_day: clicksSeries,
     },
+    activity,
+    linked_landings: linkedLandings,
     top_reels: topReels || [],
   });
 });
@@ -263,6 +273,123 @@ async function getReelsPerDay(accountId, days) {
   return Object.entries(buckets)
     .map(([date, count]) => ({ date, value: count }))
     .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+// Clicks per day, aggregated across all landings linked to this my_account.
+async function getLandingClicksPerDay(accountId, days) {
+  const since = periodStart(days);
+
+  // First find all landings linked to this account
+  const { data: landings } = await supabase
+    .from('landings')
+    .select('id')
+    .eq('my_account_id', accountId);
+
+  if (!landings || landings.length === 0) {
+    // Return zero-filled buckets so the chart still renders cleanly
+    return zeroSeries(days);
+  }
+  const landingIds = landings.map((l) => l.id);
+
+  const { data: clicks } = await supabase
+    .from('landing_link_clicks')
+    .select('clicked_at')
+    .in('landing_id', landingIds)
+    .gte('clicked_at', since);
+
+  const buckets = {};
+  for (let i = 0; i < days; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    buckets[d.toISOString().slice(0, 10)] = 0;
+  }
+  (clicks || []).forEach((c) => {
+    const day = c.clicked_at.slice(0, 10);
+    if (buckets[day] !== undefined) buckets[day] += 1;
+  });
+  return Object.entries(buckets)
+    .map(([date, value]) => ({ date, value }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+// Lists landings linked to this account, including lifetime click count.
+async function getLinkedLandings(accountId) {
+  const { data: landings } = await supabase
+    .from('landings')
+    .select('id, slug, host, title, published, landing_links(click_count)')
+    .eq('my_account_id', accountId)
+    .order('created_at', { ascending: true });
+  return (landings || []).map((l) => ({
+    id: l.id,
+    slug: l.slug,
+    host: l.host,
+    title: l.title,
+    published: l.published,
+    total_clicks: (l.landing_links || []).reduce((s, x) => s + (x.click_count || 0), 0),
+  }));
+}
+
+// Builds the per-day activity table including convert rate (clicks/views * 100).
+// views_series and clicks_series are aligned by date. follower_series is a
+// snapshot of cumulative follower_count by date — we derive "new followers"
+// as the day-over-day delta and forward-fill missing days.
+function buildDailyActivity(viewsSeries, followersSeries, clicksSeries) {
+  const viewsByDay = Object.fromEntries((viewsSeries || []).map((r) => [r.date, r.value]));
+  const clicksByDay = Object.fromEntries((clicksSeries || []).map((r) => [r.date, r.value]));
+
+  // Build a fully-populated cumulative follower map: any date with no snapshot
+  // gets the previous day's value forward-filled. We walk sorted snapshots.
+  const followersSorted = [...(followersSeries || [])].sort((a, b) => a.date.localeCompare(b.date));
+  // Build the list of days we want to report (the union of all series keys, sorted)
+  const days = [...new Set([
+    ...Object.keys(viewsByDay),
+    ...Object.keys(clicksByDay),
+    ...followersSorted.map((s) => s.date),
+  ])].sort();
+
+  let lastSnapshot = null;
+  let lastFollowerCount = null;
+  const followerOnDay = {};
+  for (const day of days) {
+    // Advance through snapshots up to <= day
+    while (followersSorted.length && followersSorted[0].date <= day) {
+      lastSnapshot = followersSorted.shift();
+      lastFollowerCount = lastSnapshot.value;
+    }
+    followerOnDay[day] = lastFollowerCount;
+  }
+
+  const rows = [];
+  let prevFollowerCount = null;
+  for (const day of days) {
+    const views = viewsByDay[day] || 0;
+    const clicks = clicksByDay[day] || 0;
+    const currentFollower = followerOnDay[day];
+    const newFollowers = (currentFollower != null && prevFollowerCount != null)
+      ? currentFollower - prevFollowerCount
+      : null;
+    const convertRate = views > 0 ? (clicks / views) * 100 : null;
+    rows.push({
+      date: day,
+      views,
+      clicks,
+      new_followers: newFollowers,
+      convert_rate: convertRate, // percentage (null if no views)
+    });
+    if (currentFollower != null) prevFollowerCount = currentFollower;
+  }
+  // Newest first for readability in the UI
+  return rows.reverse();
+}
+
+function zeroSeries(days) {
+  const out = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    out.push({ date: d.toISOString().slice(0, 10), value: 0 });
+  }
+  return out;
 }
 
 // PATCH update account_info (free-text notes about the IG account — no passwords)
