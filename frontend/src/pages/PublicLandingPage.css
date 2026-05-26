@@ -88,12 +88,16 @@
   }
 }
 
-/* ----- Hero ----- */
+/* ----- Hero -----
+   Mobile: tighter aspect + viewport cap so the first link button is
+   already visible above the fold. Desktop card stays larger.
+   The fade extends well into the dark area below with many gradient
+   stops for a buttery transition — mirrors the link.me style. */
 .pl-hero {
   position: relative;
   width: 100%;
-  aspect-ratio: 3 / 4;
-  max-height: 600px;
+  aspect-ratio: 4 / 5;
+  max-height: 58vh;
   overflow: hidden;
 }
 @media (min-width: 600px) {
@@ -111,12 +115,20 @@
 .pl-hero-fade {
   position: absolute;
   inset: 0;
+  pointer-events: none;
+  /* Many granular stops in the lower half = buttery link.me-style fade.
+     Bottom colour is the exact card bg so the seam into .pl-links is
+     visually invisible without needing to overflow the hero. */
   background: linear-gradient(
-    180deg,
+    to bottom,
     transparent 0%,
-    transparent 35%,
-    rgba(17,17,24,0.45) 65%,
-    rgba(17,17,24,0.88) 88%,
+    transparent 28%,
+    rgba(17,17,24,0.06) 44%,
+    rgba(17,17,24,0.20) 58%,
+    rgba(17,17,24,0.42) 70%,
+    rgba(17,17,24,0.68) 80%,
+    rgba(17,17,24,0.86) 88%,
+    rgba(17,17,24,0.96) 95%,
     #111118 100%
   );
 }
@@ -124,7 +136,7 @@
 .pl-hero-content {
   position: absolute;
   left: 0; right: 0; bottom: 0;
-  padding: 28px 28px 20px;
+  padding: 22px 24px 14px;
   text-align: center;
   animation: pl-rise 0.6s ease-out;
 }

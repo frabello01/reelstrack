@@ -1,8 +1,9 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
-import { BadgeCheck, ChevronRight, AlertTriangle } from 'lucide-react';
+import { ChevronRight, AlertTriangle } from 'lucide-react';
 import { api } from '../lib/api';
 import { detectMetaWebview, openExternal } from '../lib/metaEscape';
+import VerifiedBadge from '../components/VerifiedBadge';
 import './PublicLandingPage.css';
 
 export default function PublicLandingPage() {
@@ -108,13 +109,7 @@ export default function PublicLandingPage() {
             <h1 className="pl-title">
               <span>{landing.title}</span>
               {landing.verified && (
-                <BadgeCheck
-                  size={28}
-                  className="pl-verified"
-                  fill={accent}
-                  color="#fff"
-                  strokeWidth={2.5}
-                />
+                <VerifiedBadge size={28} color={accent} className="pl-verified" />
               )}
             </h1>
             {landing.subtitle && <div className="pl-subtitle">{landing.subtitle}</div>}
