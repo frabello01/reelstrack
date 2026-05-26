@@ -6,6 +6,59 @@ import { detectMetaWebview, openExternal } from '../lib/metaEscape';
 import VerifiedBadge from '../components/VerifiedBadge';
 import './PublicLandingPage.css';
 
+// ---------- <head> metadata helpers -----------------------------------
+// We rewrite the page's <title>, <link rel="icon">, and OG / Twitter meta
+// tags AFTER the landing data lands. This handles the browser-tab + bookmark
+// case for real users. Crawlers (WhatsApp / IG preview / Telegram / X /
+// Facebook) don't run JS — for them, the Vercel Edge middleware injects
+// the same metadata into the HTML before it leaves the edge.
+function applyHeadMetadata(landing) {
+  if (!landing || typeof document === 'undefined') return;
+  const title = landing.title || 'Profile';
+  const description = landing.bio || landing.subtitle || `${title} — official links`;
+  const image = landing.background_url || landing.avatar_url || '';
+  const url = typeof window !== 'undefined' ? window.location.href : '';
+
+  document.title = title;
+
+  // Favicon: prefer the landing's avatar; fall back to background.
+  if (image) {
+    upsertLink('icon', image);
+    upsertLink('apple-touch-icon', image);
+  }
+
+  upsertMeta('name', 'description', description);
+  upsertMeta('property', 'og:type', 'profile');
+  upsertMeta('property', 'og:title', title);
+  upsertMeta('property', 'og:description', description);
+  upsertMeta('property', 'og:url', url);
+  if (image) upsertMeta('property', 'og:image', image);
+  upsertMeta('name', 'twitter:card', image ? 'summary_large_image' : 'summary');
+  upsertMeta('name', 'twitter:title', title);
+  upsertMeta('name', 'twitter:description', description);
+  if (image) upsertMeta('name', 'twitter:image', image);
+}
+
+function upsertMeta(keyAttr, keyValue, content) {
+  let el = document.head.querySelector(`meta[${keyAttr}="${keyValue}"]`);
+  if (!el) {
+    el = document.createElement('meta');
+    el.setAttribute(keyAttr, keyValue);
+    document.head.appendChild(el);
+  }
+  el.setAttribute('content', content);
+}
+
+function upsertLink(rel, href) {
+  let el = document.head.querySelector(`link[rel="${rel}"]`);
+  if (!el) {
+    el = document.createElement('link');
+    el.setAttribute('rel', rel);
+    document.head.appendChild(el);
+  }
+  el.setAttribute('href', href);
+}
+
 export default function PublicLandingPage() {
   const { slug } = useParams();
   const [landing, setLanding] = useState(null);
@@ -27,7 +80,7 @@ export default function PublicLandingPage() {
         const data = await api.getPublicLanding(host, slug);
         if (cancelled) return;
         setLanding(data);
-        document.title = data.title || 'Profile';
+        applyHeadMetadata(data);
       } catch (err) {
         if (cancelled) return;
         setError(err.message || 'Profile not found');
