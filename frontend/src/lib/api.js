@@ -350,6 +350,38 @@ export const api = {
     return request(`/api/guide-completions?${qs}`, { method: 'DELETE' });
   },
 
+  // Landings (Linktree-style pages) — admin
+  getLandings: () => request('/api/landings'),
+  getLanding: (id) => request(`/api/landings/${id}`),
+  createLanding: (body) =>
+    request('/api/landings', { method: 'POST', body: JSON.stringify(body) }),
+  updateLanding: (id, body) =>
+    request(`/api/landings/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteLanding: (id) => request(`/api/landings/${id}`, { method: 'DELETE' }),
+  uploadLandingAvatar: (id, image_data_url) =>
+    request(`/api/landings/${id}/avatar`, { method: 'POST', body: JSON.stringify({ image_data_url }) }),
+  uploadLandingBackground: (id, image_data_url) =>
+    request(`/api/landings/${id}/background`, { method: 'POST', body: JSON.stringify({ image_data_url }) }),
+  createLandingLink: (landingId, body) =>
+    request(`/api/landings/${landingId}/links`, { method: 'POST', body: JSON.stringify(body) }),
+  updateLandingLink: (linkId, body) =>
+    request(`/api/landings/links/${linkId}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteLandingLink: (linkId) =>
+    request(`/api/landings/links/${linkId}`, { method: 'DELETE' }),
+  reorderLandingLinks: (landingId, ordered_ids) =>
+    request(`/api/landings/${landingId}/links/reorder`, { method: 'POST', body: JSON.stringify({ ordered_ids }) }),
+  getLandingAnalytics: (id, days = 30) =>
+    request(`/api/landings/${id}/analytics?days=${days}`),
+
+  // Landings — public (no auth)
+  getPublicLanding: (host, slug) =>
+    request(`/api/landings/public/lookup?host=${encodeURIComponent(host)}&slug=${encodeURIComponent(slug)}`),
+  recordLandingClick: (linkId, meta_platform) =>
+    request(`/api/landings/public/click/${linkId}`, {
+      method: 'POST',
+      body: JSON.stringify({ meta_platform: meta_platform || null }),
+    }),
+
   // Explore Creators (suggestion scans)
   getSuggestions: (listId) => request(`/api/suggestions/lists/${listId}`),
   triggerSuggestionScan: (listId) =>

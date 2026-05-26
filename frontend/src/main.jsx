@@ -25,6 +25,9 @@ import BatchCleanerPage from './pages/BatchCleanerPage';
 import CharactersPage from './pages/CharactersPage';
 import StudioPage from './pages/StudioPage';
 import ExplorePage from './pages/ExplorePage';
+import LandingsPage from './pages/LandingsPage';
+import LandingEditorPage from './pages/LandingEditorPage';
+import PublicLandingPage from './pages/PublicLandingPage';
 import TeamPage from './pages/TeamPage';
 import LogPage from './pages/LogPage';
 import Layout from './components/Layout';
@@ -63,14 +66,42 @@ function AdminRoute({ children }) {
   return children;
 }
 
+// Hostname check: any host that is NOT our admin app or localhost is treated
+// as a "landing-only" deployment — only the public PublicLandingPage renders,
+// the admin app is never even mounted. This makes it safe to point arbitrary
+// customer domains at the same Vercel project.
+const ADMIN_HOSTS = new Set(['app.reelstrack.io', 'localhost', '127.0.0.1']);
+const currentHost = (typeof window !== 'undefined' ? window.location.hostname : '').toLowerCase();
+const IS_LANDING_ONLY_HOST = !ADMIN_HOSTS.has(currentHost);
+
+function LandingOnlyApp() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        {/* On a custom domain, any path is interpreted as a landing slug. */}
+        <Route path="/:slug" element={<PublicLandingPage />} />
+        <Route path="/p/:slug" element={<PublicLandingPage />} />
+        {/* Root and unknown paths fall back to a generic 404-ish landing render
+            (we pass an empty slug — the renderer will show its "not found" state). */}
+        <Route path="*" element={<PublicLandingPage />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
+    {IS_LANDING_ONLY_HOST ? (
+      <LandingOnlyApp />
+    ) : (
     <AuthProvider>
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
           <Route path="/share/:token" element={<PublicTodoPage />} />
+          {/* Public landing pages — also accessible on the admin host under /p/:slug */}
+          <Route path="/p/:slug" element={<PublicLandingPage />} />
 
           <Route
             path="/"
@@ -84,6 +115,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="lists" element={<ListsPage />} />
             <Route path="lists/:id" element={<ListDetailPage />} />
             <Route path="explore" element={<ExplorePage />} />
+            <Route path="landings" element={<LandingsPage />} />
+            <Route path="landings/:id" element={<LandingEditorPage />} />
             <Route path="todos" element={<TodosPage />} />
             <Route path="todos/:id" element={<TodoDetailPage />} />
             <Route path="my-accounts" element={<MyAccountsPage />} />
@@ -109,5 +142,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         </Routes>
       </BrowserRouter>
     </AuthProvider>
+    )}
   </React.StrictMode>
 );

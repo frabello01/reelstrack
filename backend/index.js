@@ -25,6 +25,7 @@ const invitesRouter = require('./routes/invites');
 const activityLogRouter = require('./routes/activityLog');
 const guideCompletionsRouter = require('./routes/guideCompletions');
 const suggestionsRouter = require('./routes/suggestions');
+const landingsRouter = require('./routes/landings');
 const { requireAuth } = require('./middleware/auth');
 const { requireAdminForWrites } = require('./middleware/requireAdminForWrites');
 const { autoLogMiddleware } = require('./middleware/autoLogMiddleware');
@@ -76,6 +77,7 @@ app.use(rateLimit({
 // ============================================================
 app.use('/api', (req, res, next) => {
   if (req.path.startsWith('/todos/public/')) return next();
+  if (req.path.startsWith('/landings/public/')) return next();
   return requireAuth(req, res, next);
 });
 
@@ -119,6 +121,7 @@ app.use('/api/team', teamRouter);
 app.use('/api/activity-log', activityLogRouter);
 app.use('/api/guide-completions', guideCompletionsRouter);
 app.use('/api/suggestions', suggestionsRouter);
+app.use('/api/landings', landingsRouter);
 
 // ============================================================
 // CRONS (unchanged + new log retention cleanup)
