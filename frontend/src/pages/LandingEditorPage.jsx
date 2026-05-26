@@ -54,7 +54,10 @@ export default function LandingEditorPage() {
 
   const publicHost = landing.host || window.location.host;
   const publicProtocol = publicHost.startsWith('localhost') ? 'http' : 'https';
-  const publicUrl = `${publicProtocol}://${publicHost}/p/${landing.slug}`;
+  // Custom domains serve only landings (no admin), so the slug sits at root.
+  // On app.reelstrack.io we keep /p/ to avoid colliding with admin routes.
+  const publicPath = landing.host ? `/${landing.slug}` : `/p/${landing.slug}`;
+  const publicUrl = `${publicProtocol}://${publicHost}${publicPath}`;
 
   return (
     <div className="landing-editor">

@@ -61,7 +61,11 @@ export default function LandingsPage() {
   const publicUrl = (landing) => {
     const host = landing.host || window.location.host;
     const protocol = (host.startsWith('localhost') ? 'http' : 'https');
-    return `${protocol}://${host}/p/${landing.slug}`;
+    // On a custom domain the SPA only serves landings, so the slug can sit
+    // at the root. On app.reelstrack.io we keep /p/ to avoid colliding with
+    // the admin routes (/lists, /landings, …).
+    const path = landing.host ? `/${landing.slug}` : `/p/${landing.slug}`;
+    return `${protocol}://${host}${path}`;
   };
 
   return (
@@ -160,7 +164,11 @@ export default function LandingsPage() {
                 placeholder="es. mariorossi"
                 autoFocus
               />
-              <div className="form-hint">URL: /p/{form.slug || 'mariorossi'}</div>
+              <div className="form-hint">
+                URL: {form.host
+                  ? `${form.host}/${form.slug || 'mariorossi'}`
+                  : `app.reelstrack.io/p/${form.slug || 'mariorossi'}`}
+              </div>
             </div>
             <div className="form-group">
               <label className="form-label">Titolo *</label>
