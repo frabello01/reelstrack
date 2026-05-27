@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   ArrowLeft, Plus, Trash2, RefreshCw, ExternalLink,
   TrendingUp, TrendingDown, Eye, Heart, Users, Film, Trophy, AlertTriangle, CheckCircle2,
-  StickyNote, Check, X, ListChecks, MousePointerClick
+  StickyNote, Check, X, ListChecks, MousePointerClick, UserPlus, DollarSign, Link2
 } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid } from 'recharts';
 import { api } from '../lib/api';
@@ -391,6 +391,9 @@ export default function TalentDetailPage() {
         )}
       </div>
 
+      {/* Infloww monetization summary */}
+      {talent.infloww_creator_id && <InflowwSection talentId={talent.id} />}
+
       {/* Top reels */}
       {talent.top_reels && talent.top_reels.length > 0 && (
         <div className="top-reels-section">
@@ -409,6 +412,136 @@ export default function TalentDetailPage() {
               </a>
             ))}
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------
+// Infloww monetization section — lifetime subscribers + earnings
+// pulled from Infloww's API, aggregated across all this talent's
+// tracking links. Hidden if the talent isn't bound to Infloww.
+// ----------------------------------------------------------------
+function InflowwSection({ talentId }) {
+  const [links, setLinks] = useState(null);
+  const [syncing, setSyncing] = useState(false);
+
+  const load = async () => {
+    try {
+      const rows = await api.getInflowwLinks(talentId);
+      setLinks(rows || []);
+    } catch (err) {
+      setLinks([]);
+    }
+  };
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [talentId]);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      await api.triggerInflowwSync(talentId);
+      setTimeout(async () => { await load(); setSyncing(false); }, 2500);
+    } catch (err) {
+      alert(err.message);
+      setSyncing(false);
+    }
+  };
+
+  if (links == null) return null;
+
+  // Aggregates across all links (lifetime — Infloww returns lifetime totals).
+  const totalSubs = links.reduce((s, l) => s + (l.sub_count || 0), 0);
+  const totalPaying = links.reduce((s, l) => s + (l.paying_fans_count || 0), 0);
+  const totalEarningsNet = links.reduce((s, l) => s + Number(l.earnings_net || 0), 0);
+  const totalClicksInfloww = links.reduce((s, l) => s + (l.click_count || 0), 0);
+  // Blended CVR: lifetime subs / lifetime clicks (across Infloww's view of clicks)
+  const blendedCvr = totalClicksInfloww > 0 ? (totalSubs / totalClicksInfloww) * 100 : null;
+  const currency = links[0]?.currency || 'USD';
+
+  return (
+    <div className="infloww-section">
+      <div className="infloww-section-header">
+        <h2><Link2 size={16} style={{ verticalAlign: -2, marginRight: 6 }} />Infloww — link-in-bio monetization</h2>
+        <button
+          className="btn btn-ghost btn-sm"
+          onClick={handleSync}
+          disabled={syncing}
+        >
+          <RefreshCw size={13} className={syncing ? 'spin' : ''} />
+          {syncing ? 'Sincronizzo…' : 'Sync ora'}
+        </button>
+      </div>
+
+      <p className="infloww-section-hint">
+        Dati lifetime estratti da Infloww. La sincronizzazione automatica avviene ogni notte;
+        Infloww accumula i dati con un ritardo di ~2 ore rispetto a OnlyFans.
+      </p>
+
+      <div className="infloww-totals">
+        <div className="infloww-total">
+          <div className="infloww-total-label"><UserPlus size={13} /> Subscribers</div>
+          <div className="infloww-total-num">{formatNum(totalSubs)}</div>
+          <div className="infloww-total-sub">{formatNum(totalPaying)} paying</div>
+        </div>
+        <div className="infloww-total">
+          <div className="infloww-total-label"><DollarSign size={13} /> Earnings (net)</div>
+          <div className="infloww-total-num">{currency} {totalEarningsNet.toFixed(2)}</div>
+          <div className="infloww-total-sub">lifetime</div>
+        </div>
+        <div className="infloww-total">
+          <div className="infloww-total-label"><MousePointerClick size={13} /> CVR</div>
+          <div className="infloww-total-num">{blendedCvr == null ? '—' : `${blendedCvr.toFixed(2)}%`}</div>
+          <div className="infloww-total-sub">subs / click</div>
+        </div>
+      </div>
+
+      {links.length === 0 ? (
+        <div className="infloww-empty">
+          Nessun tracking link trovato. Crea i tracking link su Infloww e clicca "Sync ora".
+        </div>
+      ) : (
+        <div className="infloww-table-wrap">
+          <table className="infloww-table">
+            <thead>
+              <tr>
+                <th>Link</th>
+                <th className="num">Clicks</th>
+                <th className="num">Subs</th>
+                <th className="num">Paying</th>
+                <th className="num">Earnings (net)</th>
+                <th className="num">CVR</th>
+                <th>Collegato a</th>
+              </tr>
+            </thead>
+            <tbody>
+              {links.map((l) => (
+                <tr key={l.infloww_link_id}>
+                  <td>
+                    <div className="infloww-row-name">{l.name || '(senza nome)'}</div>
+                    <div className="infloww-row-code">
+                      {l.code ? `/c${l.code}` : ''}
+                      {l.source ? ` · ${l.source}` : ''}
+                    </div>
+                  </td>
+                  <td className="num">{formatNum(l.click_count)}</td>
+                  <td className="num">{formatNum(l.sub_count)}</td>
+                  <td className="num">{formatNum(l.paying_fans_count)}</td>
+                  <td className="num">{l.currency || 'USD'} {Number(l.earnings_net || 0).toFixed(2)}</td>
+                  <td className="num">
+                    {l.subscription_cvr != null
+                      ? <span className={Number(l.subscription_cvr) >= 1 ? 'cvr-good' : ''}>{Number(l.subscription_cvr).toFixed(2)}%</span>
+                      : '—'}
+                  </td>
+                  <td>
+                    {l.landing_links
+                      ? <Link to={`/landings/${l.landing_links.landing_id}`} className="infloww-bound-link">{l.landing_links.label}</Link>
+                      : <span className="infloww-unbound">non collegato</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>

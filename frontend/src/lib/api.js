@@ -350,6 +350,16 @@ export const api = {
     return request(`/api/guide-completions?${qs}`, { method: 'DELETE' });
   },
 
+  // Infloww
+  getInflowwLinks: (talent_id) =>
+    request(`/api/infloww/links${talent_id ? `?talent_id=${encodeURIComponent(talent_id)}` : ''}`),
+  getInflowwLinkSnapshots: (id, days = 30) =>
+    request(`/api/infloww/links/${encodeURIComponent(id)}/snapshots?days=${days}`),
+  triggerInflowwSync: (talent_id) =>
+    request('/api/infloww/sync', { method: 'POST', body: JSON.stringify(talent_id ? { talent_id } : {}) }),
+  bindInflowwLink: (landing_link_id, infloww_link_id) =>
+    request('/api/infloww/bind', { method: 'POST', body: JSON.stringify({ landing_link_id, infloww_link_id: infloww_link_id || null }) }),
+
   // Landings (Linktree-style pages) — admin
   getLandings: () => request('/api/landings'),
   getLanding: (id) => request(`/api/landings/${id}`),

@@ -26,11 +26,13 @@ const activityLogRouter = require('./routes/activityLog');
 const guideCompletionsRouter = require('./routes/guideCompletions');
 const suggestionsRouter = require('./routes/suggestions');
 const landingsRouter = require('./routes/landings');
+const inflowwRouter = require('./routes/infloww');
 const { requireAuth } = require('./middleware/auth');
 const { requireAdminForWrites } = require('./middleware/requireAdminForWrites');
 const { autoLogMiddleware } = require('./middleware/autoLogMiddleware');
 const { runMyAccountsFetch } = require('./services/myAccountsService');
 const { generateDailyTasks, cleanupOldDailyTasks } = require('./services/dailyTasksService');
+const { syncAllTalents: syncAllInflowwTalents } = require('./services/inflowwService');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -136,6 +138,7 @@ app.use('/api/activity-log', activityLogRouter);
 app.use('/api/guide-completions', guideCompletionsRouter);
 app.use('/api/suggestions', suggestionsRouter);
 app.use('/api/landings', landingsRouter);
+app.use('/api/infloww', inflowwRouter);
 
 // ============================================================
 // CRONS (unchanged + new log retention cleanup)
@@ -147,6 +150,18 @@ cron.schedule('0 5 * * *', async () => {
     console.log(`[CRON] My-accounts snapshot complete: ${r.fetched} account(s).`);
   } catch (err) {
     console.error('[CRON] My-accounts snapshot failed:', err.message);
+  }
+});
+
+// Infloww tracking-link sync — 04:00 UTC daily.
+// Infloww data lags by up to 2 hours so syncing once a day at night is plenty.
+cron.schedule('0 4 * * *', async () => {
+  console.log('[CRON] Starting Infloww tracking-link sync...');
+  try {
+    const r = await syncAllInflowwTalents();
+    console.log(`[CRON] Infloww sync complete: ${r.length} talent(s)`);
+  } catch (err) {
+    console.error('[CRON] Infloww sync failed:', err.message);
   }
 });
 

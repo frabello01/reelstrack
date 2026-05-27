@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import {
   ArrowLeft, Plus, Trash2, GripVertical, ExternalLink, Image as ImageIcon,
   BadgeCheck, Save, Eye, EyeOff, ChevronUp, ChevronDown, BarChart3, Upload, X, Copy,
+  RefreshCw, DollarSign, UserPlus,
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid } from 'recharts';
 import { api } from '../lib/api';
@@ -346,7 +347,56 @@ function LinksTab({ landing, reload }) {
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ label: '', url: '', age_gate: false, icon: '', bounce: false });
   const [busy, setBusy] = useState(null); // link id being mutated
+  const [inflowwLinks, setInflowwLinks] = useState([]);
+  const [syncingInfloww, setSyncingInfloww] = useState(false);
   const links = (landing.landing_links || []).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+
+  // Load Infloww tracking links for this landing's talent so we can show
+  // the binding picker per landing_link.
+  const loadInfloww = async () => {
+    if (!landing.talent_id) {
+      setInflowwLinks([]);
+      return;
+    }
+    try {
+      const rows = await api.getInflowwLinks(landing.talent_id);
+      setInflowwLinks(rows || []);
+    } catch (err) {
+      console.warn('Infloww links load failed:', err.message);
+    }
+  };
+  useEffect(() => { loadInfloww(); /* eslint-disable-next-line */ }, [landing.talent_id]);
+
+  // Map: landing_link_id → infloww link row
+  const inflowwByLandingLink = new Map();
+  inflowwLinks.forEach((il) => {
+    if (il.landing_link_id) inflowwByLandingLink.set(il.landing_link_id, il);
+  });
+
+  const handleSyncInfloww = async () => {
+    if (!landing.talent_id || syncingInfloww) return;
+    setSyncingInfloww(true);
+    try {
+      await api.triggerInflowwSync(landing.talent_id);
+      // Sync runs in background — wait a beat then reload
+      setTimeout(async () => {
+        await loadInfloww();
+        setSyncingInfloww(false);
+      }, 2500);
+    } catch (err) {
+      alert(err.message);
+      setSyncingInfloww(false);
+    }
+  };
+
+  const handleBindInfloww = async (landingLinkId, inflowwLinkId) => {
+    try {
+      await api.bindInflowwLink(landingLinkId, inflowwLinkId || null);
+      await loadInfloww();
+    } catch (err) {
+      alert(err.message);
+    }
+  };
 
   const handleAdd = async () => {
     if (!form.label.trim() || !form.url.trim()) return;
@@ -457,13 +507,29 @@ function LinksTab({ landing, reload }) {
       </div>
 
       <div className="editor-card">
-        <h3 className="editor-card-title">Link ({links.length})</h3>
+        <div className="editor-card-title-row">
+          <h3 className="editor-card-title">Link ({links.length})</h3>
+          {landing.talent_id && (
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={handleSyncInfloww}
+              disabled={syncingInfloww}
+              title="Sincronizza i tracking link da Infloww"
+            >
+              <RefreshCw size={13} className={syncingInfloww ? 'spin' : ''} />
+              {syncingInfloww ? 'Sincronizzo…' : 'Sync Infloww'}
+            </button>
+          )}
+        </div>
         {links.length === 0 ? (
           <div className="editor-empty">Nessun link aggiunto.</div>
         ) : (
           <div className="link-list">
-            {links.map((link, i) => (
-              <div key={link.id} className={`link-row ${!link.enabled ? 'link-disabled' : ''}`}>
+            {links.map((link, i) => {
+              const inflowwLink = inflowwByLandingLink.get(link.id);
+              return (
+              <div key={link.id} className={`link-row-wrap ${!link.enabled ? 'link-disabled' : ''}`}>
+              <div className="link-row">
                 <div className="link-row-handle">
                   <button className="icon-btn-mini" onClick={() => move(i, -1)} disabled={i === 0} title="Su"><ChevronUp size={14} /></button>
                   <button className="icon-btn-mini" onClick={() => move(i, +1)} disabled={i === links.length - 1} title="Giù"><ChevronDown size={14} /></button>
@@ -519,7 +585,49 @@ function LinksTab({ landing, reload }) {
                   ><Trash2 size={13} /></button>
                 </div>
               </div>
-            ))}
+
+              {/* Infloww binding row */}
+              {landing.talent_id && (
+                <div className="link-infloww-row">
+                  <label className="link-infloww-label" title="Collega un tracking link di Infloww per vedere subs/earnings">
+                    Infloww:
+                  </label>
+                  <select
+                    className="link-infloww-select"
+                    value={inflowwLink?.infloww_link_id || ''}
+                    onChange={(e) => handleBindInfloww(link.id, e.target.value || null)}
+                  >
+                    <option value="">— Nessun collegamento —</option>
+                    {/* Show every infloww link for this talent. Disable options
+                        already bound to OTHER landing_links so we don't double-bind. */}
+                    {inflowwLinks.map((il) => {
+                      const takenByOther = il.landing_link_id && il.landing_link_id !== link.id;
+                      return (
+                        <option key={il.infloww_link_id} value={il.infloww_link_id} disabled={takenByOther}>
+                          {il.name || '(senza nome)'}{il.code ? ` · /c${il.code}` : ''}
+                          {takenByOther ? ' — già collegato' : ''}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  {inflowwLink && (
+                    <div className="link-infloww-stats">
+                      <span title="Subscribers acquisiti via questo link">
+                        <UserPlus size={11} /> {inflowwLink.sub_count || 0}
+                      </span>
+                      <span title="Earnings nette">
+                        <DollarSign size={11} /> {Number(inflowwLink.earnings_net || 0).toFixed(2)}
+                      </span>
+                      <span title="Tasso di conversione click → sub" className="link-infloww-cvr">
+                        CVR {Number(inflowwLink.subscription_cvr || 0).toFixed(2)}%
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+              );
+            })}
           </div>
         )}
       </div>
