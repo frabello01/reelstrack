@@ -22,7 +22,6 @@ import GuideDetailPage from './pages/GuideDetailPage';
 import LessonDetailPage from './pages/LessonDetailPage';
 import ImageCleanerPage from './pages/ImageCleanerPage';
 import BatchCleanerPage from './pages/BatchCleanerPage';
-import CharactersPage from './pages/CharactersPage';
 import StudioPage from './pages/StudioPage';
 import ExplorePage from './pages/ExplorePage';
 import LandingsPage from './pages/LandingsPage';
@@ -131,7 +130,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="lessons/:id" element={<LessonDetailPage />} />
             <Route path="image-cleaner" element={<ImageCleanerPage />} />
             <Route path="batch-cleaner" element={<BatchCleanerPage />} />
-            <Route path="characters" element={<CharactersPage />} />
             <Route path="studio" element={<StudioPage />} />
             <Route path="settings" element={<SettingsPage />} />
 

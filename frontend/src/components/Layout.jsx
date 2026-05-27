@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { LayoutDashboard, ListVideo, LogOut, CheckSquare, Menu, X, BarChart3, Music, Sparkles, BookOpen, UserCircle2, Layers, Film, Users, ScrollText, Compass, Globe } from 'lucide-react';
+import { LayoutDashboard, ListVideo, LogOut, CheckSquare, Menu, X, BarChart3, Music, Sparkles, BookOpen, Layers, Film, Users, ScrollText, Compass, Globe } from 'lucide-react';
 import FetchProgress from './FetchProgress';
 import './Layout.css';
 
@@ -90,10 +90,6 @@ export default function Layout() {
             <Layers size={18} />
             Batch Cleaner
           </NavLink>
-          <NavLink to="/characters" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-            <UserCircle2 size={18} />
-            Characters
-          </NavLink>
           <NavLink to="/studio" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
             <Film size={18} />
             Studio
@@ -120,12 +116,22 @@ export default function Layout() {
         </nav>
 
         <div className="sidebar-footer">
-          <NavLink to="/settings" className="user-info-link" title="Settings">
+          <NavLink
+            to="/settings"
+            className={({ isActive }) => `nav-item user-info-link ${isActive ? 'active' : ''}`}
+            title="Settings"
+          >
             <div className="user-avatar">{(displayName || user?.email || '?')[0].toUpperCase()}</div>
             <span className="user-email">{displayName || user?.email}</span>
           </NavLink>
-          <button className="btn btn-ghost btn-sm" onClick={handleSignOut} aria-label="Sign out">
-            <LogOut size={14} />
+          <button
+            className="nav-item nav-item-button"
+            onClick={handleSignOut}
+            aria-label="Sign out"
+            title="Sign out"
+          >
+            <LogOut size={18} />
+            <span>Sign out</span>
           </button>
         </div>
       </aside>

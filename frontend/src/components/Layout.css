@@ -72,40 +72,51 @@
 
 .sidebar-footer {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding-top: 16px;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 12px;
+  margin-top: 8px;
   border-top: 1px solid var(--border);
 }
 
-.user-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1;
+/* The Settings link reuses .nav-item but swaps the icon for the user avatar */
+.user-info-link {
+  /* nav-item base styling applies; this just keeps long emails in line */
   min-width: 0;
 }
 
 .user-avatar {
-  width: 28px;
-  height: 28px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   background: var(--accent);
   color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   flex-shrink: 0;
 }
 
 .user-email {
-  font-size: 12px;
-  color: var(--text2);
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  color: inherit;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Allow buttons (no <a> wrapper) to use the same visual as NavLinks */
+.nav-item-button {
+  background: transparent;
+  border: none;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
 }
 
 .main-content {
