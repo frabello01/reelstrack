@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const supabase = require('../lib/supabase');
 const { fetchAccount, runMyAccountsFetch } = require('../services/myAccountsService');
-const { italyDateOf, italyLastNDates, italyPeriodStartIso, nextDayIso } = require('../lib/dateUtils');
+const { italyDateOf, italyDateNDaysAgo, italyLastNDates, italyPeriodStartIso, nextDayIso } = require('../lib/dateUtils');
 
 // ----- Helpers ---------------------------------------------------
 
