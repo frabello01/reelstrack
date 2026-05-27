@@ -514,6 +514,42 @@
 .infloww-table tbody tr:hover { background: rgba(255,255,255,0.03); }
 
 .infloww-row-name { font-weight: 600; color: white; }
+.infloww-row-name-editable {
+  cursor: text;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+.infloww-row-name-editable:hover {
+  background: rgba(255,255,255,0.05);
+  outline: 1px dashed rgba(255,255,255,0.18);
+}
+.infloww-original-name {
+  color: rgba(255,255,255,0.35);
+  font-weight: 400;
+  font-size: 11px;
+}
+
+.infloww-name-edit {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.infloww-name-edit input {
+  flex: 1;
+  min-width: 0;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(167, 139, 250, 0.4);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+}
+.infloww-name-edit input:focus { outline: none; border-color: #a78bfa; }
+.infloww-name-edit .btn { padding: 4px 6px; }
+
 .infloww-row-code { font-size: 11px; color: rgba(255,255,255,0.5); font-family: 'JetBrains Mono', monospace; }
 .cvr-good { color: #34d399; font-weight: 700; }
 .infloww-bound-link {

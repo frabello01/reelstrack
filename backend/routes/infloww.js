@@ -72,15 +72,21 @@ router.get('/links/:id/snapshots', async (req, res) => {
   res.json(rows);
 });
 
-// PATCH /api/infloww/links/:infloww_link_id   body: { hidden: boolean }
+// PATCH /api/infloww/links/:infloww_link_id
+// Accepts { hidden?: boolean, local_name?: string|null }
 router.patch('/links/:infloww_link_id', async (req, res) => {
-  const { hidden } = req.body || {};
-  if (typeof hidden !== 'boolean') {
-    return res.status(400).json({ error: 'hidden (boolean) required' });
+  const updates = {};
+  if (typeof req.body?.hidden === 'boolean') updates.hidden = req.body.hidden;
+  if ('local_name' in (req.body || {})) {
+    const v = req.body.local_name;
+    updates.local_name = (v == null || v === '') ? null : String(v).trim();
+  }
+  if (Object.keys(updates).length === 0) {
+    return res.status(400).json({ error: 'No supported fields to update' });
   }
   const { data, error } = await supabase
     .from('infloww_tracking_links')
-    .update({ hidden })
+    .update(updates)
     .eq('infloww_link_id', req.params.infloww_link_id)
     .select()
     .single();

@@ -602,9 +602,10 @@ function LinksTab({ landing, reload }) {
                         already bound to OTHER landing_links so we don't double-bind. */}
                     {inflowwLinks.map((il) => {
                       const takenByOther = il.landing_link_id && il.landing_link_id !== link.id;
+                      const display = il.local_name || il.name || '(senza nome)';
                       return (
                         <option key={il.infloww_link_id} value={il.infloww_link_id} disabled={takenByOther}>
-                          {il.name || '(senza nome)'}{il.code ? ` · /c${il.code}` : ''}
+                          {display}{il.code ? ` · /c${il.code}` : ''}
                           {takenByOther ? ' — già collegato' : ''}
                         </option>
                       );

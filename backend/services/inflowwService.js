@@ -82,7 +82,9 @@ async function syncCreator(talentId, inflowwCreatorId) {
       continue;
     }
 
-    // Snapshot — unique on (infloww_link_id, snapshot_date)
+    // Snapshot — unique on (infloww_link_id, snapshot_date). Same
+    // cents→dollars conversion as mapLinkToRow so the snapshot table
+    // and the latest-state table stay consistent.
     await supabase
       .from('infloww_tracking_link_snapshots')
       .upsert({
@@ -91,8 +93,8 @@ async function syncCreator(talentId, inflowwCreatorId) {
         click_count: parseInt(link.clickCount || 0),
         sub_count: parseInt(link.subCount || 0),
         paying_fans_count: parseInt(link.payingFansCount || 0),
-        earnings_gross: parseFloat(link.earningsGross || 0),
-        earnings_net: parseFloat(link.earningsNet || 0),
+        earnings_gross: parseFloat(link.earningsGross || 0) / 100,
+        earnings_net: parseFloat(link.earningsNet || 0) / 100,
         subscription_cvr: parseFloat(link.subscriptionCVR || 0),
       }, { onConflict: 'infloww_link_id,snapshot_date', ignoreDuplicates: false });
     upserted++;
@@ -108,6 +110,9 @@ function mapLinkToRow(link, talentId) {
     if (Number.isNaN(n) || !n) return null;
     return new Date(n).toISOString();
   };
+  // Infloww returns money values in CENTS (e.g. 11672 = $116.72).
+  // We store dollars so the rest of the app can use raw values.
+  const cents = (v) => parseFloat(v || 0) / 100;
   return {
     infloww_link_id: link.id.toString(),
     talent_id: talentId,
@@ -118,12 +123,12 @@ function mapLinkToRow(link, talentId) {
     click_count: parseInt(link.clickCount || 0),
     sub_count: parseInt(link.subCount || 0),
     paying_fans_count: parseInt(link.payingFansCount || 0),
-    earnings_gross: parseFloat(link.earningsGross || 0),
-    earnings_net: parseFloat(link.earningsNet || 0),
+    earnings_gross: cents(link.earningsGross),
+    earnings_net: cents(link.earningsNet),
     subscription_cvr: parseFloat(link.subscriptionCVR || 0),
     spending_cvr: parseFloat(link.spendingCVR || 0),
-    epc_gross: parseFloat(link.epcGross || 0),
-    epc_net: parseFloat(link.epcNet || 0),
+    epc_gross: cents(link.epcGross),
+    epc_net: cents(link.epcNet),
     currency: link.currency || 'USD',
     finished: !!link.finishedFlag,
     created_at_infloww: toDate(link.createdTime),

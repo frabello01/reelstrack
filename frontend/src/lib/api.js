@@ -364,6 +364,11 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ hidden }),
     }),
+  renameInflowwLink: (infloww_link_id, local_name) =>
+    request(`/api/infloww/links/${encodeURIComponent(infloww_link_id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ local_name: local_name || null }),
+    }),
 
   // Landings (Linktree-style pages) — admin
   getLandings: () => request('/api/landings'),

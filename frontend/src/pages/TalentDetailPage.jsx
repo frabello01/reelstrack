@@ -390,6 +390,14 @@ export default function TalentDetailPage() {
             color="#f472b6"
           />
         )}
+        {talent.charts.subs_per_day && (
+          <ChartCard
+            title="Combined OF subscribers per day (last 30 days)"
+            data={talent.charts.subs_per_day}
+            type="bar"
+            color="#34d399"
+          />
+        )}
       </div>
 
       {/* Infloww monetization summary */}
@@ -414,6 +422,76 @@ export default function TalentDetailPage() {
             ))}
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+// Inline-editable name for a tracking link. The displayed text is the
+// local_name if set (with the Infloww-side name shown subtly underneath),
+// otherwise the Infloww name. Clicking opens an inline input.
+function InflowwLinkName({ link, onSaved }) {
+  const display = link.local_name || link.name || '(senza nome)';
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(link.local_name || '');
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    const trimmed = value.trim();
+    // No change? Just bail
+    if ((trimmed || null) === (link.local_name || null)) {
+      setEditing(false);
+      return;
+    }
+    setSaving(true);
+    try {
+      const updated = await api.renameInflowwLink(link.infloww_link_id, trimmed);
+      onSaved?.(updated);
+      setEditing(false);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (editing) {
+    return (
+      <div className="infloww-name-edit">
+        <input
+          autoFocus
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') save();
+            else if (e.key === 'Escape') { setEditing(false); setValue(link.local_name || ''); }
+          }}
+          placeholder={link.name || 'Nome locale'}
+          disabled={saving}
+        />
+        <button className="btn btn-primary btn-sm" onClick={save} disabled={saving} title="Salva">
+          <Check size={12} />
+        </button>
+        <button
+          className="btn btn-ghost btn-sm"
+          onClick={() => { setEditing(false); setValue(link.local_name || ''); }}
+          disabled={saving}
+          title="Annulla"
+        >
+          <X size={12} />
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div
+      className="infloww-row-name infloww-row-name-editable"
+      onClick={() => { setValue(link.local_name || ''); setEditing(true); }}
+      title="Clicca per rinominare"
+    >
+      {display}
+      {link.local_name && link.name && link.local_name !== link.name && (
+        <span className="infloww-original-name"> · {link.name}</span>
       )}
     </div>
   );
@@ -574,7 +652,12 @@ function InflowwSection({ talentId }) {
                         </button>
                       </td>
                       <td>
-                        <div className="infloww-row-name">{l.name || '(senza nome)'}</div>
+                        <InflowwLinkName
+                          link={l}
+                          onSaved={(updated) => setLinks((prev) => prev.map((x) =>
+                            x.infloww_link_id === updated.infloww_link_id ? { ...x, ...updated } : x
+                          ))}
+                        />
                         <div className="infloww-row-code">
                           {l.code ? `/c${l.code}` : ''}
                           {l.source ? ` · ${l.source}` : ''}

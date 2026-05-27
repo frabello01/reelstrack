@@ -222,6 +222,69 @@ async function computeTalentMetrics(talentId, days) {
   };
 }
 
+// Combined new-subs per day across every Infloww tracking link owned by
+// this talent. Same delta-shift convention as the IG-profile activity
+// table: the value on day D = sub_count[D+1] - sub_count[D], so day D's
+// number represents activity DURING day D.
+async function getCombinedInflowwSubsPerDay(talentId, days) {
+  // Buckets zero-filled — keeps the chart rendering even when there's no data
+  const buckets = {};
+  for (let i = 0; i < days; i++) {
+    const d = new Date(); d.setDate(d.getDate() - i);
+    buckets[d.toISOString().slice(0, 10)] = 0;
+  }
+  const out = () => Object.entries(buckets)
+    .map(([date, value]) => ({ date, value }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  // Find this talent's Infloww links
+  const { data: links } = await supabase
+    .from('infloww_tracking_links')
+    .select('infloww_link_id')
+    .eq('talent_id', talentId);
+  if (!links || links.length === 0) return out();
+  const inflowwIds = links.map((l) => l.infloww_link_id);
+
+  // Pull snapshots — need one extra day so we can compute the oldest delta
+  const sinceDate = (() => {
+    const d = new Date(); d.setDate(d.getDate() - (days + 1));
+    return d.toISOString().slice(0, 10);
+  })();
+  const { data: snaps } = await supabase
+    .from('infloww_tracking_link_snapshots')
+    .select('infloww_link_id, snapshot_date, sub_count')
+    .in('infloww_link_id', inflowwIds)
+    .gte('snapshot_date', sinceDate)
+    .order('snapshot_date', { ascending: true });
+
+  if (!snaps || snaps.length === 0) return out();
+
+  // Group: linkId -> dateMap
+  const byLinkDay = new Map();
+  for (const s of snaps) {
+    if (!byLinkDay.has(s.infloww_link_id)) byLinkDay.set(s.infloww_link_id, new Map());
+    byLinkDay.get(s.infloww_link_id).set(s.snapshot_date, Number(s.sub_count || 0));
+  }
+
+  // Compute delta for each reporting day, summed across links
+  for (const day of Object.keys(buckets)) {
+    const dn = new Date(day); dn.setDate(dn.getDate() + 1);
+    const nextDay = dn.toISOString().slice(0, 10);
+    let sum = 0;
+    let haveAny = false;
+    for (const dateMap of byLinkDay.values()) {
+      const today = dateMap.get(day);
+      const tomorrow = dateMap.get(nextDay);
+      if (today != null && tomorrow != null) {
+        sum += (tomorrow - today);
+        haveAny = true;
+      }
+    }
+    buckets[day] = haveAny ? sum : 0;
+  }
+  return out();
+}
+
 // Combined clicks per day across every landing owned by this talent.
 async function getCombinedClicksPerDay(talentId, days) {
   const { data: talentLandings } = await supabase
@@ -379,7 +442,7 @@ router.get('/:id', async (req, res) => {
     computeTalentMetrics(talent.id, 30),
   ]);
 
-  const [viewsSeries, followersSeries, reelsSeries, clicksSeries] = await Promise.all([
+  const [viewsSeries, followersSeries, reelsSeries, clicksSeries, subsSeries] = await Promise.all([
     getCombinedViewsPerDay(profileIds, 30),
     getCombinedFollowersPerDay(profileIds.filter((pid) => {
       const p = profiles.find((x) => x.id === pid);
@@ -387,6 +450,7 @@ router.get('/:id', async (req, res) => {
     }), 30),
     getCombinedReelsPerDay(profileIds, 30),
     getCombinedClicksPerDay(talent.id, 30),
+    getCombinedInflowwSubsPerDay(talent.id, 30),
   ]);
 
   // Top reels of last 30 days across all profiles
@@ -418,6 +482,7 @@ router.get('/:id', async (req, res) => {
       followers_per_day: followersSeries,
       reels_per_day: reelsSeries,
       clicks_per_day: clicksSeries,
+      subs_per_day: subsSeries,
     },
     top_reels: topReelsAnnotated,
   });
