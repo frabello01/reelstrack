@@ -605,6 +605,148 @@
   margin-top: 10px;
 }
 
+/* ----- Subscribers by source ----- */
+.subs-by-source {
+  margin: 14px 0 22px;
+  background: rgba(167, 139, 250, 0.04);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 14px;
+  padding: 16px 18px 18px;
+}
+.subs-by-source-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.subs-by-source-header h2 {
+  font-family: 'Syne', sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  color: white;
+  margin: 0 0 4px;
+}
+.subs-by-source-sub {
+  font-size: 11px;
+  color: rgba(255,255,255,0.55);
+  margin: 0;
+}
+.subs-by-source-period-tabs {
+  display: flex;
+  gap: 4px;
+  background: rgba(0,0,0,0.25);
+  padding: 2px;
+  border-radius: 8px;
+}
+.subs-period-btn {
+  background: transparent;
+  border: none;
+  color: rgba(255,255,255,0.6);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.subs-period-btn:hover { color: white; }
+.subs-period-btn.active {
+  background: rgba(167, 139, 250, 0.25);
+  color: white;
+}
+
+.subs-by-source-loading,
+.subs-by-source-empty {
+  padding: 24px 0 8px;
+  color: rgba(255,255,255,0.5);
+  font-size: 13px;
+  text-align: center;
+}
+
+.subs-by-source-content {
+  display: grid;
+  grid-template-columns: minmax(180px, 280px) 1fr;
+  gap: 24px;
+  align-items: center;
+}
+@media (max-width: 720px) {
+  .subs-by-source-content { grid-template-columns: 1fr; }
+}
+
+.subs-by-source-chart {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.subs-by-source-total {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, calc(-50% - 8px));
+  text-align: center;
+  pointer-events: none;
+}
+.subs-by-source-total-num {
+  font-family: 'Syne', sans-serif;
+  font-size: 26px;
+  font-weight: 800;
+  color: white;
+  line-height: 1;
+}
+.subs-by-source-total-label {
+  font-size: 10px;
+  color: rgba(255,255,255,0.55);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 4px;
+}
+
+.subs-by-source-table {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.subs-by-source-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 14px;
+  align-items: center;
+  padding: 8px 4px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  font-size: 13px;
+  color: rgba(255,255,255,0.85);
+}
+.subs-by-source-row:last-child { border-bottom: none; }
+.subs-by-source-row-head {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: rgba(255,255,255,0.5);
+  font-weight: 600;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+.subs-by-source-row .num { text-align: right; font-variant-numeric: tabular-nums; }
+.subs-by-source-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: white;
+}
+.subs-by-source-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.subs-by-source-pct {
+  color: rgba(255,255,255,0.55);
+  min-width: 50px;
+}
+
 /* ----- Daily subs strip (inside expanded detail row) ----- */
 .infloww-detail-row td {
   background: rgba(167, 139, 250, 0.04);

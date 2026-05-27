@@ -6,9 +6,10 @@ import {
   StickyNote, Check, X, ListChecks, MousePointerClick, UserPlus, DollarSign, Link2,
   EyeOff, ChevronDown, ChevronRight as ChevronRightIcon
 } from 'lucide-react';
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid } from 'recharts';
+import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid, Legend } from 'recharts';
 import { api } from '../lib/api';
 import ImageUploader from '../components/ImageUploader';
+import { formatMoney } from '../lib/format';
 import './TalentDetailPage.css';
 
 function formatNum(n) {
@@ -427,6 +428,151 @@ export default function TalentDetailPage() {
   );
 }
 
+// Subscribers by source — day / week / MTD breakdown with pie chart.
+// Pulls from the Infloww sources endpoint; sources are taken from the
+// `source` field Infloww sets on each tracking link (Instagram, Telegram,
+// MistressAdvisor, OnlyFans, DTP, Twitter, ...).
+const SOURCE_COLORS = {
+  Instagram:        '#E1306C',
+  Telegram:         '#0088CC',
+  Twitter:          '#1DA1F2',
+  X:                '#1DA1F2',
+  OnlyFans:         '#00AFF0',
+  MistressAdvisor:  '#a855f7',
+  DTP:              '#ff8c42',
+  Reddit:           '#FF4500',
+  TikTok:           '#69C9D0',
+  YouTube:          '#FF0000',
+  Other:            '#94a3b8',
+  Unknown:          '#94a3b8',
+};
+const FALLBACK_PALETTE = ['#a78bfa', '#60a5fa', '#34d399', '#f472b6', '#fbbf24', '#fb7185', '#22d3ee'];
+
+function colorForSource(name, idx) {
+  return SOURCE_COLORS[name] || FALLBACK_PALETTE[idx % FALLBACK_PALETTE.length];
+}
+
+function SubsBySourceSection({ talentId }) {
+  const [period, setPeriod] = useState('week');
+  const [data, setData] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setData(null);
+    api.getInflowwSources(talentId, period)
+      .then((d) => { if (!cancelled) setData(d); })
+      .catch(() => { if (!cancelled) setData({ by_source: [], total: 0, label: '—' }); });
+    return () => { cancelled = true; };
+  }, [talentId, period]);
+
+  const PERIODS = [
+    { key: 'day',   label: 'Ieri' },
+    { key: 'week',  label: 'Settimana' },
+    { key: 'month', label: 'Mese' },
+  ];
+
+  if (!data) {
+    return (
+      <div className="subs-by-source">
+        <div className="subs-by-source-header">
+          <h2>Subscribers per fonte</h2>
+        </div>
+        <div className="subs-by-source-loading">Caricamento…</div>
+      </div>
+    );
+  }
+
+  const rows = data.by_source.filter((s) => s.new_subs > 0);
+  const totalPositive = rows.reduce((s, r) => s + r.new_subs, 0);
+
+  return (
+    <div className="subs-by-source">
+      <div className="subs-by-source-header">
+        <div>
+          <h2>Subscribers per fonte</h2>
+          <p className="subs-by-source-sub">
+            {data.label} · {data.start_date === data.end_date
+              ? data.start_date
+              : `${data.start_date} → ${data.end_date}`}
+          </p>
+        </div>
+        <div className="subs-by-source-period-tabs">
+          {PERIODS.map((p) => (
+            <button
+              key={p.key}
+              className={`subs-period-btn ${period === p.key ? 'active' : ''}`}
+              onClick={() => setPeriod(p.key)}
+            >{p.label}</button>
+          ))}
+        </div>
+      </div>
+
+      {data.by_source.length === 0 ? (
+        <div className="subs-by-source-empty">
+          Nessun tracking link Infloww registrato per questo creator.
+        </div>
+      ) : totalPositive === 0 ? (
+        <div className="subs-by-source-empty">
+          Nessun nuovo subscriber registrato nel periodo selezionato.
+          {data.total === 0 && ' Servono almeno due snapshot consecutivi (uno al giorno) prima che le delta diventino calcolabili.'}
+        </div>
+      ) : (
+        <div className="subs-by-source-content">
+          <div className="subs-by-source-chart">
+            <ResponsiveContainer width="100%" height={220}>
+              <PieChart>
+                <Pie
+                  data={rows}
+                  dataKey="new_subs"
+                  nameKey="source"
+                  innerRadius={45}
+                  outerRadius={85}
+                  paddingAngle={2}
+                  stroke="rgba(0,0,0,0.25)"
+                >
+                  {rows.map((r, i) => (
+                    <Cell key={r.source} fill={colorForSource(r.source, i)} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  formatter={(v, name) => [`${v} subs`, name]}
+                  contentStyle={{ background: 'rgba(20, 22, 40, 0.95)', border: '1px solid rgba(167, 139, 250, 0.3)', borderRadius: 6, fontSize: 12 }}
+                  labelStyle={{ color: 'white' }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="subs-by-source-total">
+              <div className="subs-by-source-total-num">{totalPositive}</div>
+              <div className="subs-by-source-total-label">subs totali</div>
+            </div>
+          </div>
+
+          <div className="subs-by-source-table">
+            <div className="subs-by-source-row subs-by-source-row-head">
+              <span>Fonte</span>
+              <span className="num">New subs</span>
+              <span className="num">%</span>
+            </div>
+            {data.by_source.map((r, i) => {
+              const pct = totalPositive > 0 ? (r.new_subs / totalPositive) * 100 : 0;
+              return (
+                <div key={r.source} className="subs-by-source-row">
+                  <span className="subs-by-source-name">
+                    <span className="subs-by-source-dot" style={{ background: colorForSource(r.source, i) }} />
+                    {r.source}
+                  </span>
+                  <span className="num">{r.new_subs}</span>
+                  <span className="num subs-by-source-pct">{pct.toFixed(1)}%</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Inline-editable name for a tracking link. The displayed text is the
 // local_name if set (with the Infloww-side name shown subtly underneath),
 // otherwise the Infloww name. Clicking opens an inline input.
@@ -602,7 +748,7 @@ function InflowwSection({ talentId }) {
         </div>
         <div className="infloww-total">
           <div className="infloww-total-label"><DollarSign size={13} /> Earnings (net)</div>
-          <div className="infloww-total-num">{currency} {totalEarningsNet.toFixed(2)}</div>
+          <div className="infloww-total-num">{formatMoney(totalEarningsNet, currency)}</div>
           <div className="infloww-total-sub">lifetime</div>
         </div>
         <div className="infloww-total">
@@ -611,6 +757,8 @@ function InflowwSection({ talentId }) {
           <div className="infloww-total-sub">subs / click</div>
         </div>
       </div>
+
+      <SubsBySourceSection talentId={talentId} />
 
       {visibleLinks.length === 0 && hiddenCount === 0 ? (
         <div className="infloww-empty">
@@ -666,7 +814,7 @@ function InflowwSection({ talentId }) {
                       <td className="num">{formatNum(l.click_count)}</td>
                       <td className="num">{formatNum(l.sub_count)}</td>
                       <td className="num">{formatNum(l.paying_fans_count)}</td>
-                      <td className="num">{l.currency || 'USD'} {Number(l.earnings_net || 0).toFixed(2)}</td>
+                      <td className="num">{formatMoney(l.earnings_net, l.currency || 'USD')}</td>
                       <td className="num">
                         {l.subscription_cvr != null
                           ? <span className={Number(l.subscription_cvr) >= 1 ? 'cvr-good' : ''}>{Number(l.subscription_cvr).toFixed(2)}%</span>

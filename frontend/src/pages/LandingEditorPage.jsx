@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid } from 'recharts';
 import { api } from '../lib/api';
+import { formatMoney } from '../lib/format';
 import './LandingEditorPage.css';
 
 const TAB_PROFILE = 'profile';
@@ -617,7 +618,7 @@ function LinksTab({ landing, reload }) {
                         <UserPlus size={11} /> {inflowwLink.sub_count || 0}
                       </span>
                       <span title="Earnings nette">
-                        <DollarSign size={11} /> {Number(inflowwLink.earnings_net || 0).toFixed(2)}
+                        <DollarSign size={11} /> {formatMoney(inflowwLink.earnings_net, inflowwLink.currency || 'USD')}
                       </span>
                       <span title="Tasso di conversione click → sub" className="link-infloww-cvr">
                         CVR {Number(inflowwLink.subscription_cvr || 0).toFixed(2)}%

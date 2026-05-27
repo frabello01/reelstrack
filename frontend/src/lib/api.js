@@ -369,6 +369,8 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ local_name: local_name || null }),
     }),
+  getInflowwSources: (talent_id, period) =>
+    request(`/api/infloww/sources?talent_id=${encodeURIComponent(talent_id)}&period=${encodeURIComponent(period)}`),
 
   // Landings (Linktree-style pages) — admin
   getLandings: () => request('/api/landings'),
