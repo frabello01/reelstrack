@@ -359,6 +359,11 @@ export const api = {
     request('/api/infloww/sync', { method: 'POST', body: JSON.stringify(talent_id ? { talent_id } : {}) }),
   bindInflowwLink: (landing_link_id, infloww_link_id) =>
     request('/api/infloww/bind', { method: 'POST', body: JSON.stringify({ landing_link_id, infloww_link_id: infloww_link_id || null }) }),
+  setInflowwLinkHidden: (infloww_link_id, hidden) =>
+    request(`/api/infloww/links/${encodeURIComponent(infloww_link_id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ hidden }),
+    }),
 
   // Landings (Linktree-style pages) — admin
   getLandings: () => request('/api/landings'),

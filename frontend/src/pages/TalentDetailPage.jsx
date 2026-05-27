@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Fragment } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   ArrowLeft, Plus, Trash2, RefreshCw, ExternalLink,
   TrendingUp, TrendingDown, Eye, Heart, Users, Film, Trophy, AlertTriangle, CheckCircle2,
-  StickyNote, Check, X, ListChecks, MousePointerClick, UserPlus, DollarSign, Link2
+  StickyNote, Check, X, ListChecks, MousePointerClick, UserPlus, DollarSign, Link2,
+  EyeOff, ChevronDown, ChevronRight as ChevronRightIcon
 } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid } from 'recharts';
 import { api } from '../lib/api';
@@ -426,6 +427,10 @@ export default function TalentDetailPage() {
 function InflowwSection({ talentId }) {
   const [links, setLinks] = useState(null);
   const [syncing, setSyncing] = useState(false);
+  const [showHidden, setShowHidden] = useState(false);
+  const [expandedId, setExpandedId] = useState(null);
+  const [snapshotsCache, setSnapshotsCache] = useState({}); // infloww_link_id -> snapshots[]
+  const [busy, setBusy] = useState(null);
 
   const load = async () => {
     try {
@@ -448,14 +453,47 @@ function InflowwSection({ talentId }) {
     }
   };
 
+  const handleToggleHidden = async (link) => {
+    setBusy(link.infloww_link_id);
+    try {
+      await api.setInflowwLinkHidden(link.infloww_link_id, !link.hidden);
+      setLinks((prev) => prev.map((l) =>
+        l.infloww_link_id === link.infloww_link_id ? { ...l, hidden: !link.hidden } : l
+      ));
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleToggleExpand = async (link) => {
+    if (expandedId === link.infloww_link_id) {
+      setExpandedId(null);
+      return;
+    }
+    setExpandedId(link.infloww_link_id);
+    if (!snapshotsCache[link.infloww_link_id]) {
+      try {
+        const snaps = await api.getInflowwLinkSnapshots(link.infloww_link_id, 30);
+        setSnapshotsCache((c) => ({ ...c, [link.infloww_link_id]: snaps }));
+      } catch (err) {
+        setSnapshotsCache((c) => ({ ...c, [link.infloww_link_id]: [] }));
+      }
+    }
+  };
+
   if (links == null) return null;
 
-  // Aggregates across all links (lifetime — Infloww returns lifetime totals).
+  const visibleLinks = showHidden ? links : links.filter((l) => !l.hidden);
+  const hiddenCount = links.filter((l) => l.hidden).length;
+
+  // Aggregate ALL links (including hidden) for the lifetime totals — the
+  // hidden flag is purely a display-time filter, not a data filter.
   const totalSubs = links.reduce((s, l) => s + (l.sub_count || 0), 0);
   const totalPaying = links.reduce((s, l) => s + (l.paying_fans_count || 0), 0);
   const totalEarningsNet = links.reduce((s, l) => s + Number(l.earnings_net || 0), 0);
   const totalClicksInfloww = links.reduce((s, l) => s + (l.click_count || 0), 0);
-  // Blended CVR: lifetime subs / lifetime clicks (across Infloww's view of clicks)
   const blendedCvr = totalClicksInfloww > 0 ? (totalSubs / totalClicksInfloww) * 100 : null;
   const currency = links[0]?.currency || 'USD';
 
@@ -474,8 +512,8 @@ function InflowwSection({ talentId }) {
       </div>
 
       <p className="infloww-section-hint">
-        Dati lifetime estratti da Infloww. La sincronizzazione automatica avviene ogni notte;
-        Infloww accumula i dati con un ritardo di ~2 ore rispetto a OnlyFans.
+        Dati lifetime estratti da Infloww (totale storico). Sincronizzazione automatica ogni notte;
+        Infloww ritarda i dati di ~2 ore rispetto a OnlyFans. Apri una riga per vedere i nuovi sub giorno per giorno.
       </p>
 
       <div className="infloww-totals">
@@ -496,15 +534,17 @@ function InflowwSection({ talentId }) {
         </div>
       </div>
 
-      {links.length === 0 ? (
+      {visibleLinks.length === 0 && hiddenCount === 0 ? (
         <div className="infloww-empty">
           Nessun tracking link trovato. Crea i tracking link su Infloww e clicca "Sync ora".
         </div>
       ) : (
+        <>
         <div className="infloww-table-wrap">
           <table className="infloww-table">
             <thead>
               <tr>
+                <th style={{ width: 28 }}></th>
                 <th>Link</th>
                 <th className="num">Clicks</th>
                 <th className="num">Subs</th>
@@ -512,38 +552,122 @@ function InflowwSection({ talentId }) {
                 <th className="num">Earnings (net)</th>
                 <th className="num">CVR</th>
                 <th>Collegato a</th>
+                <th style={{ width: 36 }}></th>
               </tr>
             </thead>
             <tbody>
-              {links.map((l) => (
-                <tr key={l.infloww_link_id}>
-                  <td>
-                    <div className="infloww-row-name">{l.name || '(senza nome)'}</div>
-                    <div className="infloww-row-code">
-                      {l.code ? `/c${l.code}` : ''}
-                      {l.source ? ` · ${l.source}` : ''}
-                    </div>
-                  </td>
-                  <td className="num">{formatNum(l.click_count)}</td>
-                  <td className="num">{formatNum(l.sub_count)}</td>
-                  <td className="num">{formatNum(l.paying_fans_count)}</td>
-                  <td className="num">{l.currency || 'USD'} {Number(l.earnings_net || 0).toFixed(2)}</td>
-                  <td className="num">
-                    {l.subscription_cvr != null
-                      ? <span className={Number(l.subscription_cvr) >= 1 ? 'cvr-good' : ''}>{Number(l.subscription_cvr).toFixed(2)}%</span>
-                      : '—'}
-                  </td>
-                  <td>
-                    {l.landing_links
-                      ? <Link to={`/landings/${l.landing_links.landing_id}`} className="infloww-bound-link">{l.landing_links.label}</Link>
-                      : <span className="infloww-unbound">non collegato</span>}
-                  </td>
-                </tr>
-              ))}
+              {visibleLinks.map((l) => {
+                const isExpanded = expandedId === l.infloww_link_id;
+                const snaps = snapshotsCache[l.infloww_link_id];
+                return (
+                  <Fragment key={l.infloww_link_id}>
+                    <tr
+                      className={`${l.hidden ? 'infloww-row-hidden' : ''} ${isExpanded ? 'infloww-row-expanded' : ''}`}
+                    >
+                      <td>
+                        <button
+                          className="infloww-expand-btn"
+                          onClick={() => handleToggleExpand(l)}
+                          title={isExpanded ? 'Chiudi dettaglio giornaliero' : 'Vedi nuovi sub giorno per giorno'}
+                        >
+                          {isExpanded ? <ChevronDown size={14} /> : <ChevronRightIcon size={14} />}
+                        </button>
+                      </td>
+                      <td>
+                        <div className="infloww-row-name">{l.name || '(senza nome)'}</div>
+                        <div className="infloww-row-code">
+                          {l.code ? `/c${l.code}` : ''}
+                          {l.source ? ` · ${l.source}` : ''}
+                        </div>
+                      </td>
+                      <td className="num">{formatNum(l.click_count)}</td>
+                      <td className="num">{formatNum(l.sub_count)}</td>
+                      <td className="num">{formatNum(l.paying_fans_count)}</td>
+                      <td className="num">{l.currency || 'USD'} {Number(l.earnings_net || 0).toFixed(2)}</td>
+                      <td className="num">
+                        {l.subscription_cvr != null
+                          ? <span className={Number(l.subscription_cvr) >= 1 ? 'cvr-good' : ''}>{Number(l.subscription_cvr).toFixed(2)}%</span>
+                          : '—'}
+                      </td>
+                      <td>
+                        {l.landing_links
+                          ? <Link to={`/landings/${l.landing_links.landing_id}`} className="infloww-bound-link">{l.landing_links.label}</Link>
+                          : <span className="infloww-unbound">non collegato</span>}
+                      </td>
+                      <td>
+                        <button
+                          className="infloww-hide-btn"
+                          onClick={() => handleToggleHidden(l)}
+                          disabled={busy === l.infloww_link_id}
+                          title={l.hidden ? 'Mostra di nuovo' : 'Nascondi questo link'}
+                        >
+                          {l.hidden ? <Eye size={13} /> : <EyeOff size={13} />}
+                        </button>
+                      </td>
+                    </tr>
+                    {isExpanded && (
+                      <tr className="infloww-detail-row">
+                        <td></td>
+                        <td colSpan={8}>
+                          <DailySubsStrip snapshots={snaps} />
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>
+        {hiddenCount > 0 && (
+          <button
+            className="btn btn-ghost btn-sm infloww-show-hidden"
+            onClick={() => setShowHidden((v) => !v)}
+          >
+            {showHidden
+              ? <><EyeOff size={13} /> Nascondi i link nascosti</>
+              : <><Eye size={13} /> Mostra {hiddenCount} link nascost{hiddenCount === 1 ? 'o' : 'i'}</>}
+          </button>
+        )}
+        </>
       )}
+    </div>
+  );
+}
+
+// Renders a horizontal scroll of date pills, one per day in the last 30,
+// each showing the count of new subs for that day. Days where new_subs is
+// null (e.g. the most recent day with no follow-up snapshot yet) show "—".
+function DailySubsStrip({ snapshots }) {
+  if (!snapshots) {
+    return <div className="infloww-daily-loading">Caricamento…</div>;
+  }
+  if (snapshots.length === 0) {
+    return <div className="infloww-daily-empty">Nessuno snapshot disponibile ancora.</div>;
+  }
+  // Reverse so newest comes first — easier to scan
+  const rows = [...snapshots].reverse();
+  const totalKnown = rows.reduce((s, r) => s + (r.new_subs || 0), 0);
+  return (
+    <div className="infloww-daily-strip-wrap">
+      <div className="infloww-daily-strip-header">
+        <span>Nuovi sub per giorno (ultimi 30 giorni)</span>
+        <span className="infloww-daily-total">Totale finestra: <strong>+{totalKnown}</strong></span>
+      </div>
+      <div className="infloww-daily-strip">
+        {rows.map((row) => {
+          const d = new Date(row.date);
+          const label = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`;
+          const val = row.new_subs;
+          const cls = val == null ? 'infloww-daily-na' : (val > 0 ? 'infloww-daily-pos' : 'infloww-daily-zero');
+          return (
+            <div key={row.date} className={`infloww-daily-pill ${cls}`} title={row.date}>
+              <div className="infloww-daily-date">{label}</div>
+              <div className="infloww-daily-val">{val == null ? '—' : (val >= 0 ? `+${val}` : `${val}`)}</div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
