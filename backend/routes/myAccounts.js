@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const supabase = require('../lib/supabase');
 const { fetchAccount, runMyAccountsFetch } = require('../services/myAccountsService');
+const { italyDateOf, italyLastNDates, italyPeriodStartIso, nextDayIso } = require('../lib/dateUtils');
 
 // ----- Helpers ---------------------------------------------------
 
@@ -233,30 +234,24 @@ router.post('/fetch/run', async (req, res) => {
 // the bucket stays 0 — we don't fabricate a delta we can't verify.
 async function getViewsPerDay(accountId, days) {
   const buckets = {};
-  for (let i = 0; i < days; i++) {
-    const d = new Date(); d.setDate(d.getDate() - i);
-    buckets[d.toISOString().slice(0, 10)] = 0;
-  }
+  italyLastNDates(days).forEach((d) => { buckets[d] = 0; });
   const out = () => Object.entries(buckets)
     .map(([date, value]) => ({ date, value }))
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  // Need one extra day of history so we can compute the oldest delta
-  const sinceDate = (() => {
-    const d = new Date(); d.setDate(d.getDate() - (days + 1));
-    return d.toISOString().slice(0, 10);
-  })();
-
+  // Need one extra day of history so we can compute the oldest delta.
+  // Over-fetch a tiny bit in the SQL filter; precise filtering happens
+  // via Italy-date strings below.
   const { data: snaps } = await supabase
     .from('account_reel_snapshots')
     .select('reel_id, snapshot_date, views')
     .eq('account_id', accountId)
-    .gte('snapshot_date', sinceDate)
+    .gte('snapshot_date', italyDateNDaysAgo(days + 1))
     .order('snapshot_date', { ascending: true });
 
   if (!snaps || snaps.length === 0) return out();
 
-  // Group: reelId -> dateMap
+  // Group: reelId -> Map(date -> views)
   const byReelDay = new Map();
   for (const s of snaps) {
     if (!byReelDay.has(s.reel_id)) byReelDay.set(s.reel_id, new Map());
@@ -264,17 +259,13 @@ async function getViewsPerDay(accountId, days) {
   }
 
   for (const day of Object.keys(buckets)) {
-    const dn = new Date(day); dn.setDate(dn.getDate() + 1);
-    const nextDay = dn.toISOString().slice(0, 10);
+    const nextDay = nextDayIso(day);
     let sum = 0;
     for (const dateMap of byReelDay.values()) {
       const today = dateMap.get(day);
       const tomorrow = dateMap.get(nextDay);
       if (today != null && tomorrow != null) {
-        const delta = tomorrow - today;
-        // Guard against IG correcting view counts downward (very rare —
-        // takes-back-spam-views, deleted reels appearing momentarily, etc.)
-        sum += Math.max(0, delta);
+        sum += Math.max(0, tomorrow - today);
       }
     }
     buckets[day] = sum;
@@ -284,32 +275,26 @@ async function getViewsPerDay(accountId, days) {
 }
 
 async function getFollowersPerDay(accountId, days) {
-  const sinceDate = periodStart(days).slice(0, 10);
   const { data } = await supabase
     .from('account_snapshots')
     .select('snapshot_date, follower_count')
     .eq('account_id', accountId)
-    .gte('snapshot_date', sinceDate)
+    .gte('snapshot_date', italyDateNDaysAgo(days))
     .order('snapshot_date', { ascending: true });
   return (data || []).map((s) => ({ date: s.snapshot_date, value: s.follower_count }));
 }
 
 async function getReelsPerDay(accountId, days) {
-  const since = periodStart(days);
   const { data } = await supabase
     .from('account_reels')
     .select('posted_at')
     .eq('account_id', accountId)
-    .gte('posted_at', since);
+    .gte('posted_at', italyPeriodStartIso(days));
 
   const buckets = {};
-  for (let i = 0; i < days; i++) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    buckets[d.toISOString().slice(0, 10)] = 0;
-  }
+  italyLastNDates(days).forEach((d) => { buckets[d] = 0; });
   (data || []).forEach((r) => {
-    const day = r.posted_at.slice(0, 10);
+    const day = italyDateOf(r.posted_at);
     if (buckets[day] !== undefined) buckets[day] += 1;
   });
   return Object.entries(buckets)
@@ -319,8 +304,6 @@ async function getReelsPerDay(accountId, days) {
 
 // Clicks per day, aggregated across all landings linked to this my_account.
 async function getLandingClicksPerDay(accountId, days) {
-  const since = periodStart(days);
-
   // First find all landings linked to this account
   const { data: landings } = await supabase
     .from('landings')
@@ -328,7 +311,6 @@ async function getLandingClicksPerDay(accountId, days) {
     .eq('my_account_id', accountId);
 
   if (!landings || landings.length === 0) {
-    // Return zero-filled buckets so the chart still renders cleanly
     return zeroSeries(days);
   }
   const landingIds = landings.map((l) => l.id);
@@ -337,16 +319,12 @@ async function getLandingClicksPerDay(accountId, days) {
     .from('landing_link_clicks')
     .select('clicked_at')
     .in('landing_id', landingIds)
-    .gte('clicked_at', since);
+    .gte('clicked_at', italyPeriodStartIso(days));
 
   const buckets = {};
-  for (let i = 0; i < days; i++) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    buckets[d.toISOString().slice(0, 10)] = 0;
-  }
+  italyLastNDates(days).forEach((d) => { buckets[d] = 0; });
   (clicks || []).forEach((c) => {
-    const day = c.clicked_at.slice(0, 10);
+    const day = italyDateOf(c.clicked_at);
     if (buckets[day] !== undefined) buckets[day] += 1;
   });
   return Object.entries(buckets)
@@ -457,12 +435,10 @@ async function getLandingSubsPerDay(myAccountId, days) {
     .select('id')
     .eq('my_account_id', myAccountId);
 
-  // Zero-filled buckets fallback — keeps the chart rendering even with no data.
+  // Zero-filled buckets fallback (Italy days) — keeps the chart rendering
+  // even with no data.
   const zeroBuckets = {};
-  for (let i = 0; i < days; i++) {
-    const d = new Date(); d.setDate(d.getDate() - i);
-    zeroBuckets[d.toISOString().slice(0, 10)] = 0;
-  }
+  italyLastNDates(days).forEach((d) => { zeroBuckets[d] = 0; });
   const zeroOut = () => Object.entries(zeroBuckets)
     .map(([date, value]) => ({ date, value }))
     .sort((a, b) => a.date.localeCompare(b.date));
@@ -486,41 +462,32 @@ async function getLandingSubsPerDay(myAccountId, days) {
   if (!inflowwLinks || inflowwLinks.length === 0) return zeroOut();
   const inflowwIds = inflowwLinks.map((x) => x.infloww_link_id);
 
-  // 4) Pull snapshots for those links, oldest first
-  // We need one extra day of history so we can compute delta on the oldest reporting day.
-  const sinceDate = (() => {
-    const d = new Date(); d.setDate(d.getDate() - (days + 1));
-    return d.toISOString().slice(0, 10);
-  })();
+  // 4) Pull snapshots for those links, oldest first (one extra day of
+  // history so we can compute delta on the oldest reporting day).
   const { data: snaps } = await supabase
     .from('infloww_tracking_link_snapshots')
     .select('infloww_link_id, snapshot_date, sub_count')
     .in('infloww_link_id', inflowwIds)
-    .gte('snapshot_date', sinceDate)
+    .gte('snapshot_date', italyDateNDaysAgo(days + 1))
     .order('snapshot_date', { ascending: true });
 
   if (!snaps || snaps.length === 0) return zeroOut();
 
-  // Group snapshots by (link_id, date) so we have one row per link per day.
-  // (Should already be unique due to our unique constraint, but defensive.)
-  const byLinkDay = new Map(); // link_id -> Map(date -> sub_count)
+  // Group snapshots by (link_id, date) — one row per link per day.
+  const byLinkDay = new Map();
   for (const s of snaps) {
     if (!byLinkDay.has(s.infloww_link_id)) byLinkDay.set(s.infloww_link_id, new Map());
     byLinkDay.get(s.infloww_link_id).set(s.snapshot_date, Number(s.sub_count || 0));
   }
 
-  // For each reporting day, compute per-link delta = (next-day snapshot) - (this-day snapshot)
-  // then sum across links. Then attribute that delta to THIS day (activity during this day).
+  // For each reporting day, delta = (next-day snapshot) - (this-day snapshot)
+  // summed across links. Day D's value = activity DURING day D.
   const result = { ...zeroBuckets };
-  const reportingDays = Object.keys(zeroBuckets).sort();
-  for (const day of reportingDays) {
-    // The next-day's date string
-    const dn = new Date(day); dn.setDate(dn.getDate() + 1);
-    const nextDay = dn.toISOString().slice(0, 10);
-
+  for (const day of Object.keys(zeroBuckets).sort()) {
+    const nextDay = nextDayIso(day);
     let delta = 0;
     let haveAny = false;
-    for (const [linkId, dateMap] of byLinkDay.entries()) {
+    for (const dateMap of byLinkDay.values()) {
       const today = dateMap.get(day);
       const tomorrow = dateMap.get(nextDay);
       if (today != null && tomorrow != null) {
@@ -528,8 +495,6 @@ async function getLandingSubsPerDay(myAccountId, days) {
         haveAny = true;
       }
     }
-    // Keep 0 in the bucket if we have NO snapshots on either side (so charts
-    // still render); the activity table will still show 0 for those days.
     result[day] = haveAny ? delta : 0;
   }
 
@@ -539,13 +504,7 @@ async function getLandingSubsPerDay(myAccountId, days) {
 }
 
 function zeroSeries(days) {
-  const out = [];
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    out.push({ date: d.toISOString().slice(0, 10), value: 0 });
-  }
-  return out;
+  return italyLastNDates(days).map((date) => ({ date, value: 0 }));
 }
 
 // PATCH update account_info (free-text notes about the IG account — no passwords)

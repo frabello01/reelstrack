@@ -3,6 +3,7 @@ const router = express.Router();
 const supabase = require('../lib/supabase');
 const { uploadImageDataUrl } = require('../lib/imageUpload');
 const { encodeUrl } = require('../lib/linkCipher');
+const { italyDateOf, italyLastNDates, italyPeriodStartIso } = require('../lib/dateUtils');
 
 // Normalise any user-pasted hostname to a canonical form:
 //   "https://www.Example.com:443/" → "example.com"
@@ -364,10 +365,6 @@ router.post('/:id/links/reorder', async (req, res) => {
 // Returns lifetime totals per link + a daily series for the chart.
 router.get('/:id/analytics', async (req, res) => {
   const days = Math.max(1, Math.min(365, parseInt(req.query.days || '30', 10)));
-  const since = new Date();
-  since.setDate(since.getDate() - days);
-  since.setHours(0, 0, 0, 0);
-  const sinceISO = since.toISOString();
 
   const [{ data: links }, { data: clicks }] = await Promise.all([
     supabase
@@ -379,22 +376,14 @@ router.get('/:id/analytics', async (req, res) => {
       .from('landing_link_clicks')
       .select('link_id, clicked_at')
       .eq('landing_id', req.params.id)
-      .gte('clicked_at', sinceISO),
+      .gte('clicked_at', italyPeriodStartIso(days)),
   ]);
 
-  // Build day-bucketed series for the chart
-  const dayKey = (d) => {
-    const x = new Date(d);
-    return `${x.getUTCFullYear()}-${String(x.getUTCMonth() + 1).padStart(2, '0')}-${String(x.getUTCDate()).padStart(2, '0')}`;
-  };
+  // Day-bucketed series for the chart, keyed by Italy calendar dates.
   const series = {};
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    series[dayKey(d)] = 0;
-  }
+  italyLastNDates(days).forEach((d) => { series[d] = 0; });
   for (const c of clicks || []) {
-    const k = dayKey(c.clicked_at);
+    const k = italyDateOf(c.clicked_at);
     if (k in series) series[k]++;
   }
   const timeline = Object.entries(series).map(([date, count]) => ({ date, count }));

@@ -1,4 +1,5 @@
 const supabase = require('../lib/supabase');
+const { italyDate } = require('../lib/dateUtils');
 
 const HIKERAPI_BASE = 'https://api.hikerapi.com';
 const HIKERAPI_TOKEN = process.env.HIKERAPI_TOKEN;
@@ -180,11 +181,11 @@ async function storeAccountReels(accountId, rawReels) {
     .select('id, views, likes, comments');
   if (error) console.error(`[storeAccountReels] error:`, error.message);
 
-  // Per-reel daily snapshot — one row per (reel, today). Idempotent: same
-  // day rerun overwrites the same row. Day-over-day deltas computed at
+  // Per-reel daily snapshot — one row per (reel, today Italy). Idempotent:
+  // same day rerun overwrites the same row. Day-over-day deltas computed at
   // read time give us the real "audience reached" metric.
   if (stored && stored.length > 0) {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = italyDate();
     const snapshots = stored.map((row) => ({
       reel_id: row.id,
       account_id: accountId,
@@ -205,7 +206,8 @@ async function storeAccountReels(accountId, rawReels) {
 
 async function writeDailySnapshot(accountId, followerCount, totalViews, reelsCount) {
   // Use upsert so re-running on the same day doesn't create duplicates.
-  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  // Day is Italy local — see backend/lib/dateUtils.js.
+  const today = italyDate();
   const { error } = await supabase
     .from('account_snapshots')
     .upsert({

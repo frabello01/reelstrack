@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const supabase = require('../lib/supabase');
 const { syncCreator, syncAllTalents } = require('../services/inflowwService');
+const { italyLastNDates, italyDateNDaysAgo, nextDayIso } = require('../lib/dateUtils');
 
 // GET /api/infloww/links?talent_id=X
 // Returns every Infloww tracking link bound to a talent, with the latest
@@ -27,31 +28,27 @@ router.get('/links', async (req, res) => {
 // yet.
 router.get('/links/:id/snapshots', async (req, res) => {
   const days = Math.max(1, Math.min(365, parseInt(req.query.days || '30', 10)));
-  // We need ONE EXTRA day of history before the window so we can compute
-  // the delta for the first reporting day too.
-  const since = new Date(); since.setDate(since.getDate() - (days + 1));
-  const sinceDate = since.toISOString().slice(0, 10);
 
   const { data: raw, error } = await supabase
     .from('infloww_tracking_link_snapshots')
     .select('snapshot_date, sub_count, click_count, paying_fans_count, earnings_net')
     .eq('infloww_link_id', req.params.id)
-    .gte('snapshot_date', sinceDate)
+    .gte('snapshot_date', italyDateNDaysAgo(days + 1))
     .order('snapshot_date', { ascending: true });
   if (error) return res.status(500).json({ error: error.message });
 
   const snapsByDay = Object.fromEntries((raw || []).map((s) => [s.snapshot_date, s]));
 
-  // Build the reporting day window (oldest → newest)
-  const reportingDays = [];
-  for (let i = days; i >= 1; i--) {
-    const d = new Date(); d.setDate(d.getDate() - i);
-    reportingDays.push(d.toISOString().slice(0, 10));
-  }
+  // Reporting window: last N Italy days, oldest → newest.
+  // Exclude "today Italy" because we never have tomorrow's snapshot yet,
+  // so today's delta would always be null. We report the days where a
+  // delta IS computable: italyLastNDates(days) skipping the very last entry,
+  // i.e. days-1 entries… no actually, we want N rows where the most recent
+  // is yesterday Italy. So shift the window by 1:
+  const reportingDays = italyLastNDates(days + 1).slice(0, days);
 
   const rows = reportingDays.map((day) => {
-    const dn = new Date(day); dn.setDate(dn.getDate() + 1);
-    const nextDay = dn.toISOString().slice(0, 10);
+    const nextDay = nextDayIso(day);
     const today = snapsByDay[day];
     const tomorrow = snapsByDay[nextDay];
     return {

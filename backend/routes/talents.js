@@ -3,6 +3,7 @@ const router = express.Router();
 const supabase = require('../lib/supabase');
 const { fetchAccount, runMyAccountsFetch } = require('../services/myAccountsService');
 const { uploadImageDataUrl } = require('../lib/imageUpload');
+const { italyDateOf, italyLastNDates, italyPeriodStartIso, italyDateNDaysAgo, nextDayIso } = require('../lib/dateUtils');
 
 // ----- Helpers ---------------------------------------------------
 
@@ -227,17 +228,12 @@ async function computeTalentMetrics(talentId, days) {
 // table: the value on day D = sub_count[D+1] - sub_count[D], so day D's
 // number represents activity DURING day D.
 async function getCombinedInflowwSubsPerDay(talentId, days) {
-  // Buckets zero-filled — keeps the chart rendering even when there's no data
   const buckets = {};
-  for (let i = 0; i < days; i++) {
-    const d = new Date(); d.setDate(d.getDate() - i);
-    buckets[d.toISOString().slice(0, 10)] = 0;
-  }
+  italyLastNDates(days).forEach((d) => { buckets[d] = 0; });
   const out = () => Object.entries(buckets)
     .map(([date, value]) => ({ date, value }))
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  // Find this talent's Infloww links
   const { data: links } = await supabase
     .from('infloww_tracking_links')
     .select('infloww_link_id')
@@ -245,31 +241,23 @@ async function getCombinedInflowwSubsPerDay(talentId, days) {
   if (!links || links.length === 0) return out();
   const inflowwIds = links.map((l) => l.infloww_link_id);
 
-  // Pull snapshots — need one extra day so we can compute the oldest delta
-  const sinceDate = (() => {
-    const d = new Date(); d.setDate(d.getDate() - (days + 1));
-    return d.toISOString().slice(0, 10);
-  })();
   const { data: snaps } = await supabase
     .from('infloww_tracking_link_snapshots')
     .select('infloww_link_id, snapshot_date, sub_count')
     .in('infloww_link_id', inflowwIds)
-    .gte('snapshot_date', sinceDate)
+    .gte('snapshot_date', italyDateNDaysAgo(days + 1))
     .order('snapshot_date', { ascending: true });
 
   if (!snaps || snaps.length === 0) return out();
 
-  // Group: linkId -> dateMap
   const byLinkDay = new Map();
   for (const s of snaps) {
     if (!byLinkDay.has(s.infloww_link_id)) byLinkDay.set(s.infloww_link_id, new Map());
     byLinkDay.get(s.infloww_link_id).set(s.snapshot_date, Number(s.sub_count || 0));
   }
 
-  // Compute delta for each reporting day, summed across links
   for (const day of Object.keys(buckets)) {
-    const dn = new Date(day); dn.setDate(dn.getDate() + 1);
-    const nextDay = dn.toISOString().slice(0, 10);
+    const nextDay = nextDayIso(day);
     let sum = 0;
     let haveAny = false;
     for (const dateMap of byLinkDay.values()) {
@@ -285,7 +273,6 @@ async function getCombinedInflowwSubsPerDay(talentId, days) {
   return out();
 }
 
-// Combined clicks per day across every landing owned by this talent.
 async function getCombinedClicksPerDay(talentId, days) {
   const { data: talentLandings } = await supabase
     .from('landings')
@@ -293,27 +280,22 @@ async function getCombinedClicksPerDay(talentId, days) {
     .eq('talent_id', talentId);
   const landingIds = (talentLandings || []).map((l) => l.id);
 
-  // Zero-filled buckets so the chart still renders even with no data.
   const buckets = {};
-  for (let i = 0; i < days; i++) {
-    const d = new Date(); d.setDate(d.getDate() - i);
-    buckets[d.toISOString().slice(0, 10)] = 0;
-  }
+  italyLastNDates(days).forEach((d) => { buckets[d] = 0; });
   if (landingIds.length === 0) {
     return Object.entries(buckets)
       .map(([date, value]) => ({ date, value }))
       .sort((a, b) => a.date.localeCompare(b.date));
   }
 
-  const since = periodStart(days);
   const { data } = await supabase
     .from('landing_link_clicks')
     .select('clicked_at')
     .in('landing_id', landingIds)
-    .gte('clicked_at', since);
+    .gte('clicked_at', italyPeriodStartIso(days));
 
   (data || []).forEach((c) => {
-    const day = c.clicked_at.slice(0, 10);
+    const day = italyDateOf(c.clicked_at);
     if (buckets[day] !== undefined) buckets[day] += 1;
   });
   return Object.entries(buckets)
@@ -321,32 +303,20 @@ async function getCombinedClicksPerDay(talentId, days) {
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
-// Combined TRUE views received per day across all the talent's profiles.
-// Same delta-from-snapshots logic as the per-account version in
-// routes/myAccounts.js: sum (snapshot[D+1] - snapshot[D]) across every
-// reel of every profile, attribute to day D.
 async function getCombinedViewsPerDay(profileIds, days) {
   const buckets = {};
-  for (let i = 0; i < days; i++) {
-    const d = new Date(); d.setDate(d.getDate() - i);
-    buckets[d.toISOString().slice(0, 10)] = 0;
-  }
+  italyLastNDates(days).forEach((d) => { buckets[d] = 0; });
   const out = () => Object.entries(buckets)
     .map(([date, value]) => ({ date, value }))
     .sort((a, b) => a.date.localeCompare(b.date));
 
   if (!profileIds || profileIds.length === 0) return out();
 
-  const sinceDate = (() => {
-    const d = new Date(); d.setDate(d.getDate() - (days + 1));
-    return d.toISOString().slice(0, 10);
-  })();
-
   const { data: snaps } = await supabase
     .from('account_reel_snapshots')
     .select('reel_id, snapshot_date, views')
     .in('account_id', profileIds)
-    .gte('snapshot_date', sinceDate)
+    .gte('snapshot_date', italyDateNDaysAgo(days + 1))
     .order('snapshot_date', { ascending: true });
 
   if (!snaps || snaps.length === 0) return out();
@@ -358,8 +328,7 @@ async function getCombinedViewsPerDay(profileIds, days) {
   }
 
   for (const day of Object.keys(buckets)) {
-    const dn = new Date(day); dn.setDate(dn.getDate() + 1);
-    const nextDay = dn.toISOString().slice(0, 10);
+    const nextDay = nextDayIso(day);
     let sum = 0;
     for (const dateMap of byReelDay.values()) {
       const today = dateMap.get(day);
@@ -375,20 +344,16 @@ async function getCombinedViewsPerDay(profileIds, days) {
 
 async function getCombinedReelsPerDay(profileIds, days) {
   if (!profileIds || profileIds.length === 0) return [];
-  const since = periodStart(days);
   const { data } = await supabase
     .from('account_reels')
     .select('posted_at')
     .in('account_id', profileIds)
-    .gte('posted_at', since);
+    .gte('posted_at', italyPeriodStartIso(days));
 
   const buckets = {};
-  for (let i = 0; i < days; i++) {
-    const d = new Date(); d.setDate(d.getDate() - i);
-    buckets[d.toISOString().slice(0, 10)] = 0;
-  }
+  italyLastNDates(days).forEach((d) => { buckets[d] = 0; });
   (data || []).forEach((r) => {
-    const day = r.posted_at.slice(0, 10);
+    const day = italyDateOf(r.posted_at);
     if (buckets[day] !== undefined) buckets[day] += 1;
   });
   return Object.entries(buckets)

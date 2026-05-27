@@ -1,4 +1,5 @@
 const supabase = require('../lib/supabase');
+const { italyDate } = require('../lib/dateUtils');
 
 const INFLOWW_BASE = 'https://openapi.infloww.com/v1';
 const API_KEY = process.env.INFLOWW_API_KEY;
@@ -68,8 +69,8 @@ async function syncCreator(talentId, inflowwCreatorId) {
     pages++;
   } while (cursor && pages < MAX_PAGES);
 
-  // Upsert each link + write a snapshot row.
-  const today = new Date().toISOString().slice(0, 10);
+  // Upsert each link + write a snapshot row (Italy local date).
+  const today = italyDate();
   let upserted = 0;
 
   for (const link of allLinks) {
