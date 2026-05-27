@@ -287,8 +287,12 @@ function LandingsAndActivity({ account }) {
           <p className="activity-table-hint">
             Ogni riga rappresenta un giorno UTC completo (00:00–23:59).
             <br />
-            <strong>Convert rate</strong> = OF subs ÷ click sulla landing, il vero tasso di conversione del funnel link-in-bio.
-            Le sub di oggi appaiono il giorno successivo (servono due snapshot consecutivi per calcolare la delta).
+            <strong>Views</strong> = views effettivamente ricevute durante quel giorno (delta tra snapshot consecutivi
+            su ogni singolo reel, sommato), non le views correnti dei reel pubblicati quel giorno.
+            <br />
+            <strong>Convert rate</strong> = OF subs ÷ click sulla landing — il vero tasso di conversione del funnel link-in-bio.
+            <br />
+            I delta di oggi appaiono il giorno successivo (servono due snapshot consecutivi per calcolarli).
           </p>
           <div className="activity-table-wrap">
             <table className="activity-table">

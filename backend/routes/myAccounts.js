@@ -219,30 +219,68 @@ router.post('/fetch/run', async (req, res) => {
 
 // ----- Series helpers -------------------------------------------
 
-// Views per day for last N days based on `posted_at` of reels.
-// (i.e., how much "view-power" was published each day across all the account's reels in that window)
+// TRUE views received per day for last N days, computed from per-reel
+// daily snapshots. For each reel:
+//   day D's contribution = snapshot[D+1].views - snapshot[D].views
+// Then we sum across all reels of the account.
+//
+// This represents the actual audience reached on day D — what people
+// watched that day — regardless of when each reel was posted. Reels
+// published months ago still contribute if they kept accumulating views.
+//
+// For days where consecutive snapshots don't exist (anywhere before the
+// snapshot system started, or for newly-added reels with one snapshot)
+// the bucket stays 0 — we don't fabricate a delta we can't verify.
 async function getViewsPerDay(accountId, days) {
-  const since = periodStart(days);
-  const { data } = await supabase
-    .from('account_reels')
-    .select('views, posted_at')
-    .eq('account_id', accountId)
-    .gte('posted_at', since);
-
   const buckets = {};
   for (let i = 0; i < days; i++) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
+    const d = new Date(); d.setDate(d.getDate() - i);
     buckets[d.toISOString().slice(0, 10)] = 0;
   }
-  (data || []).forEach((r) => {
-    const day = r.posted_at.slice(0, 10);
-    if (buckets[day] !== undefined) buckets[day] += r.views || 0;
-  });
-
-  return Object.entries(buckets)
-    .map(([date, views]) => ({ date, value: views }))
+  const out = () => Object.entries(buckets)
+    .map(([date, value]) => ({ date, value }))
     .sort((a, b) => a.date.localeCompare(b.date));
+
+  // Need one extra day of history so we can compute the oldest delta
+  const sinceDate = (() => {
+    const d = new Date(); d.setDate(d.getDate() - (days + 1));
+    return d.toISOString().slice(0, 10);
+  })();
+
+  const { data: snaps } = await supabase
+    .from('account_reel_snapshots')
+    .select('reel_id, snapshot_date, views')
+    .eq('account_id', accountId)
+    .gte('snapshot_date', sinceDate)
+    .order('snapshot_date', { ascending: true });
+
+  if (!snaps || snaps.length === 0) return out();
+
+  // Group: reelId -> dateMap
+  const byReelDay = new Map();
+  for (const s of snaps) {
+    if (!byReelDay.has(s.reel_id)) byReelDay.set(s.reel_id, new Map());
+    byReelDay.get(s.reel_id).set(s.snapshot_date, Number(s.views || 0));
+  }
+
+  for (const day of Object.keys(buckets)) {
+    const dn = new Date(day); dn.setDate(dn.getDate() + 1);
+    const nextDay = dn.toISOString().slice(0, 10);
+    let sum = 0;
+    for (const dateMap of byReelDay.values()) {
+      const today = dateMap.get(day);
+      const tomorrow = dateMap.get(nextDay);
+      if (today != null && tomorrow != null) {
+        const delta = tomorrow - today;
+        // Guard against IG correcting view counts downward (very rare —
+        // takes-back-spam-views, deleted reels appearing momentarily, etc.)
+        sum += Math.max(0, delta);
+      }
+    }
+    buckets[day] = sum;
+  }
+
+  return out();
 }
 
 async function getFollowersPerDay(accountId, days) {

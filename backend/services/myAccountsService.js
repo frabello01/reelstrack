@@ -172,10 +172,32 @@ async function storeAccountReels(accountId, rawReels) {
       last_updated_at: new Date().toISOString(),
     }));
 
-  const { error } = await supabase
+  // Upsert and ask Supabase to return the rows so we can grab each reel's
+  // uuid for the per-reel daily snapshots.
+  const { data: stored, error } = await supabase
     .from('account_reels')
-    .upsert(reels, { onConflict: 'account_id,instagram_id', ignoreDuplicates: false });
+    .upsert(reels, { onConflict: 'account_id,instagram_id', ignoreDuplicates: false })
+    .select('id, views, likes, comments');
   if (error) console.error(`[storeAccountReels] error:`, error.message);
+
+  // Per-reel daily snapshot — one row per (reel, today). Idempotent: same
+  // day rerun overwrites the same row. Day-over-day deltas computed at
+  // read time give us the real "audience reached" metric.
+  if (stored && stored.length > 0) {
+    const today = new Date().toISOString().slice(0, 10);
+    const snapshots = stored.map((row) => ({
+      reel_id: row.id,
+      account_id: accountId,
+      snapshot_date: today,
+      views: row.views || 0,
+      likes: row.likes || 0,
+      comments: row.comments || 0,
+    }));
+    const { error: snapErr } = await supabase
+      .from('account_reel_snapshots')
+      .upsert(snapshots, { onConflict: 'reel_id,snapshot_date', ignoreDuplicates: false });
+    if (snapErr) console.error('[reel snapshots] error:', snapErr.message);
+  }
 
   const totalViews = reels.reduce((sum, r) => sum + (r.views || 0), 0);
   return { totalViews, reelsCount: reels.length };

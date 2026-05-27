@@ -321,28 +321,56 @@ async function getCombinedClicksPerDay(talentId, days) {
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
-// Sparkline: combined views per day across all profiles for last N days
+// Combined TRUE views received per day across all the talent's profiles.
+// Same delta-from-snapshots logic as the per-account version in
+// routes/myAccounts.js: sum (snapshot[D+1] - snapshot[D]) across every
+// reel of every profile, attribute to day D.
 async function getCombinedViewsPerDay(profileIds, days) {
-  if (!profileIds || profileIds.length === 0) return [];
-  const since = periodStart(days);
-  const { data } = await supabase
-    .from('account_reels')
-    .select('views, posted_at')
-    .in('account_id', profileIds)
-    .gte('posted_at', since);
-
   const buckets = {};
   for (let i = 0; i < days; i++) {
     const d = new Date(); d.setDate(d.getDate() - i);
     buckets[d.toISOString().slice(0, 10)] = 0;
   }
-  (data || []).forEach((r) => {
-    const day = r.posted_at.slice(0, 10);
-    if (buckets[day] !== undefined) buckets[day] += r.views || 0;
-  });
-  return Object.entries(buckets)
+  const out = () => Object.entries(buckets)
     .map(([date, value]) => ({ date, value }))
     .sort((a, b) => a.date.localeCompare(b.date));
+
+  if (!profileIds || profileIds.length === 0) return out();
+
+  const sinceDate = (() => {
+    const d = new Date(); d.setDate(d.getDate() - (days + 1));
+    return d.toISOString().slice(0, 10);
+  })();
+
+  const { data: snaps } = await supabase
+    .from('account_reel_snapshots')
+    .select('reel_id, snapshot_date, views')
+    .in('account_id', profileIds)
+    .gte('snapshot_date', sinceDate)
+    .order('snapshot_date', { ascending: true });
+
+  if (!snaps || snaps.length === 0) return out();
+
+  const byReelDay = new Map();
+  for (const s of snaps) {
+    if (!byReelDay.has(s.reel_id)) byReelDay.set(s.reel_id, new Map());
+    byReelDay.get(s.reel_id).set(s.snapshot_date, Number(s.views || 0));
+  }
+
+  for (const day of Object.keys(buckets)) {
+    const dn = new Date(day); dn.setDate(dn.getDate() + 1);
+    const nextDay = dn.toISOString().slice(0, 10);
+    let sum = 0;
+    for (const dateMap of byReelDay.values()) {
+      const today = dateMap.get(day);
+      const tomorrow = dateMap.get(nextDay);
+      if (today != null && tomorrow != null) {
+        sum += Math.max(0, tomorrow - today);
+      }
+    }
+    buckets[day] = sum;
+  }
+  return out();
 }
 
 async function getCombinedReelsPerDay(profileIds, days) {
