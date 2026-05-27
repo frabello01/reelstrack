@@ -165,6 +165,14 @@ export default function MyAccountDetailPage() {
             color="#f472b6"
           />
         )}
+        {account.charts.subs_per_day && (
+          <ChartCard
+            title="OnlyFans subs per day (last 30 days)"
+            data={account.charts.subs_per_day}
+            type="bar"
+            color="#34d399"
+          />
+        )}
       </div>
 
       {/* Linked landings + activity table */}
@@ -277,8 +285,10 @@ function LandingsAndActivity({ account }) {
         <div className="activity-table-section">
           <h2>Attività giornaliera</h2>
           <p className="activity-table-hint">
-            Convert rate = click sulle landing / views totali dei reel pubblicati nel giorno.
-            È una stima approssimata: i reel ricevono views nei giorni successivi alla pubblicazione.
+            Ogni riga rappresenta un giorno UTC completo (00:00–23:59).
+            <br />
+            <strong>Convert rate</strong> = OF subs ÷ click sulla landing, il vero tasso di conversione del funnel link-in-bio.
+            Le sub di oggi appaiono il giorno successivo (servono due snapshot consecutivi per calcolare la delta).
           </p>
           <div className="activity-table-wrap">
             <table className="activity-table">
@@ -288,6 +298,7 @@ function LandingsAndActivity({ account }) {
                   <th className="num">Views</th>
                   <th className="num">Nuovi follower</th>
                   <th className="num">Click landing</th>
+                  <th className="num">OF subs</th>
                   <th className="num">Convert rate</th>
                 </tr>
               </thead>
@@ -300,6 +311,9 @@ function LandingsAndActivity({ account }) {
                       {row.new_followers == null ? '—' : (row.new_followers >= 0 ? '+' : '') + formatNum(row.new_followers)}
                     </td>
                     <td className="num">{formatNum(row.clicks)}</td>
+                    <td className={`num ${row.new_subs != null && row.new_subs > 0 ? 'subs-positive' : ''}`}>
+                      {row.new_subs == null ? '—' : formatNum(row.new_subs)}
+                    </td>
                     <td className="num">
                       {row.convert_rate == null
                         ? '—'

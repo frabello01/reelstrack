@@ -143,8 +143,17 @@ app.use('/api/infloww', inflowwRouter);
 // ============================================================
 // CRONS (unchanged + new log retention cleanup)
 // ============================================================
-cron.schedule('0 5 * * *', async () => {
-  console.log('[CRON] Starting my-accounts daily snapshot...');
+// ============================================================
+// Daily snapshot crons — aligned to fire right after UTC midnight
+// so every snapshot represents the same UTC calendar day's close.
+//   00:05 UTC  – my-accounts (IG views / followers)
+//   00:10 UTC  – Infloww (subs / earnings)
+// This alignment is what makes the per-day activity table (and its
+// convert rate = subs / clicks) actually meaningful: every column on
+// a row refers to the same 24h window of activity.
+// ============================================================
+cron.schedule('5 0 * * *', async () => {
+  console.log('[CRON] Starting my-accounts daily snapshot (00:05 UTC)...');
   try {
     const r = await runMyAccountsFetch();
     console.log(`[CRON] My-accounts snapshot complete: ${r.fetched} account(s).`);
@@ -153,10 +162,8 @@ cron.schedule('0 5 * * *', async () => {
   }
 });
 
-// Infloww tracking-link sync — 04:00 UTC daily.
-// Infloww data lags by up to 2 hours so syncing once a day at night is plenty.
-cron.schedule('0 4 * * *', async () => {
-  console.log('[CRON] Starting Infloww tracking-link sync...');
+cron.schedule('10 0 * * *', async () => {
+  console.log('[CRON] Starting Infloww tracking-link sync (00:10 UTC)...');
   try {
     const r = await syncAllInflowwTalents();
     console.log(`[CRON] Infloww sync complete: ${r.length} talent(s)`);

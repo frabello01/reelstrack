@@ -136,18 +136,21 @@ router.get('/:id', async (req, res) => {
   ]);
 
   // Chart data — daily series for the last 30 days
-  const [viewsSeries, followersSeries, reelsSeries, clicksSeries, linkedLandings] = await Promise.all([
+  const [viewsSeries, followersSeries, reelsSeries, clicksSeries, subsSeries, linkedLandings] = await Promise.all([
     getViewsPerDay(account.id, 30),
     getFollowersPerDay(account.id, 30),
     getReelsPerDay(account.id, 30),
     getLandingClicksPerDay(account.id, 30),
+    getLandingSubsPerDay(account.id, 30),
     getLinkedLandings(account.id),
   ]);
 
   // Activity table data: row per day with views, new followers, clicks,
-  // and the convert rate so the frontend doesn't have to compute it.
-  // "New followers" is the day-over-day delta of follower_count from snapshots.
-  const activity = buildDailyActivity(viewsSeries, followersSeries, clicksSeries);
+  // new subs (from Infloww), and the REAL convert rate (subs / clicks).
+  // Deltas are computed as "next snapshot - this snapshot" so the day
+  // they're assigned to is the day the activity actually occurred,
+  // aligning them with click counts that are bucketed by calendar day.
+  const activity = buildDailyActivity(viewsSeries, followersSeries, clicksSeries, subsSeries);
 
   // Top 10 reels by views (within last 30 days)
   const { data: topReels } = await supabase
@@ -166,6 +169,7 @@ router.get('/:id', async (req, res) => {
       followers_per_day: followersSeries,
       reels_per_day: reelsSeries,
       clicks_per_day: clicksSeries,
+      subs_per_day: subsSeries,
     },
     activity,
     linked_landings: linkedLandings,
@@ -329,57 +333,171 @@ async function getLinkedLandings(accountId) {
   }));
 }
 
-// Builds the per-day activity table including convert rate (clicks/views * 100).
-// views_series and clicks_series are aligned by date. follower_series is a
-// snapshot of cumulative follower_count by date — we derive "new followers"
-// as the day-over-day delta and forward-fill missing days.
-function buildDailyActivity(viewsSeries, followersSeries, clicksSeries) {
+// Builds the per-day activity table.
+//
+// Day-labelling: each row represents activity DURING that calendar day.
+// So a delta like "new followers on May 27" is computed as:
+//   (snapshot taken at 00:05 UTC May 28) - (snapshot taken at 00:05 UTC May 27)
+// i.e. next-day-snapshot minus this-day-snapshot. This aligns with click and
+// subs counts that are bucketed by clicked_at / snapshot calendar day, so
+// every column on a row refers to the same 24h window.
+//
+// Today's row therefore has null deltas (because tomorrow's snapshot doesn't
+// exist yet) — that's accurate, not a bug.
+function buildDailyActivity(viewsSeries, followersSeries, clicksSeries, subsSeries) {
   const viewsByDay = Object.fromEntries((viewsSeries || []).map((r) => [r.date, r.value]));
   const clicksByDay = Object.fromEntries((clicksSeries || []).map((r) => [r.date, r.value]));
+  const subsByDay = Object.fromEntries((subsSeries || []).map((r) => [r.date, r.value]));
 
-  // Build a fully-populated cumulative follower map: any date with no snapshot
-  // gets the previous day's value forward-filled. We walk sorted snapshots.
-  const followersSorted = [...(followersSeries || [])].sort((a, b) => a.date.localeCompare(b.date));
-  // Build the list of days we want to report (the union of all series keys, sorted)
+  // Sorted, deduped union of all reporting days.
   const days = [...new Set([
     ...Object.keys(viewsByDay),
     ...Object.keys(clicksByDay),
-    ...followersSorted.map((s) => s.date),
+    ...Object.keys(subsByDay),
+    ...(followersSeries || []).map((s) => s.date),
   ])].sort();
 
-  let lastSnapshot = null;
+  // Forward-fill follower-count map so any day without a snapshot inherits
+  // the previous day's value. This is the cumulative snapshot, not a delta.
+  const followersSorted = [...(followersSeries || [])].sort((a, b) => a.date.localeCompare(b.date));
   let lastFollowerCount = null;
   const followerOnDay = {};
+  let snapIdx = 0;
   for (const day of days) {
-    // Advance through snapshots up to <= day
-    while (followersSorted.length && followersSorted[0].date <= day) {
-      lastSnapshot = followersSorted.shift();
-      lastFollowerCount = lastSnapshot.value;
+    while (snapIdx < followersSorted.length && followersSorted[snapIdx].date <= day) {
+      lastFollowerCount = followersSorted[snapIdx].value;
+      snapIdx++;
     }
     followerOnDay[day] = lastFollowerCount;
   }
 
   const rows = [];
-  let prevFollowerCount = null;
-  for (const day of days) {
+  for (let i = 0; i < days.length; i++) {
+    const day = days[i];
+    const nextDay = days[i + 1] || null;
+
     const views = viewsByDay[day] || 0;
     const clicks = clicksByDay[day] || 0;
+
+    // Followers DURING this day = (next-day snapshot) - (this-day snapshot)
     const currentFollower = followerOnDay[day];
-    const newFollowers = (currentFollower != null && prevFollowerCount != null)
-      ? currentFollower - prevFollowerCount
+    const nextFollower = nextDay ? followerOnDay[nextDay] : null;
+    const newFollowers = (currentFollower != null && nextFollower != null)
+      ? nextFollower - currentFollower
       : null;
-    const convertRate = views > 0 ? (clicks / views) * 100 : null;
+
+    // Subs DURING this day: subsByDay already represents the per-day delta,
+    // computed elsewhere from Infloww snapshots using the same shift logic.
+    const newSubs = subsByDay[day];
+
+    // Real convert rate: subs / clicks. Falls back to null if either is unknown.
+    const convertRate = (newSubs != null && clicks > 0) ? (newSubs / clicks) * 100 : null;
+
     rows.push({
       date: day,
       views,
       clicks,
       new_followers: newFollowers,
-      convert_rate: convertRate, // percentage (null if no views)
+      new_subs: newSubs ?? null,
+      convert_rate: convertRate,
     });
-    if (currentFollower != null) prevFollowerCount = currentFollower;
   }
-  // Newest first for readability in the UI
+  // Newest first for the UI
   return rows.reverse();
+}
+
+// Daily NEW subs (delta of cumulative sub_count between consecutive snapshots)
+// across every Infloww tracking-link that's bound to a landing_link that
+// belongs to one of this my_account's landings.
+//
+// We do the delta arithmetic here so the activity-table builder can just
+// treat it as another per-day series like clicks/views.
+async function getLandingSubsPerDay(myAccountId, days) {
+  // 1) Find landings for this IG profile
+  const { data: landings } = await supabase
+    .from('landings')
+    .select('id')
+    .eq('my_account_id', myAccountId);
+
+  // Zero-filled buckets fallback — keeps the chart rendering even with no data.
+  const zeroBuckets = {};
+  for (let i = 0; i < days; i++) {
+    const d = new Date(); d.setDate(d.getDate() - i);
+    zeroBuckets[d.toISOString().slice(0, 10)] = 0;
+  }
+  const zeroOut = () => Object.entries(zeroBuckets)
+    .map(([date, value]) => ({ date, value }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  if (!landings || landings.length === 0) return zeroOut();
+  const landingIds = landings.map((l) => l.id);
+
+  // 2) Find landing_link ids for these landings
+  const { data: lLinks } = await supabase
+    .from('landing_links')
+    .select('id')
+    .in('landing_id', landingIds);
+  if (!lLinks || lLinks.length === 0) return zeroOut();
+  const landingLinkIds = lLinks.map((x) => x.id);
+
+  // 3) Find Infloww links bound to those landing_links
+  const { data: inflowwLinks } = await supabase
+    .from('infloww_tracking_links')
+    .select('infloww_link_id')
+    .in('landing_link_id', landingLinkIds);
+  if (!inflowwLinks || inflowwLinks.length === 0) return zeroOut();
+  const inflowwIds = inflowwLinks.map((x) => x.infloww_link_id);
+
+  // 4) Pull snapshots for those links, oldest first
+  // We need one extra day of history so we can compute delta on the oldest reporting day.
+  const sinceDate = (() => {
+    const d = new Date(); d.setDate(d.getDate() - (days + 1));
+    return d.toISOString().slice(0, 10);
+  })();
+  const { data: snaps } = await supabase
+    .from('infloww_tracking_link_snapshots')
+    .select('infloww_link_id, snapshot_date, sub_count')
+    .in('infloww_link_id', inflowwIds)
+    .gte('snapshot_date', sinceDate)
+    .order('snapshot_date', { ascending: true });
+
+  if (!snaps || snaps.length === 0) return zeroOut();
+
+  // Group snapshots by (link_id, date) so we have one row per link per day.
+  // (Should already be unique due to our unique constraint, but defensive.)
+  const byLinkDay = new Map(); // link_id -> Map(date -> sub_count)
+  for (const s of snaps) {
+    if (!byLinkDay.has(s.infloww_link_id)) byLinkDay.set(s.infloww_link_id, new Map());
+    byLinkDay.get(s.infloww_link_id).set(s.snapshot_date, Number(s.sub_count || 0));
+  }
+
+  // For each reporting day, compute per-link delta = (next-day snapshot) - (this-day snapshot)
+  // then sum across links. Then attribute that delta to THIS day (activity during this day).
+  const result = { ...zeroBuckets };
+  const reportingDays = Object.keys(zeroBuckets).sort();
+  for (const day of reportingDays) {
+    // The next-day's date string
+    const dn = new Date(day); dn.setDate(dn.getDate() + 1);
+    const nextDay = dn.toISOString().slice(0, 10);
+
+    let delta = 0;
+    let haveAny = false;
+    for (const [linkId, dateMap] of byLinkDay.entries()) {
+      const today = dateMap.get(day);
+      const tomorrow = dateMap.get(nextDay);
+      if (today != null && tomorrow != null) {
+        delta += (tomorrow - today);
+        haveAny = true;
+      }
+    }
+    // Keep 0 in the bucket if we have NO snapshots on either side (so charts
+    // still render); the activity table will still show 0 for those days.
+    result[day] = haveAny ? delta : 0;
+  }
+
+  return Object.entries(result)
+    .map(([date, value]) => ({ date, value }))
+    .sort((a, b) => a.date.localeCompare(b.date));
 }
 
 function zeroSeries(days) {

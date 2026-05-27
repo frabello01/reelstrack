@@ -258,6 +258,7 @@
 .activity-table .delta-up { color: #34d399; }
 .activity-table .delta-down { color: #f87171; }
 .activity-table .convert-good { color: #34d399; font-weight: 700; }
+.activity-table .subs-positive { color: #34d399; font-weight: 600; }
 .top-reel-views, .top-reel-likes {
   display: inline-flex; align-items: center; gap: 3px;
 }
