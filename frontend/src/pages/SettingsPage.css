@@ -143,6 +143,32 @@
   cursor: pointer;
 }
 .task-template-label:hover { color: white; }
+/* Discord webhook editor */
+.discord-webhook-editor { display: flex; flex-direction: column; gap: 8px; }
+.discord-webhook-editor input[type="url"] {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+}
+.settings-toast {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  width: fit-content;
+}
+.settings-toast-ok {
+  background: rgba(52, 211, 153, 0.12);
+  border: 1px solid rgba(52, 211, 153, 0.3);
+  color: #34d399;
+}
+.settings-toast-err {
+  background: rgba(255, 107, 107, 0.12);
+  border: 1px solid rgba(255, 107, 107, 0.3);
+  color: #f87171;
+}
+
 .task-template-delete-btn {
   background: rgba(255,255,255,0.05);
   border: 1px solid rgba(255,255,255,0.08);

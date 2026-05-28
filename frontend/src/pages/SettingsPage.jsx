@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Save, CheckCircle2, Image as ImageIcon, Plus, Trash2, ListChecks, GripVertical } from 'lucide-react';
+import { Save, CheckCircle2, Image as ImageIcon, Plus, Trash2, ListChecks, GripVertical, Bell, Send, AlertCircle } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { api } from '../lib/api';
 import ImageUploader from '../components/ImageUploader';
@@ -7,7 +7,7 @@ import './SettingsPage.css';
 
 export default function SettingsPage() {
   const { user } = useAuth();
-  const [settings, setSettings] = useState({ display_name: '', agency_logo_url: null });
+  const [settings, setSettings] = useState({ display_name: '', agency_logo_url: null, discord_webhook_url: null });
   const [draftName, setDraftName] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -108,6 +108,19 @@ export default function SettingsPage() {
       </div>
 
       <div className="settings-section">
+        <h2><Bell size={16} style={{ verticalAlign: '-3px', marginRight: 6 }} /> Discord notifications</h2>
+        <p className="settings-help">
+          Quando uno dei profili IG in "My Creators" cambia stato (sparisce, diventa privato, dà errore, o torna attivo),
+          inviamo un messaggio al canale Discord collegato. Incolla qui l'URL del webhook (Server → Impostazioni canale →
+          Integrazioni → Webhook).
+        </p>
+        <DiscordWebhookEditor
+          initial={settings.discord_webhook_url || ''}
+          onSaved={(url) => setSettings((s) => ({ ...s, discord_webhook_url: url }))}
+        />
+      </div>
+
+      <div className="settings-section">
         <h2><ListChecks size={16} style={{ verticalAlign: '-3px', marginRight: 6 }} /> Daily tasks</h2>
         <p className="settings-help">
           Tasks defined here are generated <strong>every day at midnight (Rome time)</strong> for
@@ -116,6 +129,83 @@ export default function SettingsPage() {
         </p>
         <TaskTemplateManager />
       </div>
+    </div>
+  );
+}
+
+// ----- Discord webhook editor: paste URL, save, send test message -----
+function DiscordWebhookEditor({ initial, onSaved }) {
+  const [draft, setDraft] = useState(initial || '');
+  const [saved, setSaved] = useState(initial || '');
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [result, setResult] = useState(null); // { type: 'ok'|'err', text }
+  const dirty = (draft || '') !== (saved || '');
+
+  const handleSave = async () => {
+    setSaving(true);
+    setResult(null);
+    try {
+      // Empty string = clear the webhook
+      const next = draft.trim() || null;
+      await api.updateSettingsFields({ discord_webhook_url: next });
+      setSaved(next || '');
+      onSaved?.(next);
+      setResult({ type: 'ok', text: next ? 'Webhook salvato' : 'Webhook rimosso' });
+    } catch (err) {
+      setResult({ type: 'err', text: err.message });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleTest = async () => {
+    setTesting(true);
+    setResult(null);
+    try {
+      // Use draft if it's dirty (so user can test before saving), else saved
+      const urlToTest = dirty ? draft.trim() : null; // null = backend uses saved
+      await api.testDiscordWebhook(urlToTest);
+      setResult({ type: 'ok', text: 'Messaggio di test inviato su Discord' });
+    } catch (err) {
+      setResult({ type: 'err', text: err.message });
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  return (
+    <div className="discord-webhook-editor">
+      <div className="settings-input-row">
+        <input
+          type="url"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder="https://discord.com/api/webhooks/123/abc..."
+          spellCheck={false}
+        />
+        <button
+          className="btn btn-primary"
+          onClick={handleSave}
+          disabled={!dirty || saving}
+        >
+          {saving ? 'Salvo…' : <><Save size={14} /> Salva</>}
+        </button>
+        <button
+          className="btn btn-ghost"
+          onClick={handleTest}
+          disabled={testing || (!saved && !draft.trim())}
+          title="Invia un messaggio di prova al webhook"
+        >
+          {testing ? 'Invio…' : <><Send size={14} /> Test</>}
+        </button>
+      </div>
+      {result && (
+        <div className={`settings-toast ${result.type === 'err' ? 'settings-toast-err' : 'settings-toast-ok'}`}>
+          {result.type === 'err' ? <AlertCircle size={13} /> : <CheckCircle2 size={13} />}
+          <span>{result.text}</span>
+        </div>
+      )}
     </div>
   );
 }

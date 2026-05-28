@@ -1,5 +1,6 @@
 const supabase = require('../lib/supabase');
 const { italyDate } = require('../lib/dateUtils');
+const { notifyAccountStatusChange } = require('./discordNotifier');
 
 const HIKERAPI_BASE = 'https://api.hikerapi.com';
 const HIKERAPI_TOKEN = process.env.HIKERAPI_TOKEN;
@@ -59,9 +60,9 @@ async function fetchAccount(account) {
     profile = await hikerGet('/v1/user/by/username', { username: account.username });
   } catch (err) {
     if (err.status === 404) {
-      return await markAccountStatus(account.id, 'inactive', 'Profile not found');
+      return await markAccountStatus(account, 'inactive', 'Profile not found');
     }
-    return await markAccountStatus(account.id, 'error', err.message);
+    return await markAccountStatus(account, 'error', err.message);
   }
 
   if (profile.is_private) {
@@ -71,7 +72,7 @@ async function fetchAccount(account) {
 
   const pk = profile.pk?.toString();
   if (!pk) {
-    return await markAccountStatus(account.id, 'error', 'No pk returned from HikerAPI');
+    return await markAccountStatus(account, 'error', 'No pk returned from HikerAPI');
   }
 
   // Step 2: paginate through reels (we want as many as possible to compute "all time" totals)
@@ -131,15 +132,18 @@ async function persistAndUpdateAccount(account, profile, status, errorMsg) {
     follower_count: profile.follower_count ?? account.follower_count,
     display_name: profile.full_name || account.display_name,
   };
-  // Persist profile pic to storage so URL doesn't expire
   if (profile.profile_pic_url) {
     const persisted = await persistProfilePic(account.id, profile.profile_pic_url);
     updates.profile_pic_url = persisted || profile.profile_pic_url;
   }
   await supabase.from('my_accounts').update(updates).eq('id', account.id);
+  await maybeNotifyStatusChange(account, status, errorMsg);
 }
 
-async function markAccountStatus(accountId, status, errorMsg) {
+async function markAccountStatus(accountOrId, status, errorMsg) {
+  // Accept either a full account object (preferred — we then have the old
+  // status for change detection) or just an id (legacy).
+  const account = typeof accountOrId === 'string' ? { id: accountOrId } : accountOrId;
   await supabase
     .from('my_accounts')
     .update({
@@ -148,7 +152,38 @@ async function markAccountStatus(accountId, status, errorMsg) {
       status_checked_at: new Date().toISOString(),
       last_fetched_at: new Date().toISOString(),
     })
-    .eq('id', accountId);
+    .eq('id', account.id);
+  if (account.username) {
+    await maybeNotifyStatusChange(account, status, errorMsg);
+  }
+}
+
+// Fires a Discord notification when the IG profile's status crosses the
+// healthy/unhealthy boundary. Fire-and-forget — never blocks the fetch.
+async function maybeNotifyStatusChange(account, newStatus, errorMsg) {
+  if (!account?.username) return;
+  if (account.status === newStatus) return; // no transition
+  try {
+    let talentName = null;
+    if (account.talent_id) {
+      const { data: t } = await supabase
+        .from('talents')
+        .select('name')
+        .eq('id', account.talent_id)
+        .maybeSingle();
+      talentName = t?.name || null;
+    }
+    // Don't await — let the webhook resolve on its own time
+    notifyAccountStatusChange({
+      username: account.username,
+      talentName,
+      prevStatus: account.status,
+      newStatus,
+      errorMsg,
+    }).catch((e) => console.warn('[my-accounts] discord notify error:', e.message));
+  } catch (err) {
+    console.warn('[my-accounts] notify lookup failed:', err.message);
+  }
 }
 
 async function storeAccountReels(accountId, rawReels) {

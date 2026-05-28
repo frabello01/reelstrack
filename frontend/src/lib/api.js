@@ -176,6 +176,10 @@ export const api = {
   getSettings: () => request('/api/settings'),
   updateSettings: (display_name) =>
     request('/api/settings', { method: 'PATCH', body: JSON.stringify({ display_name }) }),
+  updateSettingsFields: (patch) =>
+    request('/api/settings', { method: 'PATCH', body: JSON.stringify(patch) }),
+  testDiscordWebhook: (url) =>
+    request('/api/settings/discord/test', { method: 'POST', body: JSON.stringify(url ? { url } : {}) }),
   uploadAgencyLogo: (image_data_url) =>
     request('/api/settings/logo', { method: 'POST', body: JSON.stringify({ image_data_url }) }),
   removeAgencyLogo: () =>
