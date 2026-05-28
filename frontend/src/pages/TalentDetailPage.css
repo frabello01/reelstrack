@@ -117,9 +117,11 @@
   background: rgba(34,197,94,0.15); color: #4ade80;
 }
 .status-badge.status-inactive,
-.status-badge.status-private,
 .status-badge.status-error {
   background: rgba(248,113,113,0.15); color: #f87171;
+}
+.status-badge.status-private {
+  background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.7);
 }
 .status-badge.status-unknown {
   background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.5);

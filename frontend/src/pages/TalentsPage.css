@@ -60,6 +60,7 @@
   margin-top: 2px;
 }
 .banned-tag { color: #f87171; }
+.private-tag { color: rgba(255,255,255,0.55); }
 
 .talent-delete-btn {
   background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
@@ -93,7 +94,6 @@
 }
 .profile-chip.status-active { border-color: rgba(34,197,94,0.3); }
 .profile-chip.status-inactive,
-.profile-chip.status-private,
 .profile-chip.status-error {
   background: rgba(248,113,113,0.08);
   border-color: rgba(248,113,113,0.3);
@@ -101,7 +101,14 @@
   text-decoration: line-through;
   text-decoration-color: rgba(248,113,113,0.4);
 }
+/* Private is a deliberate state, not a ban — neutral grey, no strikethrough */
+.profile-chip.status-private {
+  background: rgba(255,255,255,0.04);
+  border-color: rgba(255,255,255,0.12);
+  color: rgba(255,255,255,0.65);
+}
 .chip-warning { color: #f87171; }
+.chip-private { color: rgba(255,255,255,0.5); }
 
 .talent-card-body { display: flex; flex-direction: column; gap: 12px; }
 

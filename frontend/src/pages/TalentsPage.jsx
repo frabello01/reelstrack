@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Trash2, RefreshCw, TrendingUp, TrendingDown, Eye, Users, Film, AlertTriangle } from 'lucide-react';
+import { Plus, Trash2, RefreshCw, TrendingUp, TrendingDown, Eye, Users, Film, AlertTriangle, Lock } from 'lucide-react';
 import { LineChart, Line, ResponsiveContainer } from 'recharts';
 import { api } from '../lib/api';
 import './TalentsPage.css';
@@ -119,8 +119,11 @@ export default function TalentsPage() {
                   <div className="talent-name">{t.name}</div>
                   <div className="talent-profile-count">
                     {t.profiles.length} {t.profiles.length === 1 ? 'profile' : 'profiles'}
-                    {t.metrics_7d?.active_profiles_count != null && t.metrics_7d.active_profiles_count !== t.profiles.length && (
-                      <span className="banned-tag"> · {t.profiles.length - t.metrics_7d.active_profiles_count} banned/inactive</span>
+                    {(t.metrics_7d?.banned_or_inactive_count ?? 0) > 0 && (
+                      <span className="banned-tag"> · {t.metrics_7d.banned_or_inactive_count} banned/inactive</span>
+                    )}
+                    {(t.metrics_7d?.private_count ?? 0) > 0 && (
+                      <span className="private-tag"> · {t.metrics_7d.private_count} private</span>
                     )}
                   </div>
                 </div>
@@ -140,8 +143,11 @@ export default function TalentsPage() {
                     <div key={p.id} className={`profile-chip status-${p.status || 'unknown'}`} title={p.status}>
                       {p.profile_pic_url && <img src={p.profile_pic_url} alt="" />}
                       <span>@{p.username}</span>
-                      {p.status && p.status !== 'active' && p.status !== 'unknown' && (
+                      {(p.status === 'inactive' || p.status === 'error') && (
                         <AlertTriangle size={10} className="chip-warning" />
+                      )}
+                      {p.status === 'private' && (
+                        <Lock size={10} className="chip-private" />
                       )}
                     </div>
                   ))}

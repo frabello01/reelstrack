@@ -113,10 +113,18 @@ async function computeTalentMetrics(talentId, days) {
   const activeProfiles = profiles.filter((p) => p.status === 'active');
   const totalFollowersActive = activeProfiles.reduce((s, p) => s + (p.follower_count || 0), 0);
 
-  // "Lost to bans" — followers on profiles that are now inactive/banned/private/error
+  // "Lost to bans" — only count profiles that we actually LOST.
+  // Private profiles are a deliberate setup choice (backup accounts etc.),
+  // not a ban — explicitly excluded here.
   const lostToBans = profiles
-    .filter((p) => p.status && p.status !== 'active' && p.status !== 'unknown')
+    .filter((p) => p.status === 'inactive' || p.status === 'error')
     .reduce((s, p) => s + (p.follower_count || 0), 0);
+  // Number of profiles that are actually unhealthy (for the "X banned/inactive"
+  // badge on the talent cards). Excludes private and unknown.
+  const bannedOrInactiveCount = profiles
+    .filter((p) => p.status === 'inactive' || p.status === 'error')
+    .length;
+  const privateCount = profiles.filter((p) => p.status === 'private').length;
 
   // Follower DELTA across active profiles, derived from snapshots.
   // We sum follower_count from the earliest snapshot inside the window AND the latest.
@@ -214,6 +222,8 @@ async function computeTalentMetrics(talentId, days) {
     above_100k_prev: countAbove(reelsPrev, 100_000),
     total_followers_active: totalFollowersActive,
     lost_to_bans: lostToBans,
+    banned_or_inactive_count: bannedOrInactiveCount,
+    private_count: privateCount,
     follower_delta: followerDelta,
     follower_delta_prev: followerDeltaPrev,
     landing_clicks: clicks,

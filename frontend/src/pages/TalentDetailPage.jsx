@@ -4,7 +4,7 @@ import {
   ArrowLeft, Plus, Trash2, RefreshCw, ExternalLink,
   TrendingUp, TrendingDown, Eye, Heart, Users, Film, Trophy, AlertTriangle, CheckCircle2,
   StickyNote, Check, X, ListChecks, MousePointerClick, UserPlus, DollarSign, Link2,
-  EyeOff, ChevronDown, ChevronRight as ChevronRightIcon
+  EyeOff, ChevronDown, ChevronRight as ChevronRightIcon, Lock
 } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid, Legend } from 'recharts';
 import { api } from '../lib/api';
@@ -907,7 +907,7 @@ function ProfileStatusBadge({ status, small }) {
   const map = {
     active: { label: 'Active', className: 'status-active', icon: CheckCircle2 },
     inactive: { label: 'Banned/Removed', className: 'status-inactive', icon: AlertTriangle },
-    private: { label: 'Private', className: 'status-private', icon: AlertTriangle },
+    private: { label: 'Private', className: 'status-private', icon: Lock },
     error: { label: 'Error', className: 'status-error', icon: AlertTriangle },
     unknown: { label: 'Pending', className: 'status-unknown', icon: null },
   };
