@@ -648,6 +648,9 @@ function InflowwLinkName({ link, onSaved }) {
 // pulled from Infloww's API, aggregated across all this talent's
 // tracking links. Hidden if the talent isn't bound to Infloww.
 // ----------------------------------------------------------------
+// localStorage key for the user's earnings-display preference (net | gross)
+const EARNINGS_MODE_KEY = 'infloww_earnings_mode';
+
 function InflowwSection({ talentId }) {
   const [links, setLinks] = useState(null);
   const [syncing, setSyncing] = useState(false);
@@ -655,6 +658,19 @@ function InflowwSection({ talentId }) {
   const [expandedId, setExpandedId] = useState(null);
   const [snapshotsCache, setSnapshotsCache] = useState({}); // infloww_link_id -> snapshots[]
   const [busy, setBusy] = useState(null);
+  // Net (default) shows what the creator actually receives after OF's cut.
+  // Gross shows what the customer paid (Infloww-reported gross).
+  const [earningsMode, setEarningsMode] = useState(() => {
+    try { return localStorage.getItem(EARNINGS_MODE_KEY) || 'net'; }
+    catch { return 'net'; }
+  });
+  const setEarningsModePersisted = (mode) => {
+    setEarningsMode(mode);
+    try { localStorage.setItem(EARNINGS_MODE_KEY, mode); } catch {}
+  };
+  // Pick the right earnings field for a single link based on the current mode
+  const linkEarnings = (l) => Number((earningsMode === 'gross' ? l.earnings_gross : l.earnings_net) || 0);
+  const earningsLabel = earningsMode === 'gross' ? 'Earnings (gross)' : 'Earnings (net)';
 
   const load = async () => {
     try {
@@ -716,23 +732,38 @@ function InflowwSection({ talentId }) {
   // hidden flag is purely a display-time filter, not a data filter.
   const totalSubs = links.reduce((s, l) => s + (l.sub_count || 0), 0);
   const totalPaying = links.reduce((s, l) => s + (l.paying_fans_count || 0), 0);
-  const totalEarningsNet = links.reduce((s, l) => s + Number(l.earnings_net || 0), 0);
+  const totalEarnings = links.reduce((s, l) => s + linkEarnings(l), 0);
   const totalClicksInfloww = links.reduce((s, l) => s + (l.click_count || 0), 0);
   const blendedCvr = totalClicksInfloww > 0 ? (totalSubs / totalClicksInfloww) * 100 : null;
+  const blendedLtv = totalSubs > 0 ? totalEarnings / totalSubs : null;
   const currency = links[0]?.currency || 'USD';
 
   return (
     <div className="infloww-section">
       <div className="infloww-section-header">
         <h2><Link2 size={16} style={{ verticalAlign: -2, marginRight: 6 }} />Infloww — link-in-bio monetization</h2>
-        <button
-          className="btn btn-ghost btn-sm"
-          onClick={handleSync}
-          disabled={syncing}
-        >
-          <RefreshCw size={13} className={syncing ? 'spin' : ''} />
-          {syncing ? 'Sincronizzo…' : 'Sync ora'}
-        </button>
+        <div className="infloww-header-actions">
+          <div className="infloww-mode-toggle" role="group" aria-label="Earnings mode">
+            <button
+              className={earningsMode === 'net' ? 'active' : ''}
+              onClick={() => setEarningsModePersisted('net')}
+              title="Net: dopo la commissione di OnlyFans (default)"
+            >Net</button>
+            <button
+              className={earningsMode === 'gross' ? 'active' : ''}
+              onClick={() => setEarningsModePersisted('gross')}
+              title="Gross: cifra pagata dal cliente, prima della commissione OF"
+            >Gross</button>
+          </div>
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={handleSync}
+            disabled={syncing}
+          >
+            <RefreshCw size={13} className={syncing ? 'spin' : ''} />
+            {syncing ? 'Sincronizzo…' : 'Sync ora'}
+          </button>
+        </div>
       </div>
 
       <p className="infloww-section-hint">
@@ -747,9 +778,14 @@ function InflowwSection({ talentId }) {
           <div className="infloww-total-sub">{formatNum(totalPaying)} paying</div>
         </div>
         <div className="infloww-total">
-          <div className="infloww-total-label"><DollarSign size={13} /> Earnings (net)</div>
-          <div className="infloww-total-num">{formatMoney(totalEarningsNet, currency)}</div>
+          <div className="infloww-total-label"><DollarSign size={13} /> {earningsLabel}</div>
+          <div className="infloww-total-num">{formatMoney(totalEarnings, currency)}</div>
           <div className="infloww-total-sub">lifetime</div>
+        </div>
+        <div className="infloww-total">
+          <div className="infloww-total-label"><DollarSign size={13} /> Avg LTV</div>
+          <div className="infloww-total-num">{blendedLtv == null ? '—' : formatMoney(blendedLtv, currency)}</div>
+          <div className="infloww-total-sub">per subscriber ({earningsMode})</div>
         </div>
         <div className="infloww-total">
           <div className="infloww-total-label"><MousePointerClick size={13} /> CVR</div>
@@ -775,7 +811,8 @@ function InflowwSection({ talentId }) {
                 <th className="num">Clicks</th>
                 <th className="num">Subs</th>
                 <th className="num">Paying</th>
-                <th className="num">Earnings (net)</th>
+                <th className="num">{earningsLabel}</th>
+                <th className="num">Avg LTV</th>
                 <th className="num">CVR</th>
                 <th>Collegato a</th>
                 <th style={{ width: 36 }}></th>
@@ -814,7 +851,14 @@ function InflowwSection({ talentId }) {
                       <td className="num">{formatNum(l.click_count)}</td>
                       <td className="num">{formatNum(l.sub_count)}</td>
                       <td className="num">{formatNum(l.paying_fans_count)}</td>
-                      <td className="num">{formatMoney(l.earnings_net, l.currency || 'USD')}</td>
+                      <td className="num">{formatMoney(linkEarnings(l), l.currency || 'USD')}</td>
+                      <td className="num">
+                        {/* Avg LTV = earnings (in the active mode) / subs.
+                            Undefined when a link has 0 subs — show "—". */}
+                        {(l.sub_count || 0) > 0
+                          ? formatMoney(linkEarnings(l) / l.sub_count, l.currency || 'USD')
+                          : '—'}
+                      </td>
                       <td className="num">
                         {l.subscription_cvr != null
                           ? <span className={Number(l.subscription_cvr) >= 1 ? 'cvr-good' : ''}>{Number(l.subscription_cvr).toFixed(2)}%</span>
@@ -839,7 +883,7 @@ function InflowwSection({ talentId }) {
                     {isExpanded && (
                       <tr className="infloww-detail-row">
                         <td></td>
-                        <td colSpan={8}>
+                        <td colSpan={9}>
                           <DailySubsStrip snapshots={snaps} />
                         </td>
                       </tr>

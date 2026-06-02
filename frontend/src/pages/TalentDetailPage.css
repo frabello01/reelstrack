@@ -427,6 +427,37 @@
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+.infloww-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Net / Gross segmented control */
+.infloww-mode-toggle {
+  display: inline-flex;
+  background: rgba(0,0,0,0.25);
+  padding: 2px;
+  border-radius: 8px;
+}
+.infloww-mode-toggle button {
+  background: transparent;
+  border: none;
+  color: rgba(255,255,255,0.6);
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+.infloww-mode-toggle button:hover { color: white; }
+.infloww-mode-toggle button.active {
+  background: rgba(167, 139, 250, 0.25);
+  color: white;
 }
 .infloww-section-header h2 {
   font-family: 'Syne', sans-serif;
