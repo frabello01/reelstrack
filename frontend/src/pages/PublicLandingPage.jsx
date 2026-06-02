@@ -82,6 +82,22 @@ export default function PublicLandingPage() {
         if (cancelled) return;
         setLanding(data);
         applyHeadMetadata(data);
+        // Fire the view ping after we have the landing id. Captures
+        // referrer + UTM + Meta platform so the dashboard can show
+        // source attribution. Fire-and-forget; we don't care if it fails.
+        try {
+          const url = new URL(window.location.href);
+          const utm = {
+            utm_source: url.searchParams.get('utm_source') || null,
+            utm_medium: url.searchParams.get('utm_medium') || null,
+            utm_campaign: url.searchParams.get('utm_campaign') || null,
+          };
+          api.recordLandingView(data.id, {
+            referrer: document.referrer || null,
+            meta_platform: metaPlatformRef.current,
+            ...utm,
+          }).catch(() => {});
+        } catch {}
       } catch (err) {
         if (cancelled) return;
         setError(err.message || 'Profile not found');
@@ -101,7 +117,14 @@ export default function PublicLandingPage() {
   };
 
   const fireLinkOpen = (link) => {
-    try { api.recordLandingClick(link.id, metaPlatformRef.current); } catch {}
+    try {
+      const url = new URL(window.location.href);
+      api.recordLandingClick(link.id, {
+        meta_platform: metaPlatformRef.current,
+        referrer: document.referrer || null,
+        utm_source: url.searchParams.get('utm_source') || null,
+      });
+    } catch {}
     // The plaintext URL never lives in React state — decode it ONLY here,
     // moments before navigating. A bot that dumps the rendered DOM or the
     // React fiber tree won't find any usable URL anywhere on the page.

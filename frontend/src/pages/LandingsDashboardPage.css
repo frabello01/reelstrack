@@ -1,0 +1,263 @@
+.ldb { max-width: 1200px; padding: 0; }
+
+.ldb-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+.ldb-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text2);
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+.ldb-back:hover { color: var(--text); }
+.ldb-title { margin: 0; font-family: var(--font-display); font-size: 26px; color: var(--text); }
+.ldb-sub  { margin: 4px 0 0; color: var(--text2); font-size: 13px; max-width: 640px; line-height: 1.5; }
+
+/* ----- Filters ----- */
+.ldb-filters {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+.ldb-period {
+  display: inline-flex;
+  background: rgba(0,0,0,0.25);
+  padding: 2px;
+  border-radius: 8px;
+}
+.ldb-period-btn {
+  background: transparent;
+  border: none;
+  color: var(--text2);
+  padding: 6px 14px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.ldb-period-btn:hover { color: var(--text); }
+.ldb-period-btn.active {
+  background: rgba(167, 139, 250, 0.25);
+  color: white;
+}
+.ldb-filters select {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 7px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+/* ----- KPI cards ----- */
+.ldb-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.ldb-kpi {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+.ldb-kpi-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text2);
+  margin-bottom: 6px;
+}
+.ldb-kpi-value {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1.1;
+}
+.ldb-kpi-sub { font-size: 11px; color: var(--text2); margin-top: 3px; }
+
+.ldb-kpi-live { border-color: rgba(244, 114, 182, 0.4); background: rgba(244, 114, 182, 0.05); }
+.ldb-kpi-live-dot {
+  display: inline-block;
+  width: 7px; height: 7px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: #f472b6;
+  animation: ldb-pulse 1.4s ease-in-out infinite;
+}
+@keyframes ldb-pulse {
+  0%, 100% { opacity: 0.5; transform: scale(0.9); }
+  50%      { opacity: 1;   transform: scale(1.2); }
+}
+
+/* ----- Rows of cards ----- */
+.ldb-row {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+@media (max-width: 900px) { .ldb-row { grid-template-columns: 1fr; } }
+
+.ldb-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+.ldb-card-title {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text);
+  margin: 0 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ldb-empty { color: var(--text2); font-size: 13px; padding: 18px 0; }
+
+/* ----- Sources ----- */
+.ldb-card-sources .ldb-sources-content {
+  display: grid;
+  grid-template-columns: minmax(120px, 200px) 1fr;
+  gap: 14px;
+  align-items: center;
+}
+.ldb-source-list { list-style: none; padding: 0; margin: 0; }
+.ldb-source-list li {
+  display: grid;
+  grid-template-columns: 10px 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 5px 0;
+  font-size: 13px;
+  color: var(--text);
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.ldb-source-list li:last-child { border-bottom: none; }
+.ldb-source-dot { width: 10px; height: 10px; border-radius: 50%; }
+.ldb-source-name { font-weight: 500; }
+.ldb-source-count { color: var(--text2); font-variant-numeric: tabular-nums; }
+
+/* ----- Countries ----- */
+.ldb-country-list { list-style: none; padding: 0; margin: 0; }
+.ldb-country-list li {
+  display: grid;
+  grid-template-columns: 24px 1fr 1.3fr 48px;
+  gap: 10px;
+  align-items: center;
+  padding: 5px 0;
+  font-size: 13px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.ldb-country-list li:last-child { border-bottom: none; }
+.ldb-country-flag { font-size: 16px; }
+.ldb-country-name { color: var(--text); }
+.ldb-country-bar {
+  height: 6px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 100px;
+  overflow: hidden;
+}
+.ldb-country-bar span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+}
+.ldb-country-count {
+  text-align: right;
+  color: var(--text2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ----- Top landings table ----- */
+.ldb-top-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ldb-top-table th {
+  text-align: left;
+  padding: 8px 6px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text2);
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+}
+.ldb-top-table th.num { text-align: right; }
+.ldb-top-table td {
+  padding: 9px 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.ldb-top-table td.num { text-align: right; }
+.ldb-top-table tr:last-child td { border-bottom: none; }
+.ldb-link { color: var(--text); font-weight: 600; text-decoration: none; }
+.ldb-link:hover { color: var(--accent2); }
+.ldb-top-meta { font-size: 11px; color: var(--text2); margin-top: 2px; }
+
+/* ----- Live feed ----- */
+.ldb-live-pulse {
+  display: inline-block;
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  background: #34d399;
+  box-shadow: 0 0 8px rgba(52, 211, 153, 0.6);
+  animation: ldb-pulse 1.4s ease-in-out infinite;
+}
+.ldb-feed-hint {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text2);
+  text-transform: none;
+  letter-spacing: 0;
+  margin-left: 6px;
+}
+.ldb-feed { list-style: none; padding: 0; margin: 0; max-height: 380px; overflow-y: auto; }
+.ldb-feed-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  font-size: 13px;
+}
+.ldb-feed-row:last-child { border-bottom: none; }
+.ldb-feed-new {
+  background: rgba(52, 211, 153, 0.07);
+  animation: ldb-flash 1.2s ease-out;
+}
+@keyframes ldb-flash {
+  0% { background: rgba(52, 211, 153, 0.25); }
+  100% { background: rgba(52, 211, 153, 0.07); }
+}
+.ldb-feed-time {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text2);
+  flex-shrink: 0;
+}
+.ldb-feed-flag  { font-size: 14px; }
+.ldb-feed-landing { font-weight: 600; color: var(--text); }
+.ldb-feed-link   { color: var(--text2); }
+.ldb-feed-source { font-weight: 600; margin-left: auto; }
+.ldb-feed-city   { color: var(--text2); font-size: 11px; }
+
+/* ----- Charts container ----- */
+.ldb-chart-wrap { padding: 4px 0; }

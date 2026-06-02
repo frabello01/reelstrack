@@ -26,6 +26,7 @@ import StudioPage from './pages/StudioPage';
 import ExplorePage from './pages/ExplorePage';
 import LandingsPage from './pages/LandingsPage';
 import LandingEditorPage from './pages/LandingEditorPage';
+import LandingsDashboardPage from './pages/LandingsDashboardPage';
 import PublicLandingPage from './pages/PublicLandingPage';
 import TeamPage from './pages/TeamPage';
 import LogPage from './pages/LogPage';
@@ -115,6 +116,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="lists/:id" element={<ListDetailPage />} />
             <Route path="explore" element={<ExplorePage />} />
             <Route path="landings" element={<LandingsPage />} />
+            <Route path="landings/dashboard" element={<LandingsDashboardPage />} />
             <Route path="landings/:id" element={<LandingEditorPage />} />
             <Route path="todos" element={<TodosPage />} />
             <Route path="todos/:id" element={<TodoDetailPage />} />

@@ -4,6 +4,42 @@ const supabase = require('../lib/supabase');
 const { uploadImageDataUrl } = require('../lib/imageUpload');
 const { encodeUrl } = require('../lib/linkCipher');
 const { italyDateOf, italyLastNDates, italyPeriodStartIso } = require('../lib/dateUtils');
+const { geoLookup } = require('../lib/geoLookup');
+
+// Classify the visitor's traffic source based on Meta-UA detection +
+// referrer host + UTM tag (if provided). First non-empty wins.
+function classifySource({ metaPlatform, referrerHost, utmSource }) {
+  if (utmSource) return String(utmSource).toLowerCase().slice(0, 40);
+  if (metaPlatform) return metaPlatform;          // 'instagram'|'threads'|'facebook'
+  if (!referrerHost) return 'direct';
+  const h = referrerHost.toLowerCase();
+  if (h.includes('instagram.com'))                return 'instagram';
+  if (h.includes('threads.net') || h.includes('threads.com')) return 'threads';
+  if (h.includes('facebook.com') || h.includes('fb.com')) return 'facebook';
+  if (h.includes('twitter.com') || h.includes('x.com'))    return 'twitter';
+  if (h.includes('tiktok.com'))                   return 'tiktok';
+  if (h.includes('reddit.com'))                   return 'reddit';
+  if (h.includes('telegram.org') || h.includes('t.me'))    return 'telegram';
+  if (h.includes('youtube.com') || h.includes('youtu.be')) return 'youtube';
+  if (h.includes('google.'))                      return 'google';
+  if (h.includes('bing.com'))                     return 'bing';
+  if (h.includes('linkedin.com'))                 return 'linkedin';
+  if (h.includes('discord.com') || h.includes('discord.gg')) return 'discord';
+  return 'other';
+}
+
+// Pull a normalised host from a Referer header. Returns null if absent
+// or unparseable. We store only the host (no path) for privacy and
+// because the host is all we need for source classification.
+function referrerHostFrom(req, fallbackBody) {
+  const raw = (req.headers['referer'] || req.headers['referrer'] || fallbackBody || '').toString();
+  if (!raw) return null;
+  try {
+    return new URL(raw).hostname.toLowerCase() || null;
+  } catch {
+    return null;
+  }
+}
 
 // Normalise any user-pasted hostname to a canonical form:
 //   "https://www.Example.com:443/" → "example.com"
@@ -94,13 +130,16 @@ router.get('/public/lookup', async (req, res) => {
 
 // POST /api/landings/public/click/:linkId
 // Records a click. Fire-and-forget from the client. Body may include
-// { meta_platform: 'instagram'|'threads'|'facebook'|null }.
+// { meta_platform, referrer, utm_source }.
 router.post('/public/click/:linkId', async (req, res) => {
   const { linkId } = req.params;
   const metaPlatform = (req.body?.meta_platform || null);
   const ua = (req.headers['user-agent'] || '').toString().slice(0, 250);
+  const referrerHost = referrerHostFrom(req, req.body?.referrer);
+  const utmSource = req.body?.utm_source || null;
+  const geo = geoLookup(req.ip);
+  const source = classifySource({ metaPlatform, referrerHost, utmSource });
 
-  // Verify the link exists + fetch its landing_id for the click row.
   const { data: link, error: lookupErr } = await supabase
     .from('landing_links')
     .select('id, landing_id, click_count')
@@ -112,14 +151,12 @@ router.post('/public/click/:linkId', async (req, res) => {
   // Respond instantly — DB writes are best-effort.
   res.json({ ok: true });
 
-  // Increment lifetime counter
   supabase
     .from('landing_links')
     .update({ click_count: (link.click_count || 0) + 1 })
     .eq('id', linkId)
     .then(() => {}, (e) => console.warn('[landings] click counter update failed:', e.message));
 
-  // Insert time-series row
   supabase
     .from('landing_link_clicks')
     .insert({
@@ -127,13 +164,267 @@ router.post('/public/click/:linkId', async (req, res) => {
       landing_id: link.landing_id,
       user_agent: ua,
       meta_platform: metaPlatform,
+      ip: geo.ip_truncated,
+      country_code: geo.country_code,
+      country_name: geo.country_name,
+      region: geo.region,
+      city: geo.city,
+      lat: geo.lat,
+      lng: geo.lng,
+      timezone: geo.timezone,
+      referrer_host: referrerHost,
+      source_kind: source,
     })
     .then(() => {}, (e) => console.warn('[landings] click row insert failed:', e.message));
+});
+
+// POST /api/landings/public/view/:landingId
+// Page-view ping. Fired by the public landing page once on mount.
+// Body: { referrer?, meta_platform?, utm_source?, utm_medium?, utm_campaign? }
+router.post('/public/view/:landingId', async (req, res) => {
+  const { landingId } = req.params;
+  const metaPlatform = req.body?.meta_platform || null;
+  const referrerHost = referrerHostFrom(req, req.body?.referrer);
+  const utmSource = req.body?.utm_source || null;
+  const utmMedium = req.body?.utm_medium || null;
+  const utmCampaign = req.body?.utm_campaign || null;
+  const ua = (req.headers['user-agent'] || '').toString().slice(0, 250);
+  const geo = geoLookup(req.ip);
+  const source = classifySource({ metaPlatform, referrerHost, utmSource });
+
+  // Respond instantly — DB writes are best-effort.
+  res.json({ ok: true });
+
+  supabase
+    .from('landing_page_views')
+    .insert({
+      landing_id: landingId,
+      user_agent: ua,
+      referrer_host: referrerHost,
+      source_kind: source,
+      meta_platform: metaPlatform,
+      utm_source: utmSource,
+      utm_medium: utmMedium,
+      utm_campaign: utmCampaign,
+      ip: geo.ip_truncated,
+      country_code: geo.country_code,
+      country_name: geo.country_name,
+      region: geo.region,
+      city: geo.city,
+      lat: geo.lat,
+      lng: geo.lng,
+      timezone: geo.timezone,
+    })
+    .then(() => {}, (e) => console.warn('[landings] page view insert failed:', e.message));
 });
 
 // ============================================================
 // AUTHENTICATED ENDPOINTS (admin-only via the existing auth gate)
 // ============================================================
+
+// GET /api/landings/analytics/overview?period=day|week|month&talent_id=&landing_id=
+// One-shot aggregation for the live dashboard. Returns everything the
+// page needs (totals, hourly/daily series, by-source, by-country, top
+// landings, recent feed, active-now). Designed to be refreshed every
+// ~60s; the live feed comes via Supabase Realtime instead.
+router.get('/analytics/overview', async (req, res) => {
+  const period = String(req.query.period || 'day').toLowerCase();
+  const talentFilter = req.query.talent_id || null;
+  const landingFilter = req.query.landing_id || null;
+
+  // Resolve period window in Italy local time
+  const { italyDate, italyDateNDaysAgo } = require('../lib/dateUtils');
+  let sinceDateStr, granularity;
+  if (period === 'month') {
+    const [y, m] = italyDate().split('-').map(Number);
+    sinceDateStr = `${y}-${String(m).padStart(2, '0')}-01`;
+    granularity = 'day';
+  } else if (period === 'week') {
+    sinceDateStr = italyDateNDaysAgo(6);   // today + 6 prior = 7 days
+    granularity = 'day';
+  } else {
+    sinceDateStr = italyDate();             // today only
+    granularity = 'hour';
+  }
+  const sinceIso = `${sinceDateStr}T00:00:00+00:00`;
+
+  // Resolve the candidate landing IDs (for optional filters)
+  let landingIds = null;
+  if (landingFilter) {
+    landingIds = [landingFilter];
+  } else if (talentFilter) {
+    const { data: lrows } = await supabase
+      .from('landings')
+      .select('id')
+      .eq('talent_id', talentFilter);
+    landingIds = (lrows || []).map((x) => x.id);
+    if (landingIds.length === 0) {
+      // No landings → return empty payload
+      return res.json(emptyOverview(period, sinceDateStr, granularity));
+    }
+  }
+
+  let clicksQ = supabase
+    .from('landing_link_clicks')
+    .select('clicked_at, landing_id, source_kind, country_code, country_name, city, link_id')
+    .gte('clicked_at', sinceIso);
+  if (landingIds) clicksQ = clicksQ.in('landing_id', landingIds);
+
+  let viewsQ = supabase
+    .from('landing_page_views')
+    .select('viewed_at, landing_id, source_kind, country_code')
+    .gte('viewed_at', sinceIso);
+  if (landingIds) viewsQ = viewsQ.in('landing_id', landingIds);
+
+  const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+  let liveQ = supabase
+    .from('landing_link_clicks')
+    .select('clicked_at, landing_id, link_id, source_kind, country_code, country_name, city')
+    .gte('clicked_at', fiveMinAgo)
+    .order('clicked_at', { ascending: false })
+    .limit(50);
+  if (landingIds) liveQ = liveQ.in('landing_id', landingIds);
+
+  const [{ data: clicks, error: clicksErr },
+         { data: views },
+         { data: liveClicks }] = await Promise.all([clicksQ, viewsQ, liveQ]);
+  if (clicksErr) return res.status(500).json({ error: clicksErr.message });
+
+  // Resolve landing/link names for display (only for the IDs we touched)
+  const touchedLandingIds = new Set([
+    ...(clicks || []).map((c) => c.landing_id),
+    ...(views || []).map((v) => v.landing_id),
+    ...(liveClicks || []).map((c) => c.landing_id),
+  ]);
+  const touchedLinkIds = new Set([
+    ...(clicks || []).map((c) => c.link_id).filter(Boolean),
+    ...(liveClicks || []).map((c) => c.link_id).filter(Boolean),
+  ]);
+  const { data: landingsMeta } = touchedLandingIds.size > 0
+    ? await supabase.from('landings').select('id, title, slug, host, talents(id, name)').in('id', [...touchedLandingIds])
+    : { data: [] };
+  const { data: linksMeta } = touchedLinkIds.size > 0
+    ? await supabase.from('landing_links').select('id, label').in('id', [...touchedLinkIds])
+    : { data: [] };
+  const landingById = new Map((landingsMeta || []).map((l) => [l.id, l]));
+  const linkById = new Map((linksMeta || []).map((l) => [l.id, l]));
+
+  // ----- Aggregations -----
+  const totalsByLanding = new Map();
+  for (const c of clicks || []) {
+    totalsByLanding.set(c.landing_id, (totalsByLanding.get(c.landing_id) || 0) + 1);
+  }
+  const totalsByLandingView = new Map();
+  for (const v of views || []) {
+    totalsByLandingView.set(v.landing_id, (totalsByLandingView.get(v.landing_id) || 0) + 1);
+  }
+
+  const bySource = new Map();
+  for (const c of clicks || []) {
+    const k = c.source_kind || 'other';
+    bySource.set(k, (bySource.get(k) || 0) + 1);
+  }
+
+  const byCountry = new Map();
+  for (const c of clicks || []) {
+    if (!c.country_code) continue;
+    const key = c.country_code;
+    if (!byCountry.has(key)) byCountry.set(key, { code: key, name: c.country_name || key, count: 0 });
+    byCountry.get(key).count++;
+  }
+
+  // Time series buckets (Italy local)
+  const series = [];
+  if (granularity === 'hour') {
+    for (let h = 0; h < 24; h++) series.push({ bucket: String(h).padStart(2, '0'), count: 0 });
+    for (const c of clicks || []) {
+      const d = new Date(c.clicked_at);
+      // Convert UTC instant → Italy hour
+      const h = parseInt(d.toLocaleString('en-GB', { timeZone: 'Europe/Rome', hour: '2-digit', hour12: false }), 10);
+      if (!Number.isNaN(h)) series[h].count++;
+    }
+  } else {
+    // Daily buckets in Italy date
+    const days = [];
+    const start = new Date(sinceDateStr);
+    const today = new Date(italyDate());
+    for (let d = new Date(start); d <= today; d.setDate(d.getDate() + 1)) {
+      days.push(d.toISOString().slice(0, 10));
+    }
+    const dayMap = Object.fromEntries(days.map((d) => [d, 0]));
+    for (const c of clicks || []) {
+      const day = new Date(c.clicked_at).toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' });
+      if (day in dayMap) dayMap[day]++;
+    }
+    for (const d of days) series.push({ bucket: d, count: dayMap[d] });
+  }
+
+  // Top landings (sorted by clicks desc)
+  const topLandings = [...totalsByLanding.entries()]
+    .map(([id, clickCount]) => {
+      const meta = landingById.get(id);
+      const viewCount = totalsByLandingView.get(id) || 0;
+      return {
+        landing_id: id,
+        title: meta?.title || '(unknown)',
+        slug: meta?.slug,
+        host: meta?.host,
+        talent_name: meta?.talents?.name || null,
+        clicks: clickCount,
+        views: viewCount,
+        ctr: viewCount > 0 ? (clickCount / viewCount) * 100 : null,
+      };
+    })
+    .sort((a, b) => b.clicks - a.clicks)
+    .slice(0, 20);
+
+  const totalClicks = (clicks || []).length;
+  const totalViews = (views || []).length;
+  const blendedCtr = totalViews > 0 ? (totalClicks / totalViews) * 100 : null;
+
+  // Recent feed (last 5 min, hydrated with landing/link/source labels)
+  const liveFeed = (liveClicks || []).map((c) => {
+    const meta = landingById.get(c.landing_id);
+    const link = linkById.get(c.link_id);
+    return {
+      clicked_at: c.clicked_at,
+      landing_id: c.landing_id,
+      landing_title: meta?.title || '(unknown)',
+      link_label: link?.label || null,
+      source_kind: c.source_kind,
+      country_code: c.country_code,
+      country_name: c.country_name,
+      city: c.city,
+    };
+  });
+  const activeNow = liveFeed.length;
+
+  res.json({
+    period,
+    granularity,
+    start_date: sinceDateStr,
+    totals: {
+      clicks: totalClicks,
+      views: totalViews,
+      ctr: blendedCtr,
+      active_now: activeNow,
+    },
+    series,
+    by_source: [...bySource.entries()].map(([source_kind, count]) => ({ source_kind, count })).sort((a, b) => b.count - a.count),
+    by_country: [...byCountry.values()].sort((a, b) => b.count - a.count).slice(0, 20),
+    top_landings: topLandings,
+    live_feed: liveFeed,
+  });
+});
+
+function emptyOverview(period, sinceDateStr, granularity) {
+  return {
+    period, granularity, start_date: sinceDateStr,
+    totals: { clicks: 0, views: 0, ctr: null, active_now: 0 },
+    series: [], by_source: [], by_country: [],
+    top_landings: [], live_feed: [],
+  };
+}
 
 // GET /api/landings — all landings, with link count and talent + IG profile joins
 router.get('/', async (req, res) => {

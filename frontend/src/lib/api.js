@@ -402,11 +402,22 @@ export const api = {
   // Landings — public (no auth)
   getPublicLanding: (host, slug) =>
     request(`/api/landings/public/lookup?host=${encodeURIComponent(host)}&slug=${encodeURIComponent(slug)}`),
-  recordLandingClick: (linkId, meta_platform) =>
+  recordLandingClick: (linkId, payload) =>
     request(`/api/landings/public/click/${linkId}`, {
       method: 'POST',
-      body: JSON.stringify({ meta_platform: meta_platform || null }),
+      body: JSON.stringify(payload || {}),
     }),
+  recordLandingView: (landingId, payload) =>
+    request(`/api/landings/public/view/${landingId}`, {
+      method: 'POST',
+      body: JSON.stringify(payload || {}),
+    }),
+  getLandingsOverview: (params = {}) => {
+    const qs = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => { if (v) qs.set(k, v); });
+    const q = qs.toString();
+    return request(`/api/landings/analytics/overview${q ? `?${q}` : ''}`);
+  },
 
   // Explore Creators (suggestion scans)
   getSuggestions: (listId) => request(`/api/suggestions/lists/${listId}`),

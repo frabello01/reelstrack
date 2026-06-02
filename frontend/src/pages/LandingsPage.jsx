@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Globe, ExternalLink, Trash2, ChevronRight, BadgeCheck, Lock, UserRound } from 'lucide-react';
+import { Plus, Globe, ExternalLink, Trash2, ChevronRight, BadgeCheck, Lock, UserRound, Activity } from 'lucide-react';
 import { api } from '../lib/api';
 import './LandingsPage.css';
 
@@ -123,9 +123,14 @@ export default function LandingsPage() {
             Pagine link-in-bio per ogni creator. Tracciamento click, age-gate, dominio custom.
           </p>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
-          <Plus size={15} /> Nuova Landing
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Link to="/landings/dashboard" className="btn btn-ghost">
+            <Activity size={15} /> Dashboard
+          </Link>
+          <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
+            <Plus size={15} /> Nuova Landing
+          </button>
+        </div>
       </div>
 
       {error && <div className="login-error" style={{ marginBottom: 16 }}>{error}</div>}
