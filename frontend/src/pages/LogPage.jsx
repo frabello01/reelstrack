@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuth } from '../hooks/useAuth';
+import { humanizeLogEntry } from '../lib/logHumanizer';
 import './LogPage.css';
 
 const SECTION_LABELS = {
@@ -265,29 +266,27 @@ export default function LogPage() {
 // ============================================================
 function LogEntry({ entry }) {
   const sectionLabel = SECTION_LABELS[entry.section] || entry.section;
-  const actionLabel = ACTION_LABELS[entry.action] || entry.action;
+  const humanAction = humanizeLogEntry(entry);
   const timeStr = new Date(entry.created_at).toLocaleTimeString('it-IT', {
     hour: '2-digit',
     minute: '2-digit',
   });
+  // Raw method+path is technical info — useful to admins debugging, but
+  // visually noisy. Surface it only on hover via title attribute.
+  const pathTooltip = entry.method && entry.path ? `${entry.method} ${entry.path}` : '';
 
   return (
     <div className="log-entry">
       <div className="log-entry-time">{timeStr}</div>
       <div className="log-entry-section">{sectionLabel}</div>
       <div className="log-entry-body">
-        <div className="log-entry-line">
+        <div className="log-entry-line" title={pathTooltip}>
           <span className="log-entry-user">{entry.user_name || 'Unknown'}</span>
-          <span className="log-entry-action">{actionLabel}</span>
-          {entry.target_name ? (
+          <span className="log-entry-action">{humanAction}</span>
+          {entry.target_name && (
             <span className="log-entry-target">"{entry.target_name}"</span>
-          ) : entry.target_type ? (
-            <span className="log-entry-target-type">{entry.target_type}</span>
-          ) : null}
+          )}
         </div>
-        {(!entry.target_name && entry.path) && (
-          <div className="log-entry-path">{entry.method} {entry.path}</div>
-        )}
       </div>
     </div>
   );
