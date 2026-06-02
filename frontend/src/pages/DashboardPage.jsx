@@ -11,6 +11,7 @@ const DAY_OPTIONS = [
   { label: 'Last 24h', value: '1' },
   { label: 'Last 14 days', value: '14' },
   { label: 'Last 30 days', value: '30' },
+  { label: 'Last 90 days', value: '90' },
 ];
 
 const SEEN_OPTIONS = [

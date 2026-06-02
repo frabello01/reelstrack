@@ -86,7 +86,7 @@ async function getUserClipsChunk(userId, endCursor = null) {
 
 // ---------- High-level: fetch + normalize for one creator ----------
 
-async function fetchCreatorReels(creator, daysBack = 30) {
+async function fetchCreatorReels(creator, daysBack = 90) {
   console.log(`[Hiker] Fetching reels for @${creator.username} (last ${daysBack} days)`);
 
   let pk = creator.instagram_pk;
@@ -122,7 +122,11 @@ async function fetchCreatorReels(creator, daysBack = 30) {
 
   const allReels = [];
   let endCursor = null;
-  const MAX_PAGES = 5;
+  // Hiker returns ~12 reels per chunk. 15 pages = ~180 reels = enough to
+  // cover 90 days for creators posting up to ~2 reels/day. Pagination still
+  // stops early as soon as we hit a page whose oldest reel is before the
+  // 90-day cutoff, so low-volume creators are unaffected cost-wise.
+  const MAX_PAGES = 15;
   let pagesUsed = 0;
 
   try {
@@ -220,7 +224,7 @@ async function runDailyFetch(creatorIds = null, options = {}) {
 
     const runOne = async (creator) => {
       try {
-        const result = await fetchCreatorReels(creator, 30);
+        const result = await fetchCreatorReels(creator, 90);
 
         const updates = {
           last_fetched_at: new Date().toISOString(),
