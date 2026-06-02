@@ -35,7 +35,11 @@ const { generateDailyTasks, cleanupOldDailyTasks } = require('./services/dailyTa
 const { syncAllTalents: syncAllInflowwTalents } = require('./services/inflowwService');
 
 const app = express();
-app.set('trust proxy', 1);
+// Trust the entire X-Forwarded-For chain. Render sits behind 2+ proxy hops
+// (ingress + internal LB), so `1` only gave us the LB's private 10.x.x.x
+// IP — req.ip needs to walk all the way back to the original client for
+// geolocation on landing-page clicks to work.
+app.set('trust proxy', true);
 const PORT = process.env.PORT || 3001;
 
 // ============================================================
