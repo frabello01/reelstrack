@@ -203,7 +203,15 @@ export default function LandingsDashboardPage() {
         <KPI icon={<Radio size={13} />} label="Active now" value={displayActiveNow} sub="ultimi 5 min" live />
         <KPI icon={<MousePointerClick size={13} />} label="Clicks" value={displayClicks} sub={periodSub(period, data)} />
         <KPI icon={<EyeIcon size={13} />} label="Views" value={totals.views} sub={periodSub(period, data)} />
-        <KPI icon={<Activity size={13} />} label="CTR" value={totals.ctr == null ? '—' : `${totals.ctr.toFixed(2)}%`} sub="clicks / views" />
+        <KPI
+          icon={<Activity size={13} />}
+          label="CTR"
+          value={meaningfulCtr(totals.clicks, totals.views, totals.ctr)}
+          sub="clicks / views"
+          title={dataIncomplete(totals.clicks, totals.views)
+            ? 'CTR non affidabile: il tracciamento delle views è recente, mentre i click hanno mesi di storia.'
+            : 'clicks / views'}
+        />
       </div>
 
       {/* Charts row */}
@@ -317,7 +325,14 @@ export default function LandingsDashboardPage() {
                     </td>
                     <td className="num">{formatIntIT(l.clicks)}</td>
                     <td className="num">{formatIntIT(l.views)}</td>
-                    <td className="num">{l.ctr == null ? '—' : `${l.ctr.toFixed(1)}%`}</td>
+                    <td
+                      className="num"
+                      title={dataIncomplete(l.clicks, l.views)
+                        ? 'CTR non affidabile: la landing ha più click che views tracciate (il tracciamento delle views è iniziato di recente).'
+                        : undefined}
+                    >
+                      {meaningfulCtr(l.clicks, l.views, l.ctr)}
+                    </td>
                   </tr>
                   );
                 })}
@@ -356,9 +371,9 @@ export default function LandingsDashboardPage() {
   );
 }
 
-function KPI({ icon, label, value, sub, live }) {
+function KPI({ icon, label, value, sub, live, title }) {
   return (
-    <div className={`ldb-kpi ${live ? 'ldb-kpi-live' : ''}`}>
+    <div className={`ldb-kpi ${live ? 'ldb-kpi-live' : ''}`} title={title}>
       <div className="ldb-kpi-label">{icon} {label}{live && <span className="ldb-kpi-live-dot" />}</div>
       <div className="ldb-kpi-value">{typeof value === 'number' ? formatIntIT(value) : value}</div>
       <div className="ldb-kpi-sub">{sub}</div>
@@ -372,4 +387,19 @@ function periodSub(period, data) {
   if (period === 'week') return `dal ${data.start_date}`;
   if (period === 'month') return `dal ${data.start_date}`;
   return '';
+}
+
+// CTR is only meaningful when we have at least as many views as clicks.
+// Click tracking pre-dates view tracking, so older periods can have far
+// more clicks than views — which would otherwise show comedy values like
+// 10,100%. We surface "—" with a tooltip in those cases instead of lying
+// with a misleading percentage.
+function dataIncomplete(clicks, views) {
+  return (views || 0) === 0 || (clicks || 0) > (views || 0);
+}
+
+function meaningfulCtr(clicks, views, ctr) {
+  if (dataIncomplete(clicks, views)) return '—';
+  if (ctr == null) return '—';
+  return `${ctr.toFixed(2)}%`;
 }
