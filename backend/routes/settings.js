@@ -12,16 +12,16 @@ const { sendTestMessage, clearCache: clearDiscordCache } = require('../services/
 router.get('/', async (req, res) => {
   const { data, error } = await supabase
     .from('agency_settings')
-    .select('display_name, agency_logo_url, discord_webhook_url, updated_at')
+    .select('display_name, agency_logo_url, discord_webhook_url, default_list_id, updated_at')
     .eq('id', 'default')
     .maybeSingle();
   if (error) return res.status(500).json({ error: error.message });
-  res.json(data || { display_name: null, agency_logo_url: null, discord_webhook_url: null });
+  res.json(data || { display_name: null, agency_logo_url: null, discord_webhook_url: null, default_list_id: null });
 });
 
 // PATCH update settings (display_name and/or discord_webhook_url)
 router.patch('/', async (req, res) => {
-  const allowed = ['display_name', 'discord_webhook_url'];
+  const allowed = ['display_name', 'discord_webhook_url', 'default_list_id'];
   const updates = { id: 'default', updated_at: new Date().toISOString() };
   for (const k of allowed) {
     if (k in (req.body || {})) {

@@ -1,21 +1,38 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
-import { Plus, Trash2, Users, ChevronRight } from 'lucide-react';
+import { Plus, Trash2, Users, ChevronRight, Star } from 'lucide-react';
 import './ListsPage.css';
 
 const COLORS = ['#7c6bff', '#22d3a5', '#ff6b6b', '#ffd166', '#60a5fa', '#f472b6', '#a78bfa', '#34d399'];
 
 export default function ListsPage() {
   const [lists, setLists] = useState([]);
+  const [defaultListId, setDefaultListId] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ name: '', description: '', color: COLORS[0] });
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(null);
+  const [togglingDefault, setTogglingDefault] = useState(null);
 
   useEffect(() => {
     api.getLists().then(setLists).catch(console.error);
+    api.getSettings().then((s) => setDefaultListId(s?.default_list_id || null)).catch(() => {});
   }, []);
+
+  const handleToggleDefault = async (e, listId) => {
+    e.preventDefault(); e.stopPropagation();
+    const next = defaultListId === listId ? null : listId;
+    setTogglingDefault(listId);
+    try {
+      await api.updateSettingsFields({ default_list_id: next });
+      setDefaultListId(next);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setTogglingDefault(null);
+    }
+  };
 
   const handleCreate = async () => {
     if (!form.name.trim()) return;
@@ -67,18 +84,35 @@ export default function ListsPage() {
           {lists.map((list) => {
             const count = list.list_creators?.[0]?.count ?? 0;
             return (
-              <div key={list.id} className="list-card">
+              <div key={list.id} className={`list-card ${defaultListId === list.id ? 'list-card-default' : ''}`}>
                 <div className="list-color-bar" style={{ background: list.color }} />
                 <div className="list-card-body">
                   <div className="list-card-top">
-                    <h3 className="list-name">{list.name}</h3>
-                    <button
-                      className="btn btn-ghost btn-sm icon-btn"
-                      onClick={() => handleDelete(list.id)}
-                      disabled={deleting === list.id}
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    <h3 className="list-name">
+                      {list.name}
+                      {defaultListId === list.id && (
+                        <span className="list-default-pill" title="Lista di default per la Dashboard">default</span>
+                      )}
+                    </h3>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <button
+                        className={`btn btn-ghost btn-sm icon-btn ${defaultListId === list.id ? 'list-star-active' : ''}`}
+                        onClick={(e) => handleToggleDefault(e, list.id)}
+                        disabled={togglingDefault === list.id}
+                        title={defaultListId === list.id
+                          ? 'Rimuovi come lista di default'
+                          : 'Imposta come lista di default per la Dashboard'}
+                      >
+                        <Star size={14} fill={defaultListId === list.id ? 'currentColor' : 'none'} />
+                      </button>
+                      <button
+                        className="btn btn-ghost btn-sm icon-btn"
+                        onClick={() => handleDelete(list.id)}
+                        disabled={deleting === list.id}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </div>
                   {list.description && <p className="list-desc">{list.description}</p>}
                   <div className="list-card-footer">

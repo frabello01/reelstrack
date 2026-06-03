@@ -30,9 +30,14 @@ export default function DashboardPage() {
 
   const [selectedList, setSelectedList] = useState('');
   const [days, setDays] = useState('30');
-  const [sort, setSort] = useState('outlier_score');
+  // Defaults requested: sort by Views, Unseen only, 30 days, with the
+  // user-chosen default list applied on first mount.
+  const [sort, setSort] = useState('views');
   const [seenFilter, setSeenFilter] = useState('unseen');
   const [page, setPage] = useState(0); // zero-indexed
+  // Track whether we've applied the default list yet, so manual changes
+  // by the user aren't overwritten if settings reload later.
+  const [defaultApplied, setDefaultApplied] = useState(false);
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const offset = page * PAGE_SIZE;
@@ -64,6 +69,14 @@ export default function DashboardPage() {
 
   useEffect(() => {
     api.getLists().then(setLists).catch(console.error);
+    // Apply the user-configured default list once on mount.
+    api.getSettings().then((s) => {
+      if (s?.default_list_id && !defaultApplied) {
+        setSelectedList(s.default_list_id);
+        setDefaultApplied(true);
+      }
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Whenever filters change, jump back to page 0
