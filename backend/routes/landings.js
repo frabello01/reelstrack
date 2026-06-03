@@ -301,7 +301,10 @@ router.get('/analytics/overview', async (req, res) => {
     ...(liveClicks || []).map((c) => c.link_id).filter(Boolean),
   ]);
   const { data: landingsMeta } = touchedLandingIds.size > 0
-    ? await supabase.from('landings').select('id, title, slug, host, talents(id, name)').in('id', [...touchedLandingIds])
+    ? await supabase
+        .from('landings')
+        .select('id, title, slug, host, talents(id, name), my_accounts(id, username)')
+        .in('id', [...touchedLandingIds])
     : { data: [] };
   const { data: linksMeta } = touchedLinkIds.size > 0
     ? await supabase.from('landing_links').select('id, label').in('id', [...touchedLinkIds])
@@ -370,6 +373,7 @@ router.get('/analytics/overview', async (req, res) => {
         slug: meta?.slug,
         host: meta?.host,
         talent_name: meta?.talents?.name || null,
+        ig_username: meta?.my_accounts?.username || null,
         clicks: clickCount,
         views: viewCount,
         ctr: viewCount > 0 ? (clickCount / viewCount) * 100 : null,

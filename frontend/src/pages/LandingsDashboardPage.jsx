@@ -301,19 +301,26 @@ export default function LandingsDashboardPage() {
                 </tr>
               </thead>
               <tbody>
-                {data.top_landings.slice(0, 8).map((l) => (
+                {data.top_landings.slice(0, 8).map((l) => {
+                  // Subtitle: prefer the IG handle when a profile is linked,
+                  // fall back to the talent name so we always show context.
+                  const subtitle = l.ig_username
+                    ? `@${l.ig_username}`
+                    : (l.talent_name || null);
+                  return (
                   <tr key={l.landing_id}>
                     <td>
                       <Link to={`/landings/${l.landing_id}`} className="ldb-link">
                         {l.title}
                       </Link>
-                      {l.talent_name && <div className="ldb-top-meta">{l.talent_name}</div>}
+                      {subtitle && <div className="ldb-top-meta">{subtitle}</div>}
                     </td>
                     <td className="num">{formatIntIT(l.clicks)}</td>
                     <td className="num">{formatIntIT(l.views)}</td>
                     <td className="num">{l.ctr == null ? '—' : `${l.ctr.toFixed(1)}%`}</td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           )}
