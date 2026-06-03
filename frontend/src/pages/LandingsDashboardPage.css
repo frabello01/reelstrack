@@ -211,6 +211,7 @@
 .ldb-link { color: var(--text); font-weight: 600; text-decoration: none; }
 .ldb-link:hover { color: var(--accent2); }
 .ldb-top-meta { font-size: 11px; color: var(--text2); margin-top: 2px; }
+.ldb-subs-positive { color: #34d399; font-weight: 600; }
 
 /* ----- Live feed ----- */
 .ldb-live-pulse {

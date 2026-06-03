@@ -290,6 +290,15 @@ router.get('/analytics/overview', async (req, res) => {
          { data: liveClicks }] = await Promise.all([clicksQ, viewsQ, liveQ]);
   if (clicksErr) return res.status(500).json({ error: clicksErr.message });
 
+  // ----- Subs in window (from Infloww snapshots) -----
+  // Sum per-day sub_count deltas across every Infloww link bound to a
+  // landing_link of these landings. Uses the same shift-by-one-day
+  // convention as the activity table elsewhere.
+  const subsByLanding = await computeSubsForLandings({
+    landingIds: landingIds || null,
+    sinceDateStr,
+  });
+
   // Resolve landing/link names for display (only for the IDs we touched)
   const touchedLandingIds = new Set([
     ...(clicks || []).map((c) => c.landing_id),
@@ -376,6 +385,7 @@ router.get('/analytics/overview', async (req, res) => {
         ig_username: meta?.my_accounts?.username || null,
         clicks: clickCount,
         views: viewCount,
+        subs: subsByLanding.perLanding.get(id) || 0,
         ctr: viewCount > 0 ? (clickCount / viewCount) * 100 : null,
       };
     })
@@ -410,6 +420,7 @@ router.get('/analytics/overview', async (req, res) => {
     totals: {
       clicks: totalClicks,
       views: totalViews,
+      subs: subsByLanding.total,
       ctr: blendedCtr,
       active_now: activeNow,
     },
@@ -424,10 +435,87 @@ router.get('/analytics/overview', async (req, res) => {
 function emptyOverview(period, sinceDateStr, granularity) {
   return {
     period, granularity, start_date: sinceDateStr,
-    totals: { clicks: 0, views: 0, ctr: null, active_now: 0 },
+    totals: { clicks: 0, views: 0, subs: 0, ctr: null, active_now: 0 },
     series: [], by_source: [], by_country: [],
     top_landings: [], live_feed: [],
   };
+}
+
+// Sums Infloww sub-count deltas inside [sinceDateStr, today] across every
+// Infloww link bound to a landing_link of the given landings. Returns
+// { perLanding: Map<landing_id, subs>, total }.
+//
+// Uses the "next-day minus this-day" delta convention used elsewhere in
+// the app: subs gained DURING day D = snapshot[D+1] - snapshot[D]. We
+// fetch one extra day before the window so the first reporting day has
+// a usable "start" snapshot too.
+async function computeSubsForLandings({ landingIds, sinceDateStr }) {
+  const empty = { perLanding: new Map(), total: 0 };
+
+  // 1) Find landing_links for these landings (or all landings if no filter)
+  let llq = supabase.from('landing_links').select('id, landing_id');
+  if (landingIds) llq = llq.in('landing_id', landingIds);
+  const { data: lLinks } = await llq;
+  if (!lLinks || lLinks.length === 0) return empty;
+
+  // 2) Find Infloww links bound to those landing_links
+  const linkIds = lLinks.map((x) => x.id);
+  const { data: inflowwLinks } = await supabase
+    .from('infloww_tracking_links')
+    .select('infloww_link_id, landing_link_id')
+    .in('landing_link_id', linkIds);
+  if (!inflowwLinks || inflowwLinks.length === 0) return empty;
+
+  // 3) Map infloww_link_id → landing_id
+  const landingByLandingLink = new Map(lLinks.map((x) => [x.id, x.landing_id]));
+  const landingByInflowwLink = new Map();
+  for (const il of inflowwLinks) {
+    const lid = landingByLandingLink.get(il.landing_link_id);
+    if (lid) landingByInflowwLink.set(il.infloww_link_id, lid);
+  }
+
+  // 4) Pull snapshots from one day before sinceDateStr (so the first day
+  // of the window has a "start" snapshot to delta against).
+  const inflowwIds = inflowwLinks.map((x) => x.infloww_link_id);
+  const sinceMinusOne = (() => {
+    const d = new Date(sinceDateStr);
+    d.setDate(d.getDate() - 1);
+    return d.toISOString().slice(0, 10);
+  })();
+  const { data: snaps } = await supabase
+    .from('infloww_tracking_link_snapshots')
+    .select('infloww_link_id, snapshot_date, sub_count')
+    .in('infloww_link_id', inflowwIds)
+    .gte('snapshot_date', sinceMinusOne)
+    .order('snapshot_date', { ascending: true });
+  if (!snaps || snaps.length === 0) return empty;
+
+  // 5) For each Infloww link, walk consecutive snapshots and sum deltas
+  // for pairs whose START date is inside the window.
+  const byLink = new Map();
+  for (const s of snaps) {
+    if (!byLink.has(s.infloww_link_id)) byLink.set(s.infloww_link_id, []);
+    byLink.get(s.infloww_link_id).push(s);
+  }
+
+  const perLanding = new Map();
+  let total = 0;
+  for (const [inflowwId, rows] of byLink.entries()) {
+    if (rows.length < 2) continue;
+    let linkDelta = 0;
+    for (let i = 0; i < rows.length - 1; i++) {
+      const startDay = rows[i].snapshot_date;
+      if (startDay < sinceDateStr) continue;       // outside window
+      const d = Number(rows[i + 1].sub_count || 0) - Number(rows[i].sub_count || 0);
+      if (d > 0) linkDelta += d;                   // ignore downward corrections
+    }
+    if (linkDelta === 0) continue;
+    const landingId = landingByInflowwLink.get(inflowwId);
+    if (!landingId) continue;
+    perLanding.set(landingId, (perLanding.get(landingId) || 0) + linkDelta);
+    total += linkDelta;
+  }
+  return { perLanding, total };
 }
 
 // GET /api/landings — all landings, with link count and talent + IG profile joins

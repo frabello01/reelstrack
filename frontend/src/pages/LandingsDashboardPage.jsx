@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Activity, MousePointerClick, Eye as EyeIcon, Globe2, Radio,
-  ArrowLeft, RefreshCw,
+  ArrowLeft, RefreshCw, UserPlus,
 } from 'lucide-react';
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
@@ -204,6 +204,13 @@ export default function LandingsDashboardPage() {
         <KPI icon={<MousePointerClick size={13} />} label="Clicks" value={displayClicks} sub={periodSub(period, data)} />
         <KPI icon={<EyeIcon size={13} />} label="Views" value={totals.views} sub={periodSub(period, data)} />
         <KPI
+          icon={<UserPlus size={13} />}
+          label="Subs"
+          value={totals.subs ?? 0}
+          sub="OnlyFans (via Infloww)"
+          title="Subscribers acquisiti nel periodo, sommati su tutti i tracking link Infloww collegati alle landing"
+        />
+        <KPI
           icon={<Activity size={13} />}
           label="CTR"
           value={meaningfulCtr(totals.clicks, totals.views, totals.ctr)}
@@ -305,6 +312,7 @@ export default function LandingsDashboardPage() {
                   <th>Landing</th>
                   <th className="num">Clicks</th>
                   <th className="num">Views</th>
+                  <th className="num">Subs</th>
                   <th className="num">CTR</th>
                 </tr>
               </thead>
@@ -325,6 +333,9 @@ export default function LandingsDashboardPage() {
                     </td>
                     <td className="num">{formatIntIT(l.clicks)}</td>
                     <td className="num">{formatIntIT(l.views)}</td>
+                    <td className={`num ${(l.subs || 0) > 0 ? 'ldb-subs-positive' : ''}`}>
+                      {formatIntIT(l.subs || 0)}
+                    </td>
                     <td
                       className="num"
                       title={dataIncomplete(l.clicks, l.views)
