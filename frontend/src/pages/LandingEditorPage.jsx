@@ -537,25 +537,24 @@ function LinksTab({ landing, reload }) {
                 </div>
                 <div className="link-row-icon">{link.icon || '›'}</div>
                 <div className="link-row-info">
+                  {/* Uncontrolled inputs (defaultValue + key reset on save).
+                      The previous controlled version had a no-op onChange
+                      that never called setState, which made React reset
+                      keystrokes back to the original prop value on every
+                      render — effectively blocking the user from typing.
+                      `key` includes the current value so React remounts
+                      the input when the saved value changes externally
+                      (e.g. after a reload), keeping it in sync. */}
                   <input
+                    key={`label-${link.id}-${link.label}`}
                     className="link-row-label"
-                    value={link.label}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      // Optimistic local update
-                      const next = { ...landing };
-                      next.landing_links = next.landing_links.map((l) => l.id === link.id ? { ...l, label: v } : l);
-                    }}
+                    defaultValue={link.label}
                     onBlur={(e) => e.target.value !== link.label && handleUpdate(link.id, { label: e.target.value })}
                   />
                   <input
+                    key={`url-${link.id}-${link.url}`}
                     className="link-row-url"
-                    value={link.url}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      const next = { ...landing };
-                      next.landing_links = next.landing_links.map((l) => l.id === link.id ? { ...l, url: v } : l);
-                    }}
+                    defaultValue={link.url}
                     onBlur={(e) => e.target.value !== link.url && handleUpdate(link.id, { url: e.target.value })}
                   />
                 </div>
