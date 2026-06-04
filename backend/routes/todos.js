@@ -54,13 +54,18 @@ router.get('/', async (req, res) => {
     lists.map(async (l) => {
       const { data: items } = await supabase
         .from('todo_list_reels')
-        .select('is_done, reels(thumbnail_url)')
+        .select('is_done, is_hidden, reels(thumbnail_url)')
         .eq('todo_list_id', l.id)
         .order('added_at', { ascending: false });
 
-      const total = (items || []).length;
-      const done = (items || []).filter((i) => i.is_done).length;
-      const firstThumb = (items || []).find((i) => i.reels?.thumbnail_url)?.reels?.thumbnail_url || null;
+      // Hidden reels are excluded from BOTH the numerator and the
+      // denominator so the ratio reads "done / active", matching the
+      // user's mental model: total = active + hidden, and the card
+      // shouldn't penalise progress for things you deliberately hid.
+      const visible = (items || []).filter((i) => !i.is_hidden);
+      const total = visible.length;
+      const done = visible.filter((i) => i.is_done).length;
+      const firstThumb = visible.find((i) => i.reels?.thumbnail_url)?.reels?.thumbnail_url || null;
 
       return { ...l, total_reels: total, done_count: done, preview_thumbnail: firstThumb };
     })
