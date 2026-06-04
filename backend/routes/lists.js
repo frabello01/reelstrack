@@ -62,7 +62,15 @@ router.post('/:id/creators', async (req, res) => {
   const { error } = await supabase
     .from('list_creators')
     .insert({ list_id: req.params.id, creator_id });
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) {
+    // Postgres unique-violation = the creator is already in this list.
+    // Translate the cryptic "list_creators_pkey" message into something
+    // the UI can show as-is.
+    if (error.code === '23505') {
+      return res.status(409).json({ error: 'This creator is already in the list' });
+    }
+    return res.status(500).json({ error: error.message });
+  }
   res.json({ success: true });
 });
 
