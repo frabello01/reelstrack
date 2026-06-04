@@ -87,7 +87,7 @@ export default function ReelCard({ reel, rank, formatViews, onToggleSeen, prefet
         </button>
       )}
 
-      <div className={`reel-thumbnail ${video.state === 'playing' ? 'reel-thumbnail-playing' : ''}`}>
+      <div className="reel-thumbnail">
         {video.state === 'playing' && video.url ? (
           <>
             <video

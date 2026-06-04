@@ -27,18 +27,11 @@
 
 .reel-thumbnail {
   position: relative;
-  aspect-ratio: 9/5;
+  /* Always portrait — matches the native reel aspect ratio so the video
+     fills the slot cleanly when played, without resizing the card. */
+  aspect-ratio: 9/16;
   background: var(--bg3);
   overflow: hidden;
-  transition: aspect-ratio 0.18s ease, height 0.18s ease;
-}
-
-/* While the inline video is playing, expand the thumbnail slot to a
-   portrait aspect that matches typical 9:16 reels. The video then fills
-   the slot without black bars on the sides. The grid below reflows
-   gracefully because we use aspect-ratio (not fixed height). */
-.reel-thumbnail.reel-thumbnail-playing {
-  aspect-ratio: 9/16;
 }
 .reel-thumbnail img {
   width: 100%;
