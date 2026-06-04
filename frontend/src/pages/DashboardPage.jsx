@@ -38,9 +38,16 @@ export default function DashboardPage() {
   // Track whether we've applied the default list yet, so manual changes
   // by the user aren't overwritten if settings reload later.
   const [defaultApplied, setDefaultApplied] = useState(false);
+  // Cache of reel.id → fresh signed video URL from HikerAPI. We prefetch
+  // these in the background so clicking ▶ on the visible reels feels
+  // instant instead of waiting ~1-2s for the API roundtrip. The Map is
+  // shared across page navigations so re-visiting a reel reuses the URL
+  // (still valid for hours).
+  const [videoUrlCache, setVideoUrlCache] = useState(() => new Map());
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const offset = page * PAGE_SIZE;
+  const PREFETCH_TOP_N = 6;
 
   const loadReels = useCallback(async () => {
     setLoading(true);
@@ -87,6 +94,65 @@ export default function DashboardPage() {
   useEffect(() => {
     loadReels();
   }, [loadReels]);
+
+  // ----- Prefetch video URLs + next page -----------------------------
+  // Fires fire-and-forget HikerAPI calls in the background to populate
+  // videoUrlCache for the reels most likely to be clicked next:
+  //   1) The first PREFETCH_TOP_N reels on THIS page
+  //   2) The first PREFETCH_TOP_N reels on the NEXT page (so when the
+  //      user clicks "Next →", their first clicks are also instant)
+  //
+  // Each call is ~$0.001 of HikerAPI quota and zero of our Render
+  // bandwidth — the video itself streams direct from IG's CDN. We
+  // dedupe against the existing cache so navigating back and forth
+  // doesn't re-fetch.
+  useEffect(() => {
+    if (!reels || reels.length === 0) return;
+    let cancelled = false;
+
+    const prefetchOne = async (reel) => {
+      if (cancelled) return;
+      if (videoUrlCache.has(reel.id)) return;
+      try {
+        const data = await api.fetchReelForConverter(reel.url);
+        if (cancelled || !data?.video_url) return;
+        setVideoUrlCache((prev) => {
+          if (prev.has(reel.id)) return prev;
+          const next = new Map(prev);
+          next.set(reel.id, data.video_url);
+          return next;
+        });
+      } catch {
+        // Silently ignore prefetch errors — the card will fall back to
+        // an on-demand fetch when the user actually clicks.
+      }
+    };
+
+    // Prefetch top N of current page, in parallel
+    reels.slice(0, PREFETCH_TOP_N).forEach((r) => { prefetchOne(r); });
+
+    // Also fetch the NEXT page's reel data so we can prefetch its top
+    // reels too. Skip if we're already on the last page.
+    if (page + 1 < totalPages) {
+      const params = {
+        days, sort,
+        limit: PAGE_SIZE,
+        offset: (page + 1) * PAGE_SIZE,
+        seen_filter: seenFilter,
+      };
+      if (selectedList) params.list_id = selectedList;
+      api.getReels(params)
+        .then((nextData) => {
+          if (cancelled) return;
+          const nextReels = nextData?.data || [];
+          nextReels.slice(0, PREFETCH_TOP_N).forEach((r) => { prefetchOne(r); });
+        })
+        .catch(() => {});
+    }
+
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reels]);
 
   const handleFetch = async () => {
     setFetching(true);
@@ -252,6 +318,7 @@ export default function DashboardPage() {
                 rank={offset + i + 1}
                 formatViews={formatViews}
                 onToggleSeen={handleToggleSeen}
+                prefetchedVideoUrl={videoUrlCache.get(reel.id)}
               />
             ))}
           </div>
