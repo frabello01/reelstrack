@@ -148,20 +148,24 @@ app.use('/api/infloww', inflowwRouter);
 // CRONS (unchanged + new log retention cleanup)
 // ============================================================
 // ============================================================
-// Daily snapshot crons — aligned to fire right after midnight in
-// Italy local time (Europe/Rome), DST-aware. Every snapshot represents
-// the close of an Italy calendar day, so the per-day activity table
-// (and the convert rate = subs / clicks) refers to one full Italy day.
-//   00:05 Europe/Rome  – my-accounts (IG views / followers)
-//   00:10 Europe/Rome  – Infloww (subs / earnings)
+// Daily snapshot crons — Europe/Rome, DST-aware.
+//   10:00 + 20:00  – my-accounts (IG views / followers / status check)
+//                    Twice a day so a banned/deleted profile is detected
+//                    within ~10h instead of 24h; the Discord notifier
+//                    fires on the transition.
+//   00:10          – Infloww (subs / earnings)
+// Snapshots are upserted on (account_id, snapshot_date) and
+// (reel_id, snapshot_date), so two runs on the same calendar day
+// overwrite each other's row — the day's snapshot reflects the
+// most recent state, which is what the activity table reads.
 // ============================================================
-cron.schedule('5 0 * * *', async () => {
-  console.log('[CRON] Starting my-accounts daily snapshot (00:05 Europe/Rome)...');
+cron.schedule('0 10,20 * * *', async () => {
+  console.log('[CRON] Starting my-accounts status check + snapshot (Europe/Rome)...');
   try {
     const r = await runMyAccountsFetch();
-    console.log(`[CRON] My-accounts snapshot complete: ${r.fetched} account(s).`);
+    console.log(`[CRON] My-accounts run complete: ${r.fetched} account(s).`);
   } catch (err) {
-    console.error('[CRON] My-accounts snapshot failed:', err.message);
+    console.error('[CRON] My-accounts run failed:', err.message);
   }
 }, { timezone: 'Europe/Rome' });
 
