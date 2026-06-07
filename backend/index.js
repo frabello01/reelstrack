@@ -27,6 +27,7 @@ const guideCompletionsRouter = require('./routes/guideCompletions');
 const suggestionsRouter = require('./routes/suggestions');
 const landingsRouter = require('./routes/landings');
 const inflowwRouter = require('./routes/infloww');
+const videoStudioRouter = require('./routes/videoStudio');
 const { requireAuth } = require('./middleware/auth');
 const { requireAdminForWrites } = require('./middleware/requireAdminForWrites');
 const { autoLogMiddleware } = require('./middleware/autoLogMiddleware');
@@ -143,6 +144,7 @@ app.use('/api/guide-completions', guideCompletionsRouter);
 app.use('/api/suggestions', suggestionsRouter);
 app.use('/api/landings', landingsRouter);
 app.use('/api/infloww', inflowwRouter);
+app.use('/api/video-studio', videoStudioRouter);
 
 // ============================================================
 // CRONS (unchanged + new log retention cleanup)

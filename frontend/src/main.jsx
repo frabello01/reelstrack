@@ -23,6 +23,7 @@ import LessonDetailPage from './pages/LessonDetailPage';
 import ImageCleanerPage from './pages/ImageCleanerPage';
 import BatchCleanerPage from './pages/BatchCleanerPage';
 import StudioPage from './pages/StudioPage';
+import VideoStudioPage from './pages/VideoStudioPage';
 import ExplorePage from './pages/ExplorePage';
 import LandingsPage from './pages/LandingsPage';
 import LandingEditorPage from './pages/LandingEditorPage';
@@ -133,6 +134,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="image-cleaner" element={<ImageCleanerPage />} />
             <Route path="batch-cleaner" element={<BatchCleanerPage />} />
             <Route path="studio" element={<StudioPage />} />
+            <Route path="video-studio" element={<VideoStudioPage />} />
             <Route path="settings" element={<SettingsPage />} />
 
             {/* Admin only */}

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { LayoutDashboard, ListVideo, LogOut, CheckSquare, Menu, X, BarChart3, Music, Sparkles, BookOpen, Layers, Film, Users, ScrollText, Compass, Globe } from 'lucide-react';
+import { LayoutDashboard, ListVideo, LogOut, CheckSquare, Menu, X, BarChart3, Music, Sparkles, BookOpen, Layers, Film, Users, ScrollText, Compass, Globe, Clapperboard } from 'lucide-react';
 import FetchProgress from './FetchProgress';
 import './Layout.css';
 
@@ -93,6 +93,10 @@ export default function Layout() {
           <NavLink to="/studio" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
             <Film size={18} />
             Studio
+          </NavLink>
+          <NavLink to="/video-studio" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+            <Clapperboard size={18} />
+            Video Studio
           </NavLink>
           <NavLink to="/guides" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
             <BookOpen size={18} />

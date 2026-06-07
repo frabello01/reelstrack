@@ -301,6 +301,15 @@ export const api = {
       body: JSON.stringify(body || {}),
     }),
 
+  // Video Studio (xai/grok-imagine-video via Replicate)
+  getVideoStudioStatus: () => request('/api/video-studio/status'),
+  generateVideoStudio: (body) =>
+    request('/api/video-studio/generate', { method: 'POST', body: JSON.stringify(body) }),
+  getVideoStudioGenerations: (limit = 30) =>
+    request(`/api/video-studio/generations?limit=${limit}`),
+  deleteVideoStudioGeneration: (id) =>
+    request(`/api/video-studio/generations/${id}`, { method: 'DELETE' }),
+
   // Team
   getMe: () => request('/api/team/me'),
   getTeamMembers: () => request('/api/team/members'),
