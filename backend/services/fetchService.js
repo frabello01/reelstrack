@@ -86,6 +86,21 @@ async function getUserClipsChunk(userId, endCursor = null) {
 
 // ---------- High-level: fetch + normalize for one creator ----------
 
+// Adaptive window: only walk back as far as the gap since the last fetch,
+// with a 21-day floor (so we keep refreshing view/like counts on recently-
+// published reels whose numbers are still growing) and a 90-day ceiling
+// (HikerAPI pagination gets unreliable past that, and we don't keep older
+// reels around anyway). First-ever fetch gets the full 90 days.
+function computeDaysBack(creator) {
+  if (!creator?.last_fetched_at) return 90;
+  const daysSince = Math.ceil(
+    (Date.now() - new Date(creator.last_fetched_at).getTime()) / 86_400_000
+  );
+  // +2 day buffer so a fetch that ran late at night still covers timezone
+  // drift / IG posting times in the previous calendar day.
+  return Math.min(90, Math.max(21, daysSince + 2));
+}
+
 async function fetchCreatorReels(creator, daysBack = 90) {
   console.log(`[Hiker] Fetching reels for @${creator.username} (last ${daysBack} days)`);
 
@@ -224,7 +239,16 @@ async function runDailyFetch(creatorIds = null, options = {}) {
 
     const runOne = async (creator) => {
       try {
-        const result = await fetchCreatorReels(creator, 90);
+        const daysBack = computeDaysBack(creator);
+        if (creator.last_fetched_at) {
+          const daysSince = Math.round(
+            (Date.now() - new Date(creator.last_fetched_at).getTime()) / 86_400_000
+          );
+          console.log(`[FetchService] @${creator.username}: last fetched ${daysSince}d ago, window=${daysBack}d`);
+        } else {
+          console.log(`[FetchService] @${creator.username}: never fetched, window=${daysBack}d (full)`);
+        }
+        const result = await fetchCreatorReels(creator, daysBack);
 
         const updates = {
           last_fetched_at: new Date().toISOString(),
