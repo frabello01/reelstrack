@@ -24,11 +24,12 @@ function truncate(s, n) {
   return s.length > n ? s.slice(0, n - 1) + '…' : s;
 }
 
-// Default short-domain placeholder. We don't know the user's actual
-// short domain yet (they'll set DNS later), so we use a sensible default
-// that they can mentally substitute. If they ever want to wire this to
-// agency_settings, easy follow-up.
-const DEFAULT_SHORT_HOST = 'short.domain';
+// The host the "Copy link" button writes to the clipboard. Redirects
+// resolve on ANY custom domain pointed at the Vercel project (the
+// PublicSlugDispatcher races redirect-lookup before landing-lookup
+// on bare /:slug paths), so this is purely a UI convenience — change
+// it if you ever buy a dedicated short domain like qc.link.
+const DEFAULT_SHORT_HOST = 'quellochecerchi.com';
 
 // ============================================================
 // PAGE
@@ -116,6 +117,8 @@ export default function RedirectsPage() {
           <p className="rp-subtitle">
             Link brevi tipo <code>{DEFAULT_SHORT_HOST}/biancajorio</code> che reindirizzano alla destinazione scelta.
             Esce dal webview di Instagram/Threads/Facebook. Gate 18+ opzionale.
+            Funzionano sullo stesso dominio delle landing pages — i redirect hanno la precedenza
+            sulle landing con lo stesso slug.
           </p>
         </div>
         <button className="btn btn-primary" onClick={() => { setEditing(null); setShowModal(true); }}>
@@ -156,8 +159,9 @@ export default function RedirectsPage() {
       <div className="rp-hint">
         <Globe size={14} />
         <div>
-          <strong>Setup dominio:</strong> punta il dominio breve (es. <code>qc.link</code>) al progetto Vercel.
-          Una volta attivo, ogni slug di redirect sarà raggiungibile come <code>https://tuodominio/slug</code>.
+          <strong>Dominio:</strong> i redirect girano già su <code>{DEFAULT_SHORT_HOST}</code> (lo stesso delle landing pages).
+          Se vuoi un dominio più corto in futuro (es. <code>qc.link</code>) basta puntarlo al progetto Vercel —
+          non serve cambiare nulla nel codice.
         </div>
       </div>
 
