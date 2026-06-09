@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
@@ -29,9 +29,12 @@ import LandingsPage from './pages/LandingsPage';
 import LandingEditorPage from './pages/LandingEditorPage';
 import LandingsDashboardPage from './pages/LandingsDashboardPage';
 import PublicLandingPage from './pages/PublicLandingPage';
+import PublicRedirectPage from './pages/PublicRedirectPage';
+import RedirectsPage from './pages/RedirectsPage';
 import TeamPage from './pages/TeamPage';
 import LogPage from './pages/LogPage';
 import Layout from './components/Layout';
+import { api } from './lib/api';
 import './index.css';
 
 function ProtectedRoute({ children }) {
@@ -75,13 +78,60 @@ const ADMIN_HOSTS = new Set(['app.reelstrack.io', 'localhost', '127.0.0.1']);
 const currentHost = (typeof window !== 'undefined' ? window.location.hostname : '').toLowerCase();
 const IS_LANDING_ONLY_HOST = !ADMIN_HOSTS.has(currentHost);
 
+// Bare-slug dispatcher: on custom domains, `/:slug` could be either a
+// redirect deeplink OR a landing page. We hit the (fast) redirect lookup
+// first and fall back to the landing renderer (which does its own lookup
+// and 404 handling) when no redirect matches the slug. For a domain that
+// is *only* used for redirects, the user pays exactly one round trip.
+// For a domain that is *only* used for landings, the user pays the
+// failed redirect lookup (~50ms) on top of the landing lookup — small
+// price for the bare-slug UX bouncy.ai-style.
+function PublicSlugDispatcher() {
+  const { slug } = useParams();
+  const [verdict, setVerdict] = useState(null); // 'redirect' | 'landing'
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        await api.getPublicRedirect(slug);
+        if (!cancelled) setVerdict('redirect');
+      } catch {
+        if (!cancelled) setVerdict('landing');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [slug]);
+
+  if (!verdict) {
+    return (
+      <div style={{
+        minHeight: '100vh', background: '#0a0a0f',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <div style={{
+          width: 44, height: 44,
+          border: '3px solid rgba(255,255,255,0.15)',
+          borderTopColor: 'rgba(255,255,255,0.7)',
+          borderRadius: '50%',
+          animation: 'spin 0.9s linear infinite',
+        }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+  return verdict === 'redirect' ? <PublicRedirectPage /> : <PublicLandingPage />;
+}
+
 function LandingOnlyApp() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* On a custom domain, any path is interpreted as a landing slug. */}
-        <Route path="/:slug" element={<PublicLandingPage />} />
+        {/* Explicit prefixes for unambiguous routing. */}
         <Route path="/p/:slug" element={<PublicLandingPage />} />
+        <Route path="/r/:slug" element={<PublicRedirectPage />} />
+        {/* Bare slug — could be either; dispatcher resolves it. */}
+        <Route path="/:slug" element={<PublicSlugDispatcher />} />
         {/* Root and unknown paths fall back to a generic 404-ish landing render
             (we pass an empty slug — the renderer will show its "not found" state). */}
         <Route path="*" element={<PublicLandingPage />} />
@@ -103,6 +153,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <Route path="/share/:token" element={<PublicTodoPage />} />
           {/* Public landing pages — also accessible on the admin host under /p/:slug */}
           <Route path="/p/:slug" element={<PublicLandingPage />} />
+          {/* Redirect deeplinks — also accessible on the admin host under /r/:slug for preview */}
+          <Route path="/r/:slug" element={<PublicRedirectPage />} />
 
           <Route
             path="/"
@@ -119,6 +171,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="landings" element={<LandingsPage />} />
             <Route path="landings/dashboard" element={<LandingsDashboardPage />} />
             <Route path="landings/:id" element={<LandingEditorPage />} />
+            <Route path="redirects" element={<RedirectsPage />} />
             <Route path="todos" element={<TodosPage />} />
             <Route path="todos/:id" element={<TodoDetailPage />} />
             <Route path="my-accounts" element={<MyAccountsPage />} />

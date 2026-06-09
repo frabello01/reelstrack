@@ -1,0 +1,486 @@
+/* ============================================================
+   RedirectsPage — admin pannello redirect deeplinks
+   ============================================================ */
+
+.rp-page {
+  padding: 24px;
+  max-width: 1300px;
+  margin: 0 auto;
+}
+
+.rp-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+.rp-header h1 {
+  margin: 0;
+  color: white;
+  font-family: 'Syne', sans-serif;
+  font-size: 28px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.rp-header h1 svg { color: #7c6bff; }
+.rp-subtitle {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.55);
+  max-width: 720px;
+  line-height: 1.5;
+}
+.rp-subtitle code {
+  background: rgba(0, 0, 0, 0.4);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 12px;
+  color: #c4b5fd;
+  font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace;
+}
+
+/* === KPIs === */
+.rp-kpis {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+@media (max-width: 600px) {
+  .rp-kpis { grid-template-columns: 1fr 1fr; }
+  .rp-kpis .rp-kpi:nth-child(3) { grid-column: 1 / -1; }
+}
+.rp-kpi {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+.rp-kpi-label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  font-weight: 500;
+}
+.rp-kpi-value {
+  font-size: 22px;
+  font-weight: 700;
+  font-family: 'Syne', sans-serif;
+  color: white;
+  margin-top: 4px;
+}
+
+/* === Toolbar === */
+.rp-toolbar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.rp-search {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 0 12px;
+  max-width: 400px;
+}
+.rp-search svg { color: rgba(255, 255, 255, 0.4); flex-shrink: 0; }
+.rp-search input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: white;
+  font-size: 13px;
+  padding: 10px 0;
+  width: 100%;
+  font-family: inherit;
+}
+
+/* === Setup hint === */
+.rp-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, 0.6);
+  background: rgba(124, 107, 255, 0.05);
+  border-left: 2px solid rgba(124, 107, 255, 0.5);
+  padding: 10px 14px;
+  border-radius: 4px;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+.rp-hint svg { color: #c4b5fd; flex-shrink: 0; margin-top: 1px; }
+.rp-hint strong { color: rgba(255, 255, 255, 0.85); font-weight: 600; }
+.rp-hint code {
+  background: rgba(0, 0, 0, 0.4);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 11.5px;
+  color: #c4b5fd;
+  font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace;
+}
+
+/* === Error === */
+.rp-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(248, 113, 113, 0.08);
+  border: 1px solid rgba(248, 113, 113, 0.25);
+  color: #fca5a5;
+  font-size: 13px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+
+/* === Empty state === */
+.rp-empty {
+  text-align: center;
+  padding: 64px 24px;
+  color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px dashed rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+}
+.rp-empty svg { color: rgba(124, 107, 255, 0.5); margin-bottom: 10px; }
+.rp-empty p { margin: 0; font-size: 13px; }
+
+/* === Table === */
+.rp-table-wrap {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  overflow: hidden;
+  overflow-x: auto;
+}
+
+.rp-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.rp-table thead th {
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  padding: 12px 14px;
+  text-align: left;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  white-space: nowrap;
+}
+.rp-table tbody td {
+  padding: 14px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.85);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  vertical-align: middle;
+}
+.rp-table tbody tr:last-child td { border-bottom: none; }
+.rp-table tbody tr:hover { background: rgba(255, 255, 255, 0.02); }
+
+.rp-table .rp-num { text-align: right; font-variant-numeric: tabular-nums; }
+.rp-table .rp-muted { color: rgba(255, 255, 255, 0.4); }
+
+.rp-row-off { opacity: 0.55; }
+.rp-row-off:hover { opacity: 0.75; }
+
+/* === Slug cell === */
+.rp-slug {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.rp-slug-text {
+  font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace;
+  color: #c4b5fd;
+  font-weight: 600;
+}
+.rp-copy-btn {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  padding: 3px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  transition: all 0.15s;
+}
+.rp-copy-btn:hover {
+  color: white;
+  background: rgba(255, 255, 255, 0.05);
+}
+.rp-title {
+  font-size: 11.5px;
+  color: rgba(255, 255, 255, 0.5);
+  margin-top: 2px;
+}
+
+/* === Destination link === */
+.rp-dest {
+  color: rgba(255, 255, 255, 0.75);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace;
+  font-size: 12px;
+}
+.rp-dest:hover { color: #c4b5fd; }
+.rp-dest svg { opacity: 0.6; }
+
+.rp-talent {
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 12.5px;
+}
+
+/* === Badges === */
+.rp-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 100px;
+  letter-spacing: 0.3px;
+}
+.rp-badge-gate {
+  background: rgba(251, 191, 36, 0.12);
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.25);
+}
+
+/* === Status toggle button === */
+.rp-status-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 100px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.rp-status-btn.on {
+  color: #4ade80;
+  border-color: rgba(74, 222, 128, 0.3);
+  background: rgba(74, 222, 128, 0.06);
+}
+.rp-status-btn.on:hover { background: rgba(74, 222, 128, 0.12); }
+.rp-status-btn.off {
+  color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.03);
+}
+.rp-status-btn.off:hover {
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* === Actions cells === */
+.rp-actions-th { width: 80px; }
+.rp-actions-td {
+  text-align: right;
+  white-space: nowrap;
+}
+.rp-icon-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.55);
+  padding: 5px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-left: 4px;
+  transition: all 0.15s;
+  display: inline-flex;
+  align-items: center;
+}
+.rp-icon-btn:hover {
+  color: white;
+  background: rgba(255, 255, 255, 0.05);
+}
+.rp-icon-btn-danger:hover {
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.1);
+  border-color: rgba(248, 113, 113, 0.3);
+}
+
+/* === Modal === */
+.rp-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(6px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.rp-modal {
+  background: #131319;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  width: 100%;
+  max-width: 560px;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+}
+.rp-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.rp-modal-header h3 {
+  margin: 0;
+  font-family: 'Syne', sans-serif;
+  font-size: 17px;
+  color: white;
+}
+.rp-modal-close {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+}
+.rp-modal-close:hover { color: white; background: rgba(255, 255, 255, 0.05); }
+.rp-modal-body {
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+}
+.rp-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.rp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.rp-field label {
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.rp-field input,
+.rp-field select,
+.rp-field textarea {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: white;
+  font-size: 13px;
+  font-family: inherit;
+  padding: 8px 11px;
+  border-radius: 7px;
+}
+.rp-field input:focus,
+.rp-field select:focus,
+.rp-field textarea:focus {
+  outline: none;
+  border-color: rgba(124, 107, 255, 0.5);
+}
+.rp-field textarea { resize: vertical; min-height: 60px; }
+.rp-field-hint {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  line-height: 1.4;
+}
+
+.rp-row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+@media (max-width: 480px) {
+  .rp-row-2 { grid-template-columns: 1fr; }
+}
+
+.rp-slug-input {
+  display: flex;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 7px;
+  overflow: hidden;
+}
+.rp-slug-input:focus-within { border-color: rgba(124, 107, 255, 0.5); }
+.rp-slug-prefix {
+  padding: 8px 11px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 12.5px;
+  font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+.rp-slug-input input {
+  border: none;
+  padding: 8px 11px;
+  flex: 1;
+  font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace;
+}
+
+.rp-toggles {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.rp-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 8px 10px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: background 0.15s;
+}
+.rp-toggle:hover { background: rgba(255, 255, 255, 0.04); }
+.rp-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #7c6bff;
+}
+.rp-toggle span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, 0.8);
+}
+.rp-toggle svg { color: rgba(255, 255, 255, 0.5); }
+
+/* === Spinner === */
+.spin { animation: rp-spin 0.9s linear infinite; }
+@keyframes rp-spin { to { transform: rotate(360deg); } }

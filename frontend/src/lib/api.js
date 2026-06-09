@@ -310,6 +310,27 @@ export const api = {
   deleteVideoStudioGeneration: (id) =>
     request(`/api/video-studio/generations/${id}`, { method: 'DELETE' }),
 
+  // Redirect deeplinks — admin
+  getRedirects: () => request('/api/redirects'),
+  getRedirect: (id) => request(`/api/redirects/${id}`),
+  getRedirectClicks: (id, limit = 100) =>
+    request(`/api/redirects/${id}/clicks?limit=${limit}`),
+  createRedirect: (body) =>
+    request('/api/redirects', { method: 'POST', body: JSON.stringify(body) }),
+  updateRedirect: (id, body) =>
+    request(`/api/redirects/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteRedirect: (id) =>
+    request(`/api/redirects/${id}`, { method: 'DELETE' }),
+
+  // Redirect deeplinks — public (no auth)
+  getPublicRedirect: (slug) =>
+    request(`/api/redirects/public/lookup?slug=${encodeURIComponent(slug)}`),
+  recordRedirectClick: (id, payload) =>
+    request(`/api/redirects/public/click/${id}`, {
+      method: 'POST',
+      body: JSON.stringify(payload || {}),
+    }),
+
   // Team
   getMe: () => request('/api/team/me'),
   getTeamMembers: () => request('/api/team/members'),

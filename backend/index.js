@@ -28,6 +28,7 @@ const suggestionsRouter = require('./routes/suggestions');
 const landingsRouter = require('./routes/landings');
 const inflowwRouter = require('./routes/infloww');
 const videoStudioRouter = require('./routes/videoStudio');
+const redirectsRouter = require('./routes/redirects');
 const { requireAuth } = require('./middleware/auth');
 const { requireAdminForWrites } = require('./middleware/requireAdminForWrites');
 const { autoLogMiddleware } = require('./middleware/autoLogMiddleware');
@@ -73,6 +74,9 @@ app.use((req, res, next) => {
   if (req.path.startsWith('/api/landings/public/')) {
     return publicLandingsCors(req, res, next);
   }
+  if (req.path.startsWith('/api/redirects/public/')) {
+    return publicLandingsCors(req, res, next);
+  }
   return strictCors(req, res, next);
 });
 app.use(express.json({ limit: '15mb' }));
@@ -99,6 +103,7 @@ app.use(rateLimit({
 app.use('/api', (req, res, next) => {
   if (req.path.startsWith('/todos/public/')) return next();
   if (req.path.startsWith('/landings/public/')) return next();
+  if (req.path.startsWith('/redirects/public/')) return next();
   return requireAuth(req, res, next);
 });
 
@@ -145,6 +150,7 @@ app.use('/api/suggestions', suggestionsRouter);
 app.use('/api/landings', landingsRouter);
 app.use('/api/infloww', inflowwRouter);
 app.use('/api/video-studio', videoStudioRouter);
+app.use('/api/redirects', redirectsRouter);
 
 // ============================================================
 // CRONS (unchanged + new log retention cleanup)
