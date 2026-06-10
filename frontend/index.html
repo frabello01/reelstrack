@@ -12,12 +12,15 @@
          resizes from this 512x512 source down to the device's exact size. -->
     <link rel="apple-touch-icon" href="/app-icon.png" />
 
-    <!-- iOS standalone PWA hints -->
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <!-- iOS home-screen hints. Note: NO apple-mobile-web-app-capable —
+         that meta makes iOS open the icon in standalone mode (separate
+         app, no Safari chrome). We deliberately want it to open in the
+         real Safari with all its tabs/history/cookies. -->
     <meta name="apple-mobile-web-app-title" content="ReelsTrack" />
 
-    <!-- Android Chrome web app manifest -->
+    <!-- Android Chrome web app manifest. display:"browser" inside the
+         manifest tells Chrome to open the icon as a regular tab, not
+         a standalone app window. -->
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#0a0a0f" />
 
