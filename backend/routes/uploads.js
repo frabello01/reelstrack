@@ -143,11 +143,18 @@ router.post('/public/:token/reels/:todoListReelId/init', async (req, res) => {
       originalName,
     });
 
+    // Pass the browser's Origin through to Drive so the eventual PUT has
+    // the Access-Control-Allow-Origin header. Without this, Drive returns
+    // the file metadata but with no CORS header and the browser blocks
+    // the response.
+    const browserOrigin = req.get('origin') || null;
+
     const { sessionUrl } = await drive.createResumableUploadSession({
       folderId: ctx.folderId,
       filename,
       mimeType: mime_type,
       sizeBytes: size_bytes ? Number(size_bytes) : undefined,
+      origin: browserOrigin,
     });
 
     res.json({ session_url: sessionUrl, filename, version });

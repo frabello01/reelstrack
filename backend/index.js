@@ -110,6 +110,9 @@ app.use('/api', (req, res, next) => {
   if (req.path.startsWith('/landings/public/')) return next();
   if (req.path.startsWith('/redirects/public/')) return next();
   if (req.path.startsWith('/uploads/public/')) return next();
+  // Public agency branding (logo, display_name) used on share pages — must
+  // be readable without auth so the share link renders the agency logo.
+  if (req.path === '/settings/public') return next();
   // Google OAuth callback is a browser-initiated GET from Google's domain
   // — there's no JWT to attach. CSRF is enforced via HMAC state inside
   // the handler.

@@ -247,11 +247,20 @@ async function getFolder(folderId) {
 
 // Create a resumable upload session.
 // Returns the session URL the browser will PUT the file to.
+//
+// CRITICAL: the `origin` argument MUST be the actual origin of the browser
+// that will perform the PUT (e.g. 'https://app.reelstrack.io'). Drive uses
+// the Origin header we send here to "scope" the session URL — if the PUT
+// later comes from a different origin (or no origin was declared here)
+// Drive returns the file but with no Access-Control-Allow-Origin header,
+// which the browser then blocks as a CORS violation. Setting it correctly
+// is the difference between "upload works" and "Network error during upload".
 async function createResumableUploadSession({
   folderId,
   filename,
   mimeType = 'video/mp4',
   sizeBytes,            // optional — Drive uses it for progress reporting
+  origin,               // REQUIRED — the browser origin that will PUT
 }) {
   const accessToken = await getAccessToken();
   const headers = {
@@ -260,6 +269,7 @@ async function createResumableUploadSession({
     'X-Upload-Content-Type': mimeType,
   };
   if (sizeBytes) headers['X-Upload-Content-Length'] = String(sizeBytes);
+  if (origin) headers['Origin'] = origin;
 
   const res = await fetch(
     'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true&fields=id,name,webViewLink,size,mimeType',
