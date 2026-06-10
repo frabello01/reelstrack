@@ -85,17 +85,33 @@ function buildFilename({ positionLabel, reelUrl, version, mimeType, originalName
 }
 
 // Verify the reel actually belongs to this list (defensive, the token gives
-// access to all reels in the list anyway).
+// access to all reels in the list anyway). Also pulls backup_video_url as
+// a safety net — for uploaded-MP4 reels, both url and backup_video_url
+// point to the Supabase storage URL, but if a weird historical row ever
+// has a NULL url, the backup wins so the filename never collapses to
+// just "#N - vK.mp4".
 async function verifyReelInList(listId, todoListReelId) {
   const { data, error } = await supabase
     .from('todo_list_reels')
-    .select('id, reel_id, uploads_count, is_done, reels(url)')
+    .select('id, reel_id, uploads_count, is_done, reels(url, backup_video_url)')
     .eq('todo_list_id', listId)
     .eq('id', todoListReelId)
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!data) throw Object.assign(new Error('Reel not in this list'), { status: 404 });
   return data;
+}
+
+// Strip the trailing slash and any query string off a URL so it sits
+// cleanly before " - vK.mp4" in the Drive filename.
+// "https://www.instagram.com/reel/Cxy123/?utm=..." → "https://www.instagram.com/reel/Cxy123"
+function tidyUrlForFilename(raw) {
+  if (!raw) return null;
+  let u = String(raw).trim();
+  const q = u.indexOf('?');
+  if (q >= 0) u = u.slice(0, q);
+  if (u.endsWith('/')) u = u.slice(0, -1);
+  return u || null;
 }
 
 // ============================================================
@@ -134,9 +150,14 @@ router.post('/public/:token/reels/:todoListReelId/init', async (req, res) => {
     const version = (lastVersionRow?.version_number || 0) + 1;
 
     const positionLabel = await getReelSequenceNo(reel.id);
+    // Two filename-source cases handled by the same `url` field:
+    //   Instagram-tracked / paste-by-link reels → reels.url is the IG URL
+    //   MP4-uploaded reels                      → reels.url is the Supabase storage URL
+    // backup_video_url is a defensive fallback in case url ever ends up empty.
+    const sourceUrl = reel.reels?.url || reel.reels?.backup_video_url || null;
     const filename = buildFilename({
       positionLabel,
-      reelUrl: reel.reels?.url || null,
+      reelUrl: tidyUrlForFilename(sourceUrl),
       version,
       mimeType: mime_type,
       originalName,
