@@ -16,7 +16,13 @@ const CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const REDIRECT_URI = process.env.GOOGLE_OAUTH_REDIRECT_URI
   || `${process.env.BACKEND_PUBLIC_URL || 'https://reelstrack-backend.onrender.com'}/api/drive/oauth/callback`;
-const SCOPE = 'https://www.googleapis.com/auth/drive.file';
+// Full drive scope — required so the admin can pick ANY of their folders
+// (including ones created manually outside of our app) as a creator's
+// destination. drive.file would have limited us to files our app itself
+// created, which made the folder picker useless. Restricted scope but
+// since the app stays in "Testing" mode with only you as test user,
+// no Google verification is required.
+const SCOPE = 'https://www.googleapis.com/auth/drive';
 
 // agency_settings is a singleton row keyed by id='default' in this codebase.
 const AGENCY_SETTINGS_ID = 'default';
