@@ -127,18 +127,38 @@
 
 /* ============== MOBILE ============== */
 @media (max-width: 900px) {
+  /* Defensive overflow cut: anything wider than the viewport stays
+     out of view, the page never gets a horizontal scroll bar. We also
+     drop the nested-scroll-container model and let the WINDOW scroll
+     on mobile — that's what makes touch-scroll feel native, lets the
+     topbar use position:sticky against the viewport, and avoids the
+     "scroll near the bottom is dead" issue caused by nested overflow:auto. */
+  html, body {
+    overflow-x: hidden;
+  }
+
   .layout {
     flex-direction: column;
+    height: auto;
+    min-height: 100vh;
+    /* override desktop overflow:hidden so the window can scroll naturally */
+    overflow: visible;
   }
 
   .mobile-topbar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    background: var(--bg2);
+    background: rgba(20, 22, 33, 0.92);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--border);
     padding: 10px 14px;
     flex-shrink: 0;
+    /* Sticks to the viewport top while the page scrolls — only works
+       because we removed the nested .main-content scroll above. */
+    position: sticky;
+    top: 0;
     z-index: 50;
   }
   .mobile-menu-btn {
@@ -159,6 +179,10 @@
     transform: translateX(-100%);
     transition: transform 0.25s ease-out;
     box-shadow: 4px 0 20px rgba(0,0,0,0.4);
+    /* The drawer scrolls inside itself, so even on tall menus every
+       item is reachable on a small phone. */
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
   .sidebar-open { transform: translateX(0); }
 
@@ -183,5 +207,14 @@
 
   .main-content {
     padding: 16px;
+    /* No nested overflow on mobile — the window is the scroll surface.
+       overflow-x hidden is a belt-and-braces guard for child widgets
+       that occasionally overflow (long URLs, embeds, etc.). */
+    overflow: visible;
+    overflow-x: hidden;
+    width: 100%;
+    max-width: 100vw;
+    box-sizing: border-box;
+    flex: 1;
   }
 }
