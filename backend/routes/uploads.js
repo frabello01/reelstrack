@@ -41,19 +41,18 @@ async function resolveListByToken(token) {
   return { list, talent, folderId: talent.drive_folder_id };
 }
 
-// Compute the creator-facing "#N" for a reel within a list, based on the
-// same sort order shown on the public page (priority DESC, added_at ASC).
-async function computeReelPositionLabel(listId, todoListReelId) {
-  const { data: items, error } = await supabase
+// The creator-facing "#N" is now the immutable sequence_no stored on the
+// row itself. No more computing from sort order — the number is stable
+// for the lifetime of the reel and matches what's shown on both the
+// admin and public pages.
+async function getReelSequenceNo(todoListReelId) {
+  const { data, error } = await supabase
     .from('todo_list_reels')
-    .select('id, priority, added_at, is_hidden')
-    .eq('todo_list_id', listId)
-    .eq('is_hidden', false)
-    .order('priority', { ascending: false })
-    .order('added_at', { ascending: true });
+    .select('sequence_no')
+    .eq('id', todoListReelId)
+    .maybeSingle();
   if (error) return null;
-  const idx = (items || []).findIndex((i) => i.id === todoListReelId);
-  return idx >= 0 ? (idx + 1) : null;
+  return data?.sequence_no || null;
 }
 
 // Build the Drive filename per the agreed convention:
@@ -134,7 +133,7 @@ router.post('/public/:token/reels/:todoListReelId/init', async (req, res) => {
       .maybeSingle();
     const version = (lastVersionRow?.version_number || 0) + 1;
 
-    const positionLabel = await computeReelPositionLabel(ctx.list.id, reel.id);
+    const positionLabel = await getReelSequenceNo(reel.id);
     const filename = buildFilename({
       positionLabel,
       reelUrl: reel.reels?.url || null,
@@ -272,12 +271,19 @@ router.delete('/public/:token/reels/:todoListReelId/uploads/:uploadId', async (r
       .eq('id', upload.id);
     if (delErr) return res.status(500).json({ error: delErr.message });
 
-    // Decrement counter (uploads_count). We keep is_done as-is per spec:
-    // once a reel is done, deleting all clips doesn't reverse it. The race
-    // window between two parallel deletes is negligible at our scale.
+    // Decrement counter (uploads_count). If this was the LAST clip for
+    // this reel, the reel goes back to "not done" — matches the creator's
+    // mental model that "having clips uploaded" = done. (Spec corrected
+    // from earlier: removing the last clip MUST reverse the done state.)
+    const newCount = Math.max(0, (reel.uploads_count || 1) - 1);
+    const updates = { uploads_count: newCount };
+    if (newCount === 0) {
+      updates.is_done = false;
+      updates.done_at = null;
+    }
     await supabase
       .from('todo_list_reels')
-      .update({ uploads_count: Math.max(0, (reel.uploads_count || 1) - 1) })
+      .update(updates)
       .eq('id', reel.id);
 
     res.json({ ok: true });

@@ -245,15 +245,6 @@ export default function PublicTodoPage() {
         ) : (
           <div className="public-items">
             {(() => {
-              // Stable rank: based on order reels were added (newest = #1).
-              // Visible order may shuffle by priority but rank stays tied to insertion.
-              const byAddedDesc = [...list.items].sort((a, b) =>
-                new Date(b.added_at) - new Date(a.added_at)
-              );
-              const rankByReelId = new Map();
-              byAddedDesc.forEach((it, i) => {
-                if (it.reels?.id) rankByReelId.set(it.reels.id, i + 1);
-              });
               return list.items.map((item) => {
               const reel = item.reels;
               const hasBackup = reel?.backup_status === 'done' && reel?.backup_video_url;
@@ -268,7 +259,7 @@ export default function PublicTodoPage() {
                     {item.is_done ? <CheckCircle2 size={22} /> : <div className="public-checkbox-empty" />}
                   </button>
                   <div className="public-item-rank-col">
-                    <div className="public-item-rank">#{rankByReelId.get(reel?.id) ?? '?'}</div>
+                    <div className="public-item-rank">#{item.sequence_no ?? '?'}</div>
                     {item.priority === 3 && (
                       <div className="public-priority-badge public-priority-high" title={t('priority_high')}>
                         <Flame size={10} /> {t('priority_high')}

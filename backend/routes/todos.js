@@ -20,6 +20,25 @@ function extractInstagramShortcode(input) {
   return match ? match[1] : null;
 }
 
+// Next sequence_no for a to-do list. Numbers are immutable and
+// monotonically increasing — the very first reel ever added to the list
+// is #1, the next is #2, etc. Deletions leave gaps on purpose so the
+// creator's mental "reel #N" stays stable across the whole life of the
+// list. There's a tiny race window if two inserts collide; the unique
+// constraint on (todo_list_id, sequence_no) protects integrity and the
+// caller can retry. For our single-admin scale this is fine.
+async function nextSequenceNo(listId) {
+  const { data, error } = await supabase
+    .from('todo_list_reels')
+    .select('sequence_no')
+    .eq('todo_list_id', listId)
+    .order('sequence_no', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(`Could not compute next sequence_no: ${error.message}`);
+  return (data?.sequence_no || 0) + 1;
+}
+
 async function hikerGet(path, params = {}) {
   if (!HIKERAPI_TOKEN) throw new Error('HIKERAPI_TOKEN not configured on server');
   const url = new URL(`${HIKERAPI_BASE}${path}`);
@@ -86,7 +105,7 @@ router.get('/:id', async (req, res) => {
   const { data: items } = await supabase
     .from('todo_list_reels')
     .select(`
-      id, is_done, is_hidden, added_at, done_at, public_note, private_note, priority,
+      id, sequence_no, is_done, is_hidden, added_at, done_at, public_note, private_note, priority,
       is_edited, edited_at, uploads_count,
       reels (
         id, instagram_id, url, thumbnail_url, caption, is_manual, is_uploaded,
@@ -162,9 +181,10 @@ router.post('/:id/reels', async (req, res) => {
     return res.status(409).json({ error: 'This reel is already in this list' });
   }
 
+  const sequence_no = await nextSequenceNo(req.params.id);
   const { data, error } = await supabase
     .from('todo_list_reels')
-    .insert({ todo_list_id: req.params.id, reel_id })
+    .insert({ todo_list_id: req.params.id, reel_id, sequence_no })
     .select()
     .single();
   if (error) return res.status(500).json({ error: error.message });
@@ -243,9 +263,10 @@ router.post('/:id/reels/by-link', async (req, res) => {
       return res.status(409).json({ error: 'This reel is already in this list' });
     }
 
+    const sequence_no = await nextSequenceNo(req.params.id);
     const { data: linked, error: linkErr } = await supabase
       .from('todo_list_reels')
-      .insert({ todo_list_id: req.params.id, reel_id: reelId })
+      .insert({ todo_list_id: req.params.id, reel_id: reelId, sequence_no })
       .select()
       .single();
     if (linkErr) return res.status(500).json({ error: linkErr.message });
@@ -368,7 +389,10 @@ router.post('/:id/reels/:reelId/move', async (req, res) => {
     return res.status(409).json({ error: 'This reel is already in the target list' });
   }
 
-  // Insert into target preserving notes + priority + done state
+  // Insert into target preserving notes + priority + done state.
+  // Sequence_no is fresh in the target list — moving doesn't carry it over
+  // because numbers are local to each list.
+  const target_sequence_no = await nextSequenceNo(target_list_id);
   const { error: insertErr } = await supabase
     .from('todo_list_reels')
     .insert({
@@ -378,6 +402,7 @@ router.post('/:id/reels/:reelId/move', async (req, res) => {
       private_note: source.private_note,
       priority: source.priority,
       is_done: source.is_done,
+      sequence_no: target_sequence_no,
     });
   if (insertErr) return res.status(500).json({ error: insertErr.message });
 
@@ -425,6 +450,7 @@ router.post('/:id/reels/:reelId/copy', async (req, res) => {
     todo_list_id: target_list_id,
     reel_id: req.params.reelId,
     priority: source.priority,
+    sequence_no: await nextSequenceNo(target_list_id),
   };
   if (copy_notes) {
     insertPayload.public_note = source.public_note;
@@ -564,9 +590,10 @@ router.post('/:id/reels/upload/finalize', async (req, res) => {
   if (reelErr) return res.status(500).json({ error: `Failed to save reel: ${reelErr.message}` });
 
   // Link to list
+  const sequence_no = await nextSequenceNo(req.params.id);
   const { error: linkErr } = await supabase
     .from('todo_list_reels')
-    .insert({ todo_list_id: req.params.id, reel_id });
+    .insert({ todo_list_id: req.params.id, reel_id, sequence_no });
   if (linkErr) return res.status(500).json({ error: linkErr.message });
 
   res.json({ success: true, reel_id, video_url: videoUrl, thumbnail_url: thumbnailUrl });
@@ -641,7 +668,7 @@ router.get('/public/:token', async (req, res) => {
   const { data: items } = await supabase
     .from('todo_list_reels')
     .select(`
-      id, is_done, added_at, done_at, public_note, priority,
+      id, sequence_no, is_done, added_at, done_at, public_note, priority,
       uploads_count,
       reels (
         id, url, thumbnail_url, caption, is_manual, is_uploaded,

@@ -403,18 +403,11 @@ export default function TodoDetailPage() {
         </div>
       ) : (
         (() => {
-          // Build a stable rank: based on the order reels were ADDED (oldest = #1).
-          // Adding a new reel gives it the next highest number; existing numbering stays put.
-          // The visible list order may shuffle when priority changes, but the rank
-          // shown next to each reel stays tied to insertion order.
-          const byAddedAsc = [...list.items].sort((a, b) =>
-            new Date(a.added_at) - new Date(b.added_at)
-          );
-          const rankByReelId = new Map();
-          byAddedAsc.forEach((it, i) => {
-            if (it.reels?.id) rankByReelId.set(it.reels.id, i + 1);
-          });
-
+          // Stable, immutable per-list number stored on each row server-side
+          // (todo_list_reels.sequence_no). Same number shown to admin, to the
+          // creator on the share page, AND embedded in the Drive filename.
+          // Numbers never recycle on delete — leaves gaps on purpose so
+          // "reel #6" stays "reel #6" forever.
           const activeItems = list.items.filter((it) => !it.is_hidden);
           const hiddenItems = list.items.filter((it) => it.is_hidden);
 
@@ -423,7 +416,7 @@ export default function TodoDetailPage() {
             const hasBackup = reel?.backup_status === 'done' && reel?.backup_video_url;
             const isEditingPublic = editingNote?.reelId === reel?.id && editingNote?.kind === 'public';
             const isEditingPrivate = editingNote?.reelId === reel?.id && editingNote?.kind === 'private';
-            const stableRank = rankByReelId.get(reel?.id) ?? '?';
+            const stableRank = item.sequence_no ?? '?';
             return (
               <div key={item.id} className={`todo-item ${item.is_done ? 'done' : ''} ${item.is_hidden ? 'is-hidden' : ''}`}>
                 <div className="todo-item-main">
