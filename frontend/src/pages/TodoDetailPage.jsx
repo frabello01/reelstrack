@@ -968,6 +968,22 @@ function AdminClipBadge({ item, onChange }) {
     });
   };
 
+  const handleDelete = async (c) => {
+    if (!confirm(`Eliminare "${c.drive_file_name}" da Drive? Operazione irreversibile.`)) return;
+    try {
+      const resp = await api.deleteReelUpload(item.id, c.id);
+      setClips((cs) => (cs || []).filter((x) => x.id !== c.id));
+      const patch = { uploads_count: resp.new_uploads_count };
+      if (resp.became_undone) {
+        patch.is_done = false;
+        patch.done_at = null;
+      }
+      onChange?.(patch);
+    } catch (err) {
+      alert(`Errore: ${err.message}`);
+    }
+  };
+
   return (
     <div className={`admin-clip-badge-wrap ${open ? 'open' : ''}`}>
       <div className="admin-clip-badge-row">
@@ -989,19 +1005,29 @@ function AdminClipBadge({ item, onChange }) {
             <div className="admin-clip-empty">Nessuna clip ancora caricata.</div>
           ) : (
             clips.map((c) => (
-              <a
-                key={c.id}
-                href={c.drive_view_url || '#'}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="admin-clip-row"
-                title={c.drive_file_name}
-              >
-                <Video size={11} />
-                <span className="admin-clip-version">v{c.version_number}</span>
-                <span className="admin-clip-name">{c.drive_file_name}</span>
-                <ExternalLink size={11} />
-              </a>
+              <div key={c.id} className="admin-clip-row">
+                <a
+                  href={c.drive_view_url || '#'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="admin-clip-link"
+                  title={c.drive_file_name}
+                >
+                  <Video size={11} />
+                  <span className="admin-clip-version">v{c.version_number}</span>
+                  <span className="admin-clip-name">{c.drive_file_name}</span>
+                  <ExternalLink size={11} />
+                </a>
+                <button
+                  type="button"
+                  className="admin-clip-delete-btn"
+                  onClick={() => handleDelete(c)}
+                  title="Elimina clip da Drive"
+                  aria-label="Elimina clip"
+                >
+                  <Trash2 size={11} />
+                </button>
+              </div>
             ))
           )}
         </div>

@@ -353,6 +353,10 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ is_edited }),
     }),
+  deleteReelUpload: (todoListReelId, uploadId) =>
+    request(`/api/uploads/reels/${todoListReelId}/uploads/${uploadId}`, {
+      method: 'DELETE',
+    }),
 
   // Creator uploads — public (used by the creator on the share page)
   initCreatorUpload: (token, todoListReelId, payload) =>

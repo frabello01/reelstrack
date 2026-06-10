@@ -308,6 +308,60 @@ router.get('/reels/:todoListReelId', async (req, res) => {
   res.json(data || []);
 });
 
+// DELETE /api/uploads/reels/:todoListReelId/uploads/:uploadId
+// Admin nukes a clip the creator uploaded (e.g. the take is bad). Same
+// guarantees as the creator-side delete: Drive first, then the row, then
+// counter decrement. Mirrors auto-undone semantics — if the last clip
+// goes, the reel goes back to "not done" (and lands in PENDING).
+router.delete('/reels/:todoListReelId/uploads/:uploadId', async (req, res) => {
+  const { todoListReelId, uploadId } = req.params;
+
+  const { data: upload, error: lookupErr } = await supabase
+    .from('todo_list_reel_uploads')
+    .select('id, drive_file_id')
+    .eq('id', uploadId)
+    .eq('todo_list_reel_id', todoListReelId)
+    .maybeSingle();
+  if (lookupErr) return res.status(500).json({ error: lookupErr.message });
+  if (!upload) return res.status(404).json({ error: 'Upload not found' });
+
+  const { data: reelRow } = await supabase
+    .from('todo_list_reels')
+    .select('uploads_count')
+    .eq('id', todoListReelId)
+    .maybeSingle();
+
+  // Drive first — if it fails we keep the DB row so we don't orphan it.
+  try {
+    await drive.deleteFile(upload.drive_file_id);
+  } catch (err) {
+    return res.status(502).json({ error: `Drive delete failed: ${err.message}` });
+  }
+
+  const { error: delErr } = await supabase
+    .from('todo_list_reel_uploads')
+    .delete()
+    .eq('id', upload.id);
+  if (delErr) return res.status(500).json({ error: delErr.message });
+
+  const newCount = Math.max(0, (reelRow?.uploads_count || 1) - 1);
+  const updates = { uploads_count: newCount };
+  if (newCount === 0) {
+    updates.is_done = false;
+    updates.done_at = null;
+  }
+  await supabase
+    .from('todo_list_reels')
+    .update(updates)
+    .eq('id', todoListReelId);
+
+  res.json({
+    ok: true,
+    new_uploads_count: newCount,
+    became_undone: newCount === 0,
+  });
+});
+
 // PATCH /api/uploads/reels/:todoListReelId/edited — toggle is_edited
 router.patch('/reels/:todoListReelId/edited', async (req, res) => {
   const { is_edited } = req.body || {};
