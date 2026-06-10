@@ -192,6 +192,11 @@ export default function TalentDetailPage() {
               <span className="banned-stat"> · {talent.profiles.length - m.active_profiles_count} not active</span>
             )}
           </div>
+          <LanguagePicker
+            talentId={id}
+            current={talent.language || 'it'}
+            onChanged={(lang) => setTalent((t) => ({ ...t, language: lang }))}
+          />
         </div>
         <button className="btn btn-secondary" onClick={handleRefresh} disabled={refreshing}>
           <RefreshCw size={14} className={refreshing ? 'spin' : ''} />
@@ -1342,6 +1347,52 @@ function DriveFolderPicker({ onPick, onClose }) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ============================================================
+// LanguagePicker — flag buttons next to the talent name. Sets the
+// language used by the public share page (PublicTodoPage) shown to
+// this creator.
+// ============================================================
+function LanguagePicker({ talentId, current, onChanged }) {
+  const [saving, setSaving] = useState(false);
+  const LANGS = [
+    { code: 'it', flag: '🇮🇹', label: 'Italiano' },
+    { code: 'en', flag: '🇬🇧', label: 'English' },
+    { code: 'es', flag: '🇪🇸', label: 'Español' },
+  ];
+
+  const set = async (code) => {
+    if (saving || code === current) return;
+    setSaving(true);
+    try {
+      await api.updateTalent(talentId, { language: code });
+      onChanged?.(code);
+    } catch (err) {
+      alert(`Lingua non salvata: ${err.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="lang-picker" title="Lingua mostrata sulla share page del creator">
+      {LANGS.map((l) => (
+        <button
+          key={l.code}
+          type="button"
+          className={`lang-picker-btn ${current === l.code ? 'active' : ''}`}
+          onClick={() => set(l.code)}
+          disabled={saving}
+          title={l.label}
+          aria-label={l.label}
+        >
+          <span className="lang-flag">{l.flag}</span>
+          <span className="lang-code">{l.code.toUpperCase()}</span>
+        </button>
+      ))}
     </div>
   );
 }

@@ -630,7 +630,7 @@ router.delete('/:id/cover-image', async (req, res) => {
 router.get('/public/:token', async (req, res) => {
   const { data: list, error } = await supabase
     .from('todo_lists')
-    .select('id, name, public_token, public_note, cover_image_url, created_at, creator_uploads_enabled, talent_id')
+    .select('id, name, public_token, public_note, cover_image_url, created_at, creator_uploads_enabled, talent_id, talents(language)')
     .eq('public_token', req.params.token)
     .maybeSingle();
   if (error) return res.status(500).json({ error: error.message });
@@ -662,6 +662,7 @@ router.get('/public/:token', async (req, res) => {
     public_note: list.public_note,
     cover_image_url: list.cover_image_url,
     creator_uploads_enabled: !!list.creator_uploads_enabled,
+    language: list.talents?.language || 'it',
     items: items || [],
   });
 });

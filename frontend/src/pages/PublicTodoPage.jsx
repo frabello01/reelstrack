@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, createContext, useContext } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   ExternalLink, Eye, Heart, StickyNote, CheckCircle2, Play, Flame,
@@ -6,6 +6,108 @@ import {
 } from 'lucide-react';
 import { api } from '../lib/api';
 import './PublicTodoPage.css';
+
+// ============================================================
+// i18n — minimal in-file dictionary keyed by the talent's language.
+// Italian is the canonical source; English + Spanish are translations.
+// Missing keys fall back to Italian, then to the literal key.
+// ============================================================
+const TRANSLATIONS = {
+  it: {
+    list_not_found_title: 'Lista non trovata',
+    list_not_found_body: 'Questo link non è valido oppure la lista è stata eliminata.',
+    no_reels: 'Nessun reel in questa lista.',
+    progress_text: '{done} di {total} fatti',
+    mark_done: 'Segna come fatto',
+    mark_not_done: 'Segna come da fare',
+    open_on_instagram: 'Apri su Instagram',
+    play_backup: 'Riproduci il video di backup',
+    footer_hint: 'Tocca il cerchio per segnare un reel come fatto.',
+    priority_high: 'ALTA',
+    priority_low: 'BASSA',
+    reel_fallback: 'Reel',
+    clip_header_empty: 'Carica le tue clip per questo reel',
+    clip_header_count_one: '1 clip caricata',
+    clip_header_count_many: '{n} clip caricate',
+    drop_main: 'Trascina un video o clicca per scegliere',
+    drop_hint: 'video fino a 500 MB · puoi caricarne più di uno',
+    loading_existing_clips: 'carico le clip esistenti…',
+    delete_clip_title: 'Elimina clip',
+    remove_from_queue: 'Rimuovi dalla coda',
+    not_a_video: '"{name}" non è un file video.',
+    too_large: '"{name}" supera i 500 MB.',
+    confirm_delete: 'Eliminare "{name}" da Drive?',
+    error_prefix: 'Errore',
+  },
+  en: {
+    list_not_found_title: 'List not found',
+    list_not_found_body: 'This share link is invalid or the list has been deleted.',
+    no_reels: 'No reels in this list yet.',
+    progress_text: '{done} of {total} done',
+    mark_done: 'Mark as done',
+    mark_not_done: 'Mark as not done',
+    open_on_instagram: 'Open on Instagram',
+    play_backup: 'Play backup video',
+    footer_hint: 'Tap the circle to mark a reel as done.',
+    priority_high: 'HIGH',
+    priority_low: 'LOW',
+    reel_fallback: 'Reel',
+    clip_header_empty: 'Upload your clips for this reel',
+    clip_header_count_one: '1 clip uploaded',
+    clip_header_count_many: '{n} clips uploaded',
+    drop_main: 'Drop a video here or click to pick one',
+    drop_hint: 'videos up to 500 MB · you can upload more than one',
+    loading_existing_clips: 'loading existing clips…',
+    delete_clip_title: 'Delete clip',
+    remove_from_queue: 'Remove from queue',
+    not_a_video: '"{name}" is not a video file.',
+    too_large: '"{name}" exceeds 500 MB.',
+    confirm_delete: 'Delete "{name}" from Drive?',
+    error_prefix: 'Error',
+  },
+  es: {
+    list_not_found_title: 'Lista no encontrada',
+    list_not_found_body: 'Este enlace no es válido o la lista ha sido eliminada.',
+    no_reels: 'Aún no hay reels en esta lista.',
+    progress_text: '{done} de {total} hechos',
+    mark_done: 'Marcar como hecho',
+    mark_not_done: 'Marcar como pendiente',
+    open_on_instagram: 'Abrir en Instagram',
+    play_backup: 'Reproducir el video de respaldo',
+    footer_hint: 'Toca el círculo para marcar un reel como hecho.',
+    priority_high: 'ALTA',
+    priority_low: 'BAJA',
+    reel_fallback: 'Reel',
+    clip_header_empty: 'Sube tus clips para este reel',
+    clip_header_count_one: '1 clip subido',
+    clip_header_count_many: '{n} clips subidos',
+    drop_main: 'Arrastra un video o haz clic para elegirlo',
+    drop_hint: 'videos hasta 500 MB · puedes subir más de uno',
+    loading_existing_clips: 'cargando los clips existentes…',
+    delete_clip_title: 'Eliminar clip',
+    remove_from_queue: 'Quitar de la cola',
+    not_a_video: '"{name}" no es un archivo de video.',
+    too_large: '"{name}" supera los 500 MB.',
+    confirm_delete: '¿Eliminar "{name}" de Drive?',
+    error_prefix: 'Error',
+  },
+};
+
+const I18nContext = createContext({ t: (k) => k, lang: 'it' });
+const useT = () => useContext(I18nContext);
+
+function makeTranslator(lang) {
+  const dict = TRANSLATIONS[lang] || TRANSLATIONS.it;
+  return (key, vars) => {
+    let s = dict[key] || TRANSLATIONS.it[key] || key;
+    if (vars) {
+      for (const [k, v] of Object.entries(vars)) {
+        s = s.split(`{${k}}`).join(String(v));
+      }
+    }
+    return s;
+  };
+}
 
 const MAX_FILE_BYTES = 500 * 1024 * 1024;
 function humanSize(b) {
@@ -91,13 +193,16 @@ export default function PublicTodoPage() {
     }
   };
 
+  const lang = list?.language || 'it';
+  const t = useMemo(() => makeTranslator(lang), [lang]);
+
   if (loading) return <div className="public-loading"><div className="spinner" /></div>;
   if (error || !list) {
     return (
       <div className="public-page">
         <div className="public-error">
-          <h1>List not found</h1>
-          <p>{error || 'This share link is invalid or the list has been deleted.'}</p>
+          <h1>{makeTranslator('it')('list_not_found_title')}</h1>
+          <p>{error || makeTranslator('it')('list_not_found_body')}</p>
         </div>
       </div>
     );
@@ -108,6 +213,7 @@ export default function PublicTodoPage() {
   const pct = total > 0 ? Math.round((doneCount / total) * 100) : 0;
 
   return (
+    <I18nContext.Provider value={{ t, lang }}>
     <div className="public-page">
       <div className="public-container">
         <header className="public-header">
@@ -121,7 +227,7 @@ export default function PublicTodoPage() {
             <div className="public-progress-bar">
               <div className="public-progress-fill" style={{ width: `${pct}%` }} />
             </div>
-            <div className="public-progress-text">{doneCount} of {total} done</div>
+            <div className="public-progress-text">{t('progress_text', { done: doneCount, total })}</div>
           </div>
         </header>
 
@@ -134,7 +240,7 @@ export default function PublicTodoPage() {
 
         {list.items.length === 0 ? (
           <div className="public-empty">
-            <p>No reels in this list yet.</p>
+            <p>{t('no_reels')}</p>
           </div>
         ) : (
           <div className="public-items">
@@ -157,20 +263,20 @@ export default function PublicTodoPage() {
                   <button
                     className="public-checkbox"
                     onClick={() => toggleDone(item)}
-                    aria-label={item.is_done ? 'Mark as not done' : 'Mark as done'}
+                    aria-label={item.is_done ? t('mark_not_done') : t('mark_done')}
                   >
                     {item.is_done ? <CheckCircle2 size={22} /> : <div className="public-checkbox-empty" />}
                   </button>
                   <div className="public-item-rank-col">
                     <div className="public-item-rank">#{rankByReelId.get(reel?.id) ?? '?'}</div>
                     {item.priority === 3 && (
-                      <div className="public-priority-badge public-priority-high" title="High priority">
-                        <Flame size={10} /> HIGH
+                      <div className="public-priority-badge public-priority-high" title={t('priority_high')}>
+                        <Flame size={10} /> {t('priority_high')}
                       </div>
                     )}
                     {item.priority === 1 && (
-                      <div className="public-priority-badge public-priority-low" title="Low priority">
-                        LOW
+                      <div className="public-priority-badge public-priority-low" title={t('priority_low')}>
+                        {t('priority_low')}
                       </div>
                     )}
                   </div>
@@ -179,7 +285,7 @@ export default function PublicTodoPage() {
                   </div>
                   <div className="public-item-info">
                     <div className="public-item-creator">
-                      {reel?.creators?.username ? `@${reel.creators.username}` : 'Reel'}
+                      {reel?.creators?.username ? `@${reel.creators.username}` : t('reel_fallback')}
                     </div>
                     {reel?.caption && (
                       <div className="public-item-caption">
@@ -203,8 +309,8 @@ export default function PublicTodoPage() {
                       target="_blank"
                       rel="noopener noreferrer"
                       className="public-item-link"
-                      aria-label="Open reel on Instagram"
-                      title="Open on Instagram"
+                      aria-label={t('open_on_instagram')}
+                      title={t('open_on_instagram')}
                     >
                       <ExternalLink size={16} />
                     </a>
@@ -212,8 +318,8 @@ export default function PublicTodoPage() {
                       <button
                         className="public-item-link public-play-btn"
                         onClick={() => setPlayingVideoUrl(reel.backup_video_url)}
-                        aria-label="Play backup video"
-                        title="Play backup video (works even if reel is removed from IG)"
+                        aria-label={t('play_backup')}
+                        title={t('play_backup')}
                       >
                         <Play size={16} />
                       </button>
@@ -251,10 +357,11 @@ export default function PublicTodoPage() {
         )}
 
         <footer className="public-footer">
-          <p>Tap the circle to mark a reel as done.</p>
+          <p>{t('footer_hint')}</p>
         </footer>
       </div>
     </div>
+    </I18nContext.Provider>
   );
 }
 
@@ -263,6 +370,7 @@ export default function PublicTodoPage() {
 // Lazily loads existing clips; drag/drop or click to upload more.
 // ============================================================
 function ClipUploadStrip({ token, item, onChange }) {
+  const { t } = useT();
   const [clips, setClips] = useState(null);   // null = not loaded yet
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -296,11 +404,11 @@ function ClipUploadStrip({ token, item, onChange }) {
     setError('');
     for (const file of files) {
       if (!/^video\//i.test(file.type)) {
-        setError(`"${file.name}" non Ã¨ un file video.`);
+        setError(t('not_a_video', { name: file.name }));
         continue;
       }
       if (file.size > MAX_FILE_BYTES) {
-        setError(`"${file.name}" supera i 500 MB.`);
+        setError(t('too_large', { name: file.name }));
         continue;
       }
       const tempId = `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -353,13 +461,13 @@ function ClipUploadStrip({ token, item, onChange }) {
   };
 
   const handleDelete = async (clip) => {
-    if (!confirm(`Eliminare "${clip.drive_file_name}" da Drive?`)) return;
+    if (!confirm(t('confirm_delete', { name: clip.drive_file_name }))) return;
     try {
       await api.deleteCreatorUpload(token, item.id, clip.id);
       setClips((c) => (c || []).filter((x) => x.id !== clip.id));
       onChange?.({ uploads_count: Math.max(0, (item.uploads_count || 1) - 1) });
     } catch (err) {
-      alert(`Errore: ${err.message}`);
+      alert(`${t('error_prefix')}: ${err.message}`);
     }
   };
 
@@ -372,8 +480,10 @@ function ClipUploadStrip({ token, item, onChange }) {
         <FilmIcon size={12} />
         <span>
           {clips && clips.length > 0
-            ? `${clips.length} clip caricat${clips.length === 1 ? 'a' : 'e'}`
-            : 'Carica le tue clip per questo reel'}
+            ? (clips.length === 1
+                ? t('clip_header_count_one')
+                : t('clip_header_count_many', { n: clips.length }))
+            : t('clip_header_empty')}
         </span>
       </div>
 
@@ -391,8 +501,8 @@ function ClipUploadStrip({ token, item, onChange }) {
         onClick={() => inputRef.current?.click()}
       >
         <Upload size={14} />
-        <span>Trascina un video o clicca per scegliere</span>
-        <small>video fino a 500 MB Â· si puÃ² caricarne piÃ¹ di uno</small>
+        <span>{t('drop_main')}</span>
+        <small>{t('drop_hint')}</small>
       </div>
       <input
         ref={inputRef}
@@ -404,7 +514,7 @@ function ClipUploadStrip({ token, item, onChange }) {
       />
 
       {(loading || (clips === null && (item.uploads_count || 0) > 0)) && (
-        <div className="public-clip-loading"><Loader2 size={12} className="spin" /> carico le clip esistentiâ€¦</div>
+        <div className="public-clip-loading"><Loader2 size={12} className="spin" /> {t('loading_existing_clips')}</div>
       )}
 
       {(clips || []).length > 0 && (
@@ -426,7 +536,7 @@ function ClipUploadStrip({ token, item, onChange }) {
               <button
                 className="public-clip-delete"
                 onClick={() => handleDelete(c)}
-                title="Elimina clip"
+                title={t('delete_clip_title')}
               >
                 <Trash2 size={11} />
               </button>
@@ -449,7 +559,7 @@ function ClipUploadStrip({ token, item, onChange }) {
                   <button
                     className="public-clip-delete"
                     onClick={() => dismissPending(p.tempId)}
-                    title="Rimuovi dalla coda"
+                    title={t('remove_from_queue')}
                   >
                     <X size={11} />
                   </button>

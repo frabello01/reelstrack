@@ -1023,3 +1023,38 @@
   color: rgba(255,255,255,0.5); font-size: 13px;
 }
 .drive-picker-error { color: #fca5a5; }
+
+/* ============================================================
+   Language picker (TalentDetailPage)
+   ============================================================ */
+.lang-picker {
+  display: inline-flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+.lang-picker-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.55);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  padding: 4px 10px;
+  border-radius: 100px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.lang-picker-btn:hover {
+  background: rgba(255,255,255,0.08);
+  color: white;
+}
+.lang-picker-btn.active {
+  background: rgba(124, 107, 255, 0.15);
+  border-color: rgba(124, 107, 255, 0.4);
+  color: #c4b5fd;
+}
+.lang-picker-btn:disabled { opacity: 0.5; cursor: default; }
+.lang-flag { font-size: 13px; line-height: 1; }
