@@ -848,3 +848,21 @@
   background: rgba(255, 255, 255, 0.08);
   color: rgba(255, 255, 255, 0.85);
 }
+
+/* ============================================================
+   Edited toggle in the per-reel action row (TodoDetailPage)
+   - off (not edited): muted, just a checkmark
+   - on (is_edited):  green pill, filled checkmark
+   ============================================================ */
+.todo-item-action-btn.edited-toggle {
+  position: relative;
+}
+.todo-item-action-btn.edited-toggle.is-on {
+  background: rgba(74, 222, 128, 0.15);
+  border-color: rgba(74, 222, 128, 0.35);
+  color: #86efac;
+}
+.todo-item-action-btn.edited-toggle.is-on:hover {
+  background: rgba(74, 222, 128, 0.22);
+  color: #bbf7d0;
+}

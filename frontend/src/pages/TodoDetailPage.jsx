@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, ExternalLink, Trash2, Eye, EyeOff, Heart, Share2, Link2,
-  StickyNote, Lock, Check, X, Plus, Save, AlertCircle, Loader2,
+  StickyNote, Lock, Check, CheckCircle, X, Plus, Save, AlertCircle, Loader2,
   RefreshCw, Play, Download, MoreVertical, Move, Copy, Flame, Upload, Video,
   HardDrive, Folder, ToggleLeft, ToggleRight, UserRound
 } from 'lucide-react';
@@ -185,15 +185,19 @@ export default function TodoDetailPage() {
     }
   };
 
-  // Toggle hidden state. Optimistic update.
-  const handleToggleHidden = async (reelId, currentlyHidden) => {
-    const newHidden = !currentlyHidden;
+  // Toggle the editor-done flag for a reel. Optimistic update. Pure
+  // admin-side state — the creator never sees this flag on the share
+  // page; it just drives the Trello column the reel lives in.
+  const handleToggleEdited = async (itemId, currentlyEdited) => {
+    const next = !currentlyEdited;
     setList((l) => ({
       ...l,
-      items: l.items.map((it) => it.reels?.id === reelId ? { ...it, is_hidden: newHidden } : it),
+      items: l.items.map((it) => it.id === itemId
+        ? { ...it, is_edited: next, edited_at: next ? new Date().toISOString() : null }
+        : it),
     }));
     try {
-      await api.toggleReelHidden(id, reelId, newHidden);
+      await api.setReelEdited(itemId, next);
     } catch (err) {
       alert(`Failed: ${err.message}`);
       load();
@@ -413,14 +417,12 @@ export default function TodoDetailPage() {
           // creator on the share page, AND embedded in the Drive filename.
           // Numbers never recycle on delete — leaves gaps on purpose so
           // "reel #6" stays "reel #6" forever.
-          // Bucket every reel into exactly one of 4 columns based on its
-          // (is_hidden, is_done, is_edited) state. Each reel appears in
-          // exactly one tab.
-          const visible = list.items.filter((it) => !it.is_hidden);
-          const pendingItems = visible.filter((it) => !it.is_done);
-          const toeditItems  = visible.filter((it) => it.is_done && !it.is_edited);
-          const editedItems  = visible.filter((it) => it.is_edited);
-          const hiddenItems  = list.items.filter((it) => it.is_hidden);
+          // Bucket every reel into exactly one of 3 columns based on
+          // (is_done, is_edited). is_hidden is no longer used in the UI —
+          // historical hidden reels were migrated to is_edited=true.
+          const pendingItems = list.items.filter((it) => !it.is_done);
+          const toeditItems  = list.items.filter((it) => it.is_done && !it.is_edited);
+          const editedItems  = list.items.filter((it) => it.is_edited);
 
           const renderItem = (item) => {
             const reel = item.reels;
@@ -512,12 +514,14 @@ export default function TodoDetailPage() {
                       </a>
                     )}
                     <button
-                      className="todo-item-action-btn"
-                      onClick={() => handleToggleHidden(reel.id, item.is_hidden)}
-                      title={item.is_hidden ? 'Move back to Active' : 'Hide (move to Hidden section)'}
-                      aria-label={item.is_hidden ? 'Unhide' : 'Hide'}
+                      className={`todo-item-action-btn edited-toggle ${item.is_edited ? 'is-on' : ''}`}
+                      onClick={() => handleToggleEdited(item.id, item.is_edited)}
+                      title={item.is_edited
+                        ? 'Editato — click per riaprire (torna in "To be edited")'
+                        : 'Marca come editato (sposta in "Edited")'}
+                      aria-label={item.is_edited ? 'Mark as not edited' : 'Mark as edited'}
                     >
-                      {item.is_hidden ? <Eye size={14} /> : <EyeOff size={14} />}
+                      {item.is_edited ? <CheckCircle size={14} /> : <Check size={14} />}
                     </button>
                     <div className="reel-menu-wrap">
                       <button
@@ -624,9 +628,8 @@ export default function TodoDetailPage() {
 
           const tabConfig = {
             pending: { items: pendingItems, empty: 'Nessun reel in attesa. Tutto in lavorazione o editato.' },
-            toedit:  { items: toeditItems,  empty: 'Nessun reel da editare.' },
+            toedit:  { items: toeditItems,  empty: 'Nessun reel da editare al momento.' },
             edited:  { items: editedItems,  empty: 'Nessun reel editato ancora.' },
-            hidden:  { items: hiddenItems,  empty: 'Nessun reel nascosto.' },
           };
           const current = tabConfig[tab] || tabConfig.pending;
 
@@ -655,17 +658,9 @@ export default function TodoDetailPage() {
                 >
                   Edited <span className="todo-tab-count">{editedItems.length}</span>
                 </button>
-                <button
-                  type="button"
-                  className={`todo-tab tab-hidden ${tab === 'hidden' ? 'active' : ''}`}
-                  onClick={() => setTab('hidden')}
-                  title="Reels nascosti dal flusso"
-                >
-                  <EyeOff size={13} /> Hidden <span className="todo-tab-count">{hiddenItems.length}</span>
-                </button>
               </div>
 
-              <div className={`todo-items ${tab === 'hidden' ? 'todo-items-hidden' : ''}`}>
+              <div className="todo-items">
                 {current.items.length === 0 ? (
                   <div className="empty-state-inline">
                     <p>{current.empty}</p>
@@ -945,7 +940,6 @@ function AdminClipBadge({ item, onChange }) {
   const [open, setOpen] = useState(true);
   const [clips, setClips] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
 
   const count = item.uploads_count || 0;
 
@@ -974,39 +968,16 @@ function AdminClipBadge({ item, onChange }) {
     });
   };
 
-  const handleToggleEdited = async (e) => {
-    e.stopPropagation();
-    if (saving) return;
-    setSaving(true);
-    try {
-      const updated = await api.setReelEdited(item.id, !item.is_edited);
-      onChange?.({ is_edited: updated.is_edited, edited_at: updated.edited_at });
-    } catch (err) {
-      alert(`Errore: ${err.message}`);
-    } finally {
-      setSaving(false);
-    }
-  };
-
   return (
     <div className={`admin-clip-badge-wrap ${open ? 'open' : ''}`}>
       <div className="admin-clip-badge-row">
         <button
           className={`admin-clip-count-btn ${count > 0 ? 'has-clips' : 'empty'}`}
           onClick={toggleOpen}
-          title={count > 0 ? `${count} clip caricat${count === 1 ? 'a' : 'e'} — click per vedere` : 'Nessuna clip caricata'}
+          title={count > 0 ? `${count} clip caricat${count === 1 ? 'a' : 'e'} — click per nascondere/mostrare` : 'Nessuna clip caricata'}
         >
           <Video size={11} />
           <span>{count} clip</span>
-        </button>
-        <button
-          className={`admin-edited-toggle ${item.is_edited ? 'on' : 'off'}`}
-          onClick={handleToggleEdited}
-          disabled={saving}
-          title={item.is_edited ? 'Marcato come editato' : "Click se l'editor ha finito"}
-        >
-          {item.is_edited ? <Check size={11} /> : <X size={11} />}
-          <span>{item.is_edited ? 'Editato' : 'Da editare'}</span>
         </button>
       </div>
 
