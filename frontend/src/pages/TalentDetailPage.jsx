@@ -4,7 +4,7 @@ import {
   ArrowLeft, Plus, Trash2, RefreshCw, ExternalLink,
   TrendingUp, TrendingDown, Eye, Heart, Users, Film, Trophy, AlertTriangle, CheckCircle2,
   StickyNote, Check, X, ListChecks, MousePointerClick, UserPlus, DollarSign, Link2,
-  EyeOff, ChevronDown, ChevronRight as ChevronRightIcon, Lock
+  EyeOff, ChevronDown, ChevronRight as ChevronRightIcon, Lock, HardDrive, Folder, Search, Loader2
 } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid, Legend } from 'recharts';
 import { api } from '../lib/api';
@@ -198,6 +198,20 @@ export default function TalentDetailPage() {
           {refreshing ? 'Refreshing…' : 'Refresh now'}
         </button>
       </div>
+
+      <DriveFolderSection
+        talentId={id}
+        currentFolderId={talent.drive_folder_id}
+        currentFolderName={talent.drive_folder_name}
+        onSaved={(folder) => {
+          // Mutate locally — avoids a full reload
+          setTalent((t) => ({
+            ...t,
+            drive_folder_id: folder?.id || null,
+            drive_folder_name: folder?.name || null,
+          }));
+        }}
+      />
 
       {/* Profiles management section */}
       <div className="profiles-section">
@@ -1116,5 +1130,218 @@ function DailyTasksToggle({ profileId, initialEnabled }) {
       <ListChecks size={13} />
       <span>{enabled ? 'In daily tasks' : 'Excluded'}</span>
     </button>
+  );
+}
+
+// ============================================================
+// DriveFolderSection — pick / validate the talent's Drive folder
+// where creator-uploaded clips will land.
+// ============================================================
+function DriveFolderSection({ talentId, currentFolderId, currentFolderName, onSaved }) {
+  const [driveStatus, setDriveStatus] = useState(null);
+  const [folderId, setFolderId] = useState(currentFolderId || '');
+  const [folderName, setFolderName] = useState(currentFolderName || '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  useEffect(() => {
+    setFolderId(currentFolderId || '');
+    setFolderName(currentFolderName || '');
+  }, [currentFolderId, currentFolderName]);
+
+  useEffect(() => {
+    api.getDriveStatus().then(setDriveStatus).catch(() => setDriveStatus({ connected: false }));
+  }, []);
+
+  const dirty = (folderId || '') !== (currentFolderId || '');
+
+  const handleSave = async () => {
+    setError('');
+    setSaving(true);
+    try {
+      let resolvedName = folderName;
+      if (folderId.trim()) {
+        const folder = await api.validateDriveFolder(folderId.trim());
+        resolvedName = folder.name;
+      } else {
+        resolvedName = null;
+      }
+      const updated = await api.updateTalent(talentId, {
+        drive_folder_id: folderId.trim() || null,
+        drive_folder_name: resolvedName,
+      });
+      setFolderName(resolvedName || '');
+      onSaved?.({ id: updated.drive_folder_id, name: updated.drive_folder_name });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleClear = async () => {
+    if (!confirm('Rimuovere la cartella Drive da questo creator?')) return;
+    setSaving(true);
+    setError('');
+    try {
+      const updated = await api.updateTalent(talentId, {
+        drive_folder_id: null,
+        drive_folder_name: null,
+      });
+      setFolderId('');
+      setFolderName('');
+      onSaved?.({ id: null, name: null });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handlePicked = (folder) => {
+    setFolderId(folder.id);
+    setFolderName(folder.name);
+    setPickerOpen(false);
+  };
+
+  if (driveStatus && !driveStatus.connected) {
+    return (
+      <div className="drive-folder-section">
+        <div className="drive-folder-header">
+          <HardDrive size={14} /> Cartella Google Drive
+        </div>
+        <div className="drive-folder-disconnected">
+          Google Drive non è ancora connesso. Vai su <Link to="/settings">Settings</Link> per collegarlo.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="drive-folder-section">
+      <div className="drive-folder-header">
+        <HardDrive size={14} /> Cartella Google Drive
+        <span className="drive-folder-hint">
+          Dove finiscono i video che le creator caricano dai share link delle to-do list
+        </span>
+      </div>
+
+      <div className="drive-folder-row">
+        <input
+          type="text"
+          className="drive-folder-input"
+          value={folderId}
+          onChange={(e) => setFolderId(e.target.value)}
+          placeholder="ID cartella Drive (es. 1aB2cD3eF4gH...)"
+          disabled={saving}
+          spellCheck={false}
+        />
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm"
+          onClick={() => setPickerOpen(true)}
+          disabled={saving}
+          title="Sfoglia le tue cartelle Drive"
+        >
+          <Folder size={13} /> Sfoglia
+        </button>
+        {dirty && (
+          <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={saving}>
+            {saving ? <Loader2 size={12} className="spin" /> : <Check size={12} />} Salva
+          </button>
+        )}
+        {!dirty && currentFolderId && (
+          <button className="btn btn-ghost btn-sm" onClick={handleClear} disabled={saving} title="Rimuovi cartella">
+            <X size={12} />
+          </button>
+        )}
+      </div>
+
+      {folderName && !error && (
+        <div className="drive-folder-current">
+          <Folder size={12} /> <strong>{folderName}</strong>
+        </div>
+      )}
+      {error && (
+        <div className="drive-folder-error">
+          <AlertTriangle size={12} /> {error}
+        </div>
+      )}
+
+      {pickerOpen && (
+        <DriveFolderPicker
+          onPick={handlePicked}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ----- DriveFolderPicker: lightweight searchable modal -----
+function DriveFolderPicker({ onPick, onClose }) {
+  const [folders, setFolders] = useState([]);
+  const [query, setQuery] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const load = async (q) => {
+    setLoading(true);
+    setError('');
+    try {
+      const list = await api.listDriveFolders(q);
+      setFolders(list || []);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(''); }, []);
+
+  // Debounced search
+  useEffect(() => {
+    const t = setTimeout(() => { load(query.trim()); }, 250);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  return (
+    <div className="drive-picker-backdrop" onClick={onClose}>
+      <div className="drive-picker" onClick={(e) => e.stopPropagation()}>
+        <div className="drive-picker-header">
+          <h3><Folder size={14} /> Scegli cartella Drive</h3>
+          <button className="drive-picker-close" onClick={onClose}><X size={14} /></button>
+        </div>
+        <div className="drive-picker-search">
+          <Search size={13} />
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Cerca per nome cartella…"
+            autoFocus
+          />
+        </div>
+        <div className="drive-picker-list">
+          {loading ? (
+            <div className="drive-picker-loading"><Loader2 size={16} className="spin" /></div>
+          ) : error ? (
+            <div className="drive-picker-error"><AlertTriangle size={13} /> {error}</div>
+          ) : folders.length === 0 ? (
+            <div className="drive-picker-empty">Nessuna cartella trovata</div>
+          ) : (
+            folders.map((f) => (
+              <button key={f.id} className="drive-picker-item" onClick={() => onPick(f)}>
+                <Folder size={13} />
+                <span className="drive-picker-name">{f.name}</span>
+                <span className="drive-picker-id">{f.id.slice(0, 12)}…</span>
+              </button>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

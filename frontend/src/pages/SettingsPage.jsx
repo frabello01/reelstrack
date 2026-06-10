@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Save, CheckCircle2, Image as ImageIcon, Plus, Trash2, ListChecks, GripVertical, Bell, Send, AlertCircle } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { Save, CheckCircle2, Image as ImageIcon, Plus, Trash2, ListChecks, GripVertical, Bell, Send, AlertCircle, HardDrive, LogOut, Loader2 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { api } from '../lib/api';
 import ImageUploader from '../components/ImageUploader';
@@ -121,6 +122,16 @@ export default function SettingsPage() {
       </div>
 
       <div className="settings-section">
+        <h2><HardDrive size={16} style={{ verticalAlign: '-3px', marginRight: 6 }} /> Google Drive</h2>
+        <p className="settings-help">
+          Collega un account Google per abilitare il caricamento delle clip dei creator direttamente sulle
+          loro cartelle Drive (dalla pagina pubblica della to-do list). Una sola connessione serve a tutto —
+          le cartelle dei singoli creator si configurano in <em>My Creators</em>.
+        </p>
+        <DriveConnectionEditor />
+      </div>
+
+      <div className="settings-section">
         <h2><ListChecks size={16} style={{ verticalAlign: '-3px', marginRight: 6 }} /> Daily tasks</h2>
         <p className="settings-help">
           Tasks defined here are generated <strong>every day at midnight (Rome time)</strong> for
@@ -204,6 +215,132 @@ function DiscordWebhookEditor({ initial, onSaved }) {
         <div className={`settings-toast ${result.type === 'err' ? 'settings-toast-err' : 'settings-toast-ok'}`}>
           {result.type === 'err' ? <AlertCircle size={13} /> : <CheckCircle2 size={13} />}
           <span>{result.text}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ----- Drive connection: status + connect/disconnect -----
+function DriveConnectionEditor() {
+  const [status, setStatus] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [flash, setFlash] = useState(null); // { type, text }
+  const [params, setParams] = useSearchParams();
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const s = await api.getDriveStatus();
+      setStatus(s);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  // Consume the ?drive_status=... flash params set by the OAuth callback redirect
+  useEffect(() => {
+    const ds = params.get('drive_status');
+    if (!ds) return;
+    if (ds === 'connected') {
+      const email = params.get('drive_email') || '';
+      setFlash({ type: 'ok', text: `Drive collegato${email ? ` come ${email}` : ''}.` });
+    } else {
+      const msg = params.get('drive_msg') || 'errore sconosciuto';
+      setFlash({ type: 'err', text: `Connessione fallita: ${msg}` });
+    }
+    // Clean the URL so a refresh doesn't show the flash again
+    const next = new URLSearchParams(params);
+    next.delete('drive_status');
+    next.delete('drive_email');
+    next.delete('drive_msg');
+    setParams(next, { replace: true });
+    // Reload status after the redirect since the row was just updated
+    load();
+  }, []);
+
+  const handleConnect = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      const { auth_url } = await api.startDriveOAuth();
+      window.location.href = auth_url;
+    } catch (err) {
+      setError(err.message);
+      setBusy(false);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    if (!confirm('Disconnettere Google Drive? Gli upload futuri sui to-do non funzioneranno finché non riconnetti.')) return;
+    setBusy(true);
+    setError('');
+    try {
+      await api.disconnectDrive();
+      await load();
+      setFlash({ type: 'ok', text: 'Drive disconnesso.' });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (loading) return <div className="settings-toast"><Loader2 size={14} className="spin" /> Carico stato Drive…</div>;
+  if (!status) return null;
+
+  return (
+    <div className="drive-connection-editor">
+      {!status.configured ? (
+        <div className="settings-toast settings-toast-err">
+          <AlertCircle size={13} />
+          <span>Drive non configurato sul server. Setta <code>GOOGLE_CLIENT_ID</code> e <code>GOOGLE_CLIENT_SECRET</code> su Render.</span>
+        </div>
+      ) : status.connected ? (
+        <div className="drive-connected-row">
+          <div className="drive-connected-info">
+            <CheckCircle2 size={16} style={{ color: '#4ade80' }} />
+            <div>
+              <strong>Connesso</strong>
+              {status.email && <> come <code>{status.email}</code></>}
+              {status.connected_at && (
+                <div className="drive-connected-since">
+                  dal {new Date(status.connected_at).toLocaleDateString('it-IT')}
+                </div>
+              )}
+            </div>
+          </div>
+          <button
+            className="btn btn-ghost"
+            onClick={handleDisconnect}
+            disabled={busy}
+          >
+            <LogOut size={13} /> Disconnetti
+          </button>
+        </div>
+      ) : (
+        <button className="btn btn-primary" onClick={handleConnect} disabled={busy}>
+          {busy
+            ? <><Loader2 size={14} className="spin" /> Reindirizzamento…</>
+            : <><HardDrive size={14} /> Connetti Google Drive</>}
+        </button>
+      )}
+
+      {flash && (
+        <div className={`settings-toast ${flash.type === 'err' ? 'settings-toast-err' : 'settings-toast-ok'}`}>
+          {flash.type === 'err' ? <AlertCircle size={13} /> : <CheckCircle2 size={13} />}
+          <span>{flash.text}</span>
+        </div>
+      )}
+      {error && (
+        <div className="settings-toast settings-toast-err">
+          <AlertCircle size={13} /> {error}
         </div>
       )}
     </div>

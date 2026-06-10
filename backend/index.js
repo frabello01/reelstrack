@@ -29,6 +29,8 @@ const landingsRouter = require('./routes/landings');
 const inflowwRouter = require('./routes/infloww');
 const videoStudioRouter = require('./routes/videoStudio');
 const redirectsRouter = require('./routes/redirects');
+const driveRouter = require('./routes/drive');
+const uploadsRouter = require('./routes/uploads');
 const { requireAuth } = require('./middleware/auth');
 const { requireAdminForWrites } = require('./middleware/requireAdminForWrites');
 const { autoLogMiddleware } = require('./middleware/autoLogMiddleware');
@@ -77,6 +79,9 @@ app.use((req, res, next) => {
   if (req.path.startsWith('/api/redirects/public/')) {
     return publicLandingsCors(req, res, next);
   }
+  if (req.path.startsWith('/api/uploads/public/')) {
+    return publicLandingsCors(req, res, next);
+  }
   return strictCors(req, res, next);
 });
 app.use(express.json({ limit: '15mb' }));
@@ -104,6 +109,11 @@ app.use('/api', (req, res, next) => {
   if (req.path.startsWith('/todos/public/')) return next();
   if (req.path.startsWith('/landings/public/')) return next();
   if (req.path.startsWith('/redirects/public/')) return next();
+  if (req.path.startsWith('/uploads/public/')) return next();
+  // Google OAuth callback is a browser-initiated GET from Google's domain
+  // — there's no JWT to attach. CSRF is enforced via HMAC state inside
+  // the handler.
+  if (req.path === '/drive/oauth/callback') return next();
   return requireAuth(req, res, next);
 });
 
@@ -151,6 +161,8 @@ app.use('/api/landings', landingsRouter);
 app.use('/api/infloww', inflowwRouter);
 app.use('/api/video-studio', videoStudioRouter);
 app.use('/api/redirects', redirectsRouter);
+app.use('/api/drive', driveRouter);
+app.use('/api/uploads', uploadsRouter);
 
 // ============================================================
 // CRONS (unchanged + new log retention cleanup)

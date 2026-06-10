@@ -506,11 +506,13 @@ router.post('/', async (req, res) => {
 
 // PATCH update a talent
 router.patch('/:id', async (req, res) => {
-  const { name, display_name, notes } = req.body;
+  const { name, display_name, notes, drive_folder_id, drive_folder_name } = req.body;
   const updates = {};
   if (name !== undefined) updates.name = name;
   if (display_name !== undefined) updates.display_name = display_name;
   if (notes !== undefined) updates.notes = notes;
+  if (drive_folder_id !== undefined) updates.drive_folder_id = drive_folder_id || null;
+  if (drive_folder_name !== undefined) updates.drive_folder_name = drive_folder_name || null;
   if (Object.keys(updates).length === 0) return res.status(400).json({ error: 'Nothing to update' });
 
   const { data, error } = await supabase

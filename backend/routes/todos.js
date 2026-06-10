@@ -78,7 +78,7 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   const { data: list, error } = await supabase
     .from('todo_lists')
-    .select('*')
+    .select('*, talents(id, name, drive_folder_id, drive_folder_name)')
     .eq('id', req.params.id)
     .single();
   if (error) return res.status(500).json({ error: error.message });
@@ -87,6 +87,7 @@ router.get('/:id', async (req, res) => {
     .from('todo_list_reels')
     .select(`
       id, is_done, is_hidden, added_at, done_at, public_note, private_note, priority,
+      is_edited, edited_at, uploads_count,
       reels (
         id, instagram_id, url, thumbnail_url, caption, is_manual, is_uploaded,
         views, likes, comments, posted_at,
@@ -114,14 +115,16 @@ router.post('/', async (req, res) => {
   res.json(data);
 });
 
-// PATCH rename + update list-level notes
+// PATCH rename + update list-level notes (+ talent + uploads toggle)
 router.patch('/:id', async (req, res) => {
-  const { name, public_note, private_note } = req.body;
+  const { name, public_note, private_note, talent_id, creator_uploads_enabled } = req.body;
   // Only update fields that were actually provided (so callers can patch one at a time)
   const updates = {};
   if (name !== undefined) updates.name = name;
   if (public_note !== undefined) updates.public_note = public_note;
   if (private_note !== undefined) updates.private_note = private_note;
+  if (talent_id !== undefined) updates.talent_id = talent_id || null;
+  if (creator_uploads_enabled !== undefined) updates.creator_uploads_enabled = !!creator_uploads_enabled;
   if (Object.keys(updates).length === 0) {
     return res.status(400).json({ error: 'Nothing to update' });
   }
@@ -627,7 +630,7 @@ router.delete('/:id/cover-image', async (req, res) => {
 router.get('/public/:token', async (req, res) => {
   const { data: list, error } = await supabase
     .from('todo_lists')
-    .select('id, name, public_token, public_note, cover_image_url, created_at')
+    .select('id, name, public_token, public_note, cover_image_url, created_at, creator_uploads_enabled, talent_id')
     .eq('public_token', req.params.token)
     .maybeSingle();
   if (error) return res.status(500).json({ error: error.message });
@@ -639,6 +642,7 @@ router.get('/public/:token', async (req, res) => {
     .from('todo_list_reels')
     .select(`
       id, is_done, added_at, done_at, public_note, priority,
+      uploads_count,
       reels (
         id, url, thumbnail_url, caption, is_manual, is_uploaded,
         views, likes, comments, posted_at,
@@ -657,6 +661,7 @@ router.get('/public/:token', async (req, res) => {
     public_token: list.public_token,
     public_note: list.public_note,
     cover_image_url: list.cover_image_url,
+    creator_uploads_enabled: !!list.creator_uploads_enabled,
     items: items || [],
   });
 });

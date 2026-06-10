@@ -249,3 +249,119 @@
   color: rgba(255,255,255,0.5);
   border-color: rgba(255,255,255,0.2);
 }
+
+/* ============================================================
+   Clip upload strip (per-reel on PublicTodoPage)
+   ============================================================ */
+.public-clip-strip {
+  grid-column: 1 / -1;
+  margin-top: 12px;
+  padding: 12px;
+  background: rgba(124, 107, 255, 0.05);
+  border: 1px dashed rgba(124, 107, 255, 0.25);
+  border-radius: 10px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.public-clip-strip-header {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; color: rgba(255,255,255,0.7);
+  font-weight: 600;
+}
+.public-clip-strip-header svg { color: #c4b5fd; }
+
+.public-clip-drop {
+  border: 1.5px dashed rgba(255,255,255,0.18);
+  border-radius: 10px;
+  background: rgba(255,255,255,0.02);
+  padding: 16px 12px;
+  text-align: center;
+  cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  color: rgba(255,255,255,0.65);
+  transition: all 0.15s;
+  font-size: 13px;
+}
+.public-clip-drop:hover,
+.public-clip-drop-active {
+  border-color: rgba(124,107,255,0.6);
+  background: rgba(124,107,255,0.07);
+  color: white;
+}
+.public-clip-drop svg { color: #c4b5fd; }
+.public-clip-drop small {
+  font-size: 11px; color: rgba(255,255,255,0.4);
+}
+
+.public-clip-loading {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11.5px; color: rgba(255,255,255,0.5);
+}
+
+.public-clip-list {
+  list-style: none;
+  padding: 0; margin: 0;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.public-clip-pending-list { margin-top: 4px; }
+.public-clip-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: rgba(0,0,0,0.25);
+  border-radius: 6px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.85);
+}
+.public-clip-item svg { color: rgba(255,255,255,0.55); flex-shrink: 0; }
+.public-clip-item.pending { background: rgba(124,107,255,0.1); }
+.public-clip-item.failed { background: rgba(248,113,113,0.1); }
+.public-clip-item.failed svg { color: #f87171; }
+.public-clip-name { overflow: hidden; }
+.public-clip-name a { color: rgba(255,255,255,0.9); text-decoration: none; margin-left: 4px; }
+.public-clip-name a:hover { color: #c4b5fd; }
+.public-clip-size {
+  font-size: 11px;
+  color: rgba(255,255,255,0.4);
+  font-family: ui-monospace, "JetBrains Mono", Menlo, monospace;
+}
+.public-clip-delete {
+  background: transparent;
+  border: none;
+  color: rgba(255,255,255,0.4);
+  cursor: pointer;
+  padding: 3px 5px;
+  border-radius: 4px;
+  display: flex; align-items: center;
+}
+.public-clip-delete:hover { color: #f87171; background: rgba(248,113,113,0.1); }
+.public-clip-progress {
+  display: inline-flex; align-items: center; gap: 6px;
+  min-width: 120px;
+}
+.public-clip-progress-bar {
+  display: inline-block;
+  width: 90px; height: 5px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 100px; overflow: hidden;
+}
+.public-clip-progress-bar span {
+  display: block; height: 100%;
+  background: linear-gradient(90deg, #7c6bff, #c4b5fd);
+  transition: width 0.18s ease;
+}
+.public-clip-progress-text {
+  font-family: ui-monospace, "JetBrains Mono", Menlo, monospace;
+  font-size: 11px;
+  color: rgba(255,255,255,0.6);
+  min-width: 32px;
+}
+.public-clip-error {
+  font-size: 11px; color: #fca5a5;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.public-clip-strip-error {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11.5px; color: #fca5a5;
+}

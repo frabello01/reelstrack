@@ -103,6 +103,8 @@ export const api = {
   renameTodo: (id, name) => request(`/api/todos/${id}`, { method: 'PATCH', body: JSON.stringify({ name }) }),
   updateTodoNotes: (id, { public_note, private_note }) =>
     request(`/api/todos/${id}`, { method: 'PATCH', body: JSON.stringify({ public_note, private_note }) }),
+  updateTodo: (id, body) =>
+    request(`/api/todos/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   deleteTodo: (id) => request(`/api/todos/${id}`, { method: 'DELETE' }),
   addReelToTodo: (todoId, reel_id) =>
     request(`/api/todos/${todoId}/reels`, { method: 'POST', body: JSON.stringify({ reel_id }) }),
@@ -329,6 +331,45 @@ export const api = {
     request(`/api/redirects/public/click/${id}`, {
       method: 'POST',
       body: JSON.stringify(payload || {}),
+    }),
+
+  // Google Drive — admin
+  getDriveStatus: () => request('/api/drive/status'),
+  startDriveOAuth: () => request('/api/drive/oauth/start'),
+  disconnectDrive: () => request('/api/drive/disconnect', { method: 'POST' }),
+  listDriveFolders: (q = '') =>
+    request(`/api/drive/folders${q ? `?q=${encodeURIComponent(q)}` : ''}`),
+  validateDriveFolder: (folder_id) =>
+    request('/api/drive/folders/validate', {
+      method: 'POST',
+      body: JSON.stringify({ folder_id }),
+    }),
+
+  // Creator uploads — admin (clip list for a reel + edited toggle)
+  getReelUploads: (todoListReelId) =>
+    request(`/api/uploads/reels/${todoListReelId}`),
+  setReelEdited: (todoListReelId, is_edited) =>
+    request(`/api/uploads/reels/${todoListReelId}/edited`, {
+      method: 'PATCH',
+      body: JSON.stringify({ is_edited }),
+    }),
+
+  // Creator uploads — public (used by the creator on the share page)
+  initCreatorUpload: (token, todoListReelId, payload) =>
+    request(`/api/uploads/public/${token}/reels/${todoListReelId}/init`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  completeCreatorUpload: (token, todoListReelId, payload) =>
+    request(`/api/uploads/public/${token}/reels/${todoListReelId}/complete`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  listCreatorUploads: (token, todoListReelId) =>
+    request(`/api/uploads/public/${token}/reels/${todoListReelId}`),
+  deleteCreatorUpload: (token, todoListReelId, uploadId) =>
+    request(`/api/uploads/public/${token}/reels/${todoListReelId}/uploads/${uploadId}`, {
+      method: 'DELETE',
     }),
 
   // Team

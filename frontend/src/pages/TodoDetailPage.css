@@ -599,3 +599,213 @@
   .todo-tabs { width: 100%; }
   .todo-tab { flex: 1; justify-content: center; padding: 8px 10px; }
 }
+
+/* ============================================================
+   Creator Uploads block (TodoDetailPage)
+   ============================================================ */
+.creator-uploads-block {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+.creator-uploads-block.on {
+  background: rgba(74,222,128,0.04);
+  border-color: rgba(74,222,128,0.2);
+}
+.cub-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.cub-toggle {
+  background: transparent;
+  border: none;
+  color: rgba(255,255,255,0.45);
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+}
+.creator-uploads-block.on .cub-toggle { color: #4ade80; }
+.cub-header-text { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.cub-header-text strong {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 13.5px; color: white; font-weight: 600;
+}
+.cub-header-text strong svg { color: #c4b5fd; }
+.cub-subtitle {
+  font-size: 11.5px; color: rgba(255,255,255,0.5);
+}
+.cub-expand {
+  background: transparent; border: none;
+  color: rgba(255,255,255,0.4);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+.cub-expand:hover { color: white; }
+
+.cub-body {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cub-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cub-field label {
+  font-size: 11px;
+  color: rgba(255,255,255,0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  display: inline-flex; align-items: center; gap: 4px;
+}
+.cub-field select {
+  background: rgba(0,0,0,0.3);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: white;
+  font-size: 12.5px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  max-width: 280px;
+}
+.cub-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.cub-check {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px;
+  padding: 4px 0;
+}
+.cub-check.ok { color: rgba(255,255,255,0.85); }
+.cub-check.ok svg { color: #4ade80; }
+.cub-check.pending { color: rgba(255,255,255,0.5); }
+.cub-check.pending svg { color: rgba(248,113,113,0.7); }
+.cub-check code {
+  background: rgba(0,0,0,0.4);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+.cub-warn {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: rgba(251,191,36,0.08);
+  border: 1px solid rgba(251,191,36,0.2);
+  color: #fbbf24;
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 6px;
+}
+.cub-err {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; color: #fca5a5;
+}
+
+/* ============================================================
+   Admin clip badge / list (TodoDetailPage)
+   ============================================================ */
+.admin-clip-badge-wrap {
+  margin-top: 6px;
+}
+.admin-clip-badge-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.admin-clip-count-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(124,107,255,0.1);
+  border: 1px solid rgba(124,107,255,0.25);
+  color: #c4b5fd;
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 100px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.admin-clip-count-btn:hover { background: rgba(124,107,255,0.18); }
+.admin-clip-count-btn.empty {
+  background: rgba(255,255,255,0.03);
+  border-color: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.45);
+  cursor: default;
+}
+.admin-clip-count-btn svg { color: inherit; }
+
+.admin-edited-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.55);
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 100px;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.admin-edited-toggle.on {
+  background: rgba(74,222,128,0.1);
+  border-color: rgba(74,222,128,0.3);
+  color: #4ade80;
+}
+.admin-edited-toggle:hover { background: rgba(255,255,255,0.05); }
+.admin-edited-toggle.on:hover { background: rgba(74,222,128,0.18); }
+
+.admin-clip-list {
+  margin-top: 6px;
+  background: rgba(0,0,0,0.25);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 8px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-width: 480px;
+}
+.admin-clip-loading,
+.admin-clip-empty {
+  font-size: 11.5px;
+  color: rgba(255,255,255,0.5);
+  padding: 4px;
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.admin-clip-row {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+  font-size: 11.5px;
+  color: rgba(255,255,255,0.82);
+  padding: 5px 7px;
+  border-radius: 5px;
+  transition: background 0.12s;
+}
+.admin-clip-row:hover {
+  background: rgba(255,255,255,0.04);
+  color: white;
+}
+.admin-clip-row svg { color: rgba(255,255,255,0.45); }
+.admin-clip-version {
+  font-family: ui-monospace, "JetBrains Mono", Menlo, monospace;
+  color: #c4b5fd;
+  font-size: 11px;
+}
+.admin-clip-name {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}

@@ -3,7 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, ExternalLink, Trash2, Eye, EyeOff, Heart, Share2, Link2,
   StickyNote, Lock, Check, X, Plus, Save, AlertCircle, Loader2,
-  RefreshCw, Play, Download, MoreVertical, Move, Copy, Flame, Upload, Video
+  RefreshCw, Play, Download, MoreVertical, Move, Copy, Flame, Upload, Video,
+  HardDrive, Folder, ToggleLeft, ToggleRight, UserRound
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { uploadVideoToTodo } from '../lib/videoUpload';
@@ -322,6 +323,9 @@ export default function TodoDetailPage() {
         </div>
       </div>
 
+      {/* Creator uploads (Drive) — settable per to-do list */}
+      <CreatorUploadsBlock list={list} onChanged={silentReload} />
+
       {/* List-level notes (public + private) */}
       <div className="list-notes-block">
         <div className="list-note-card list-note-public">
@@ -459,6 +463,17 @@ export default function TodoDetailPage() {
                       reel={reel}
                       onRetry={() => handleRetryBackup(reel.id)}
                     />
+                    {list.creator_uploads_enabled && (
+                      <AdminClipBadge
+                        item={item}
+                        onChange={(patch) => {
+                          setList((l) => ({
+                            ...l,
+                            items: l.items.map((it) => it.id === item.id ? { ...it, ...patch } : it),
+                          }));
+                        }}
+                      />
+                    )}
                   </div>
                   <div className="todo-item-actions">
                     {hasBackup && (
@@ -765,3 +780,238 @@ function ReelMoveCopyMenu({ currentListId, allLists, onMove, onCopy }) {
     </>
   );
 }
+
+// ============================================================
+// CreatorUploadsBlock â€” toggle + talent picker + status warnings
+// Sits at the top of TodoDetailPage when a list is loaded.
+// ============================================================
+function CreatorUploadsBlock({ list, onChanged }) {
+  const [talents, setTalents] = useState([]);
+  const [driveStatus, setDriveStatus] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [expanded, setExpanded] = useState(list?.creator_uploads_enabled ?? false);
+
+  useEffect(() => {
+    api.getTalents().then(setTalents).catch(() => {});
+    api.getDriveStatus().then(setDriveStatus).catch(() => setDriveStatus({ connected: false }));
+  }, []);
+
+  if (!list) return null;
+  const talent = talents.find((t) => t.id === list.talent_id) || list.talents || null;
+  const driveReady = driveStatus?.connected;
+  const talentReady = !!list.talent_id;
+  const folderReady = !!(talent?.drive_folder_id);
+
+  const toggleEnabled = async () => {
+    if (busy) return;
+    setError('');
+    setBusy(true);
+    try {
+      await api.updateTodo(list.id, { creator_uploads_enabled: !list.creator_uploads_enabled });
+      onChanged?.();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleTalentChange = async (e) => {
+    setError('');
+    setBusy(true);
+    try {
+      await api.updateTodo(list.id, { talent_id: e.target.value || null });
+      onChanged?.();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className={`creator-uploads-block ${list.creator_uploads_enabled ? 'on' : 'off'}`}>
+      <div className="cub-header">
+        <button
+          className="cub-toggle"
+          onClick={toggleEnabled}
+          disabled={busy}
+          title={list.creator_uploads_enabled ? 'Disattiva upload creator' : 'Attiva upload creator'}
+        >
+          {list.creator_uploads_enabled ? <ToggleRight size={20} /> : <ToggleLeft size={20} />}
+        </button>
+        <div className="cub-header-text">
+          <strong><HardDrive size={13} /> Upload creator su Google Drive</strong>
+          <span className="cub-subtitle">
+            {list.creator_uploads_enabled
+              ? 'Attivo â€” la creator puÃ² caricare clip dal share link.'
+              : 'Disattivo â€” la pagina pubblica resta in sola visualizzazione.'}
+          </span>
+        </div>
+        <button
+          className="cub-expand"
+          onClick={() => setExpanded((x) => !x)}
+          title={expanded ? 'Nascondi setup' : 'Mostra setup'}
+        >
+          {expanded ? 'â–¾' : 'â–¸'}
+        </button>
+      </div>
+
+      {expanded && (
+        <div className="cub-body">
+          <div className="cub-field">
+            <label><UserRound size={11} /> Creator</label>
+            <select
+              value={list.talent_id || ''}
+              onChange={handleTalentChange}
+              disabled={busy}
+            >
+              <option value="">â€” Nessun creator â€”</option>
+              {talents.map((t) => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="cub-checklist">
+            <ChecklistRow
+              ok={driveReady}
+              text={driveReady
+                ? `Drive connesso${driveStatus?.email ? ` (${driveStatus.email})` : ''}`
+                : 'Drive non connesso â€” apri Settings'}
+            />
+            <ChecklistRow
+              ok={talentReady}
+              text={talentReady
+                ? `Creator: ${talent?.name || 'OK'}`
+                : 'Scegli il creator qui sopra'}
+            />
+            <ChecklistRow
+              ok={folderReady}
+              text={folderReady
+                ? <>Cartella Drive: <code>{talent?.drive_folder_name || talent?.drive_folder_id}</code></>
+                : (talentReady
+                    ? 'Cartella Drive non impostata sul creator â€” vai su My Creators'
+                    : 'Cartella Drive verrÃ  impostata sul creator scelto')}
+            />
+          </div>
+
+          {list.creator_uploads_enabled && !(driveReady && talentReady && folderReady) && (
+            <div className="cub-warn">
+              <AlertCircle size={13} />
+              <span>Upload attivo ma la configurazione non Ã¨ completa â€” completala prima di condividere il link.</span>
+            </div>
+          )}
+          {error && <div className="cub-err"><AlertCircle size={13} /> {error}</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ChecklistRow({ ok, text }) {
+  return (
+    <div className={`cub-check ${ok ? 'ok' : 'pending'}`}>
+      {ok ? <Check size={12} /> : <X size={12} />}
+      <span>{text}</span>
+    </div>
+  );
+}
+
+// ============================================================
+// AdminClipBadge — admin-side view of clips the creator uploaded
+// for a single reel + the "Editato" toggle. Expandable list.
+// ============================================================
+function AdminClipBadge({ item, onChange }) {
+  const [open, setOpen] = useState(false);
+  const [clips, setClips] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const count = item.uploads_count || 0;
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const list = await api.getReelUploads(item.id);
+      setClips(list || []);
+    } catch {
+      setClips([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleOpen = () => {
+    setOpen((o) => {
+      if (!o && clips === null && count > 0) load();
+      return !o;
+    });
+  };
+
+  const handleToggleEdited = async (e) => {
+    e.stopPropagation();
+    if (saving) return;
+    setSaving(true);
+    try {
+      const updated = await api.setReelEdited(item.id, !item.is_edited);
+      onChange?.({ is_edited: updated.is_edited, edited_at: updated.edited_at });
+    } catch (err) {
+      alert(`Errore: ${err.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className={`admin-clip-badge-wrap ${open ? 'open' : ''}`}>
+      <div className="admin-clip-badge-row">
+        <button
+          className={`admin-clip-count-btn ${count > 0 ? 'has-clips' : 'empty'}`}
+          onClick={toggleOpen}
+          title={count > 0 ? `${count} clip caricat${count === 1 ? 'a' : 'e'} — click per vedere` : 'Nessuna clip caricata'}
+        >
+          <Video size={11} />
+          <span>{count} clip</span>
+        </button>
+        <button
+          className={`admin-edited-toggle ${item.is_edited ? 'on' : 'off'}`}
+          onClick={handleToggleEdited}
+          disabled={saving}
+          title={item.is_edited ? 'Marcato come editato' : "Click se l'editor ha finito"}
+        >
+          {item.is_edited ? <Check size={11} /> : <X size={11} />}
+          <span>{item.is_edited ? 'Editato' : 'Da editare'}</span>
+        </button>
+      </div>
+
+      {open && (
+        <div className="admin-clip-list">
+          {loading ? (
+            <div className="admin-clip-loading"><Loader2 size={12} className="spin" /> carico…</div>
+          ) : (clips || []).length === 0 ? (
+            <div className="admin-clip-empty">Nessuna clip ancora caricata.</div>
+          ) : (
+            clips.map((c) => (
+              <a
+                key={c.id}
+                href={c.drive_view_url || '#'}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="admin-clip-row"
+                title={c.drive_file_name}
+              >
+                <Video size={11} />
+                <span className="admin-clip-version">v{c.version_number}</span>
+                <span className="admin-clip-name">{c.drive_file_name}</span>
+                <ExternalLink size={11} />
+              </a>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+

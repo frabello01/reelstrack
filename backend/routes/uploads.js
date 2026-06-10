@@ -1,0 +1,314 @@
+const express = require('express');
+const router = express.Router();
+const supabase = require('../lib/supabase');
+const drive = require('../lib/googleDrive');
+
+// ============================================================
+// Hard limits
+// ============================================================
+const MAX_FILE_BYTES = 500 * 1024 * 1024;      // 500 MB per clip
+const ALLOWED_MIME_PREFIXES = ['video/'];      // mp4, mov, webm, etc.
+
+// ============================================================
+// HELPERS
+// ============================================================
+
+// Resolve the public token to a to-do list AND its talent's Drive folder.
+// Returns { list, talent, folderId } or throws a 4xx-ish error string.
+async function resolveListByToken(token) {
+  const { data: list, error } = await supabase
+    .from('todo_lists')
+    .select('id, name, talent_id, creator_uploads_enabled')
+    .eq('public_token', token)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!list) throw Object.assign(new Error('List not found'), { status: 404 });
+  if (!list.creator_uploads_enabled) {
+    throw Object.assign(new Error('Uploads are not enabled on this list'), { status: 403 });
+  }
+  if (!list.talent_id) {
+    throw Object.assign(new Error('This list is not linked to a creator yet — ask the admin to set it up.'), { status: 400 });
+  }
+  const { data: talent, error: tErr } = await supabase
+    .from('talents')
+    .select('id, name, drive_folder_id, drive_folder_name')
+    .eq('id', list.talent_id)
+    .maybeSingle();
+  if (tErr) throw new Error(tErr.message);
+  if (!talent?.drive_folder_id) {
+    throw Object.assign(new Error('No Drive folder set for this creator yet — ask the admin to assign one.'), { status: 400 });
+  }
+  return { list, talent, folderId: talent.drive_folder_id };
+}
+
+// Compute the creator-facing "#N" for a reel within a list, based on the
+// same sort order shown on the public page (priority DESC, added_at ASC).
+async function computeReelPositionLabel(listId, todoListReelId) {
+  const { data: items, error } = await supabase
+    .from('todo_list_reels')
+    .select('id, priority, added_at, is_hidden')
+    .eq('todo_list_id', listId)
+    .eq('is_hidden', false)
+    .order('priority', { ascending: false })
+    .order('added_at', { ascending: true });
+  if (error) return null;
+  const idx = (items || []).findIndex((i) => i.id === todoListReelId);
+  return idx >= 0 ? (idx + 1) : null;
+}
+
+// Build the Drive filename per the agreed convention:
+//   "#N - <ig_url> - v<K>.<ext>"
+//   "#N - v<K>.<ext>"           if no IG URL
+function buildFilename({ positionLabel, reelUrl, version, mimeType, originalName }) {
+  // Sanitize filename to avoid OS-level issues (Drive allows almost anything,
+  // but creators may later download these to local disks). Strip control chars
+  // and excessive whitespace; preserve URL characters since they're part of
+  // the spec.
+  const clean = (s) => String(s || '').replace(/[\x00-\x1f\x7f]/g, '').replace(/\s+/g, ' ').trim();
+
+  let extFromName = '';
+  if (originalName) {
+    const m = String(originalName).match(/\.([a-zA-Z0-9]{1,5})$/);
+    if (m) extFromName = '.' + m[1].toLowerCase();
+  }
+  let ext = extFromName || (
+    mimeType?.includes('quicktime') ? '.mov' :
+    mimeType?.includes('webm') ? '.webm' :
+    mimeType?.includes('x-matroska') ? '.mkv' :
+    '.mp4'
+  );
+
+  const nbase = `#${positionLabel ?? '?'}`;
+  const middle = reelUrl ? ` - ${clean(reelUrl)}` : '';
+  const ver = ` - v${version}`;
+  // Drive caps filenames at 32767 chars but Windows caps at 255 — stay safe.
+  return `${nbase}${middle}${ver}${ext}`.slice(0, 240);
+}
+
+// Verify the reel actually belongs to this list (defensive, the token gives
+// access to all reels in the list anyway).
+async function verifyReelInList(listId, todoListReelId) {
+  const { data, error } = await supabase
+    .from('todo_list_reels')
+    .select('id, reel_id, uploads_count, is_done, reels(url)')
+    .eq('todo_list_id', listId)
+    .eq('id', todoListReelId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw Object.assign(new Error('Reel not in this list'), { status: 404 });
+  return data;
+}
+
+// ============================================================
+// PUBLIC (via share token) — creator-facing
+// Mounted under /api/uploads/public — whitelisted before the auth gate.
+// ============================================================
+
+// POST /api/uploads/public/:token/reels/:todoListReelId/init
+// Body: { filename, mime_type, size_bytes }
+// Returns: { session_url, filename, version }
+router.post('/public/:token/reels/:todoListReelId/init', async (req, res) => {
+  try {
+    const { filename: originalName, mime_type, size_bytes } = req.body || {};
+    if (!mime_type || !ALLOWED_MIME_PREFIXES.some((p) => String(mime_type).startsWith(p))) {
+      return res.status(400).json({ error: 'Only video files are allowed' });
+    }
+    if (size_bytes && Number(size_bytes) > MAX_FILE_BYTES) {
+      return res.status(400).json({
+        error: `File too large (${(Number(size_bytes) / 1024 / 1024).toFixed(1)} MB). Max ${MAX_FILE_BYTES / 1024 / 1024} MB.`,
+      });
+    }
+
+    const ctx = await resolveListByToken(req.params.token);
+    const reel = await verifyReelInList(ctx.list.id, req.params.todoListReelId);
+
+    // Version number is monotonic per (todo_list_reel_id). We don't recycle
+    // numbers when an upload is deleted — the creator's Drive history stays
+    // unambiguous.
+    const { data: lastVersionRow } = await supabase
+      .from('todo_list_reel_uploads')
+      .select('version_number')
+      .eq('todo_list_reel_id', reel.id)
+      .order('version_number', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const version = (lastVersionRow?.version_number || 0) + 1;
+
+    const positionLabel = await computeReelPositionLabel(ctx.list.id, reel.id);
+    const filename = buildFilename({
+      positionLabel,
+      reelUrl: reel.reels?.url || null,
+      version,
+      mimeType: mime_type,
+      originalName,
+    });
+
+    const { sessionUrl } = await drive.createResumableUploadSession({
+      folderId: ctx.folderId,
+      filename,
+      mimeType: mime_type,
+      sizeBytes: size_bytes ? Number(size_bytes) : undefined,
+    });
+
+    res.json({ session_url: sessionUrl, filename, version });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+// POST /api/uploads/public/:token/reels/:todoListReelId/complete
+// Body: { drive_file_id, drive_file_name, size_bytes?, mime_type?, version }
+// Stores the upload row, increments counter, sets is_done if first clip.
+router.post('/public/:token/reels/:todoListReelId/complete', async (req, res) => {
+  try {
+    const { drive_file_id, drive_file_name, size_bytes, mime_type, version } = req.body || {};
+    if (!drive_file_id || !drive_file_name) {
+      return res.status(400).json({ error: 'drive_file_id and drive_file_name required' });
+    }
+
+    const ctx = await resolveListByToken(req.params.token);
+    const reel = await verifyReelInList(ctx.list.id, req.params.todoListReelId);
+
+    // Fetch the freshly-uploaded file's webViewLink so the admin can click
+    // through. Best-effort — we don't fail the request if Drive is flaky.
+    let viewUrl = null;
+    try {
+      const meta = await drive.getFileMetadata(drive_file_id);
+      viewUrl = meta?.webViewLink || null;
+    } catch (err) {
+      console.warn('[uploads] getFileMetadata failed:', err.message);
+    }
+
+    const { data: insertedUpload, error: insertErr } = await supabase
+      .from('todo_list_reel_uploads')
+      .insert({
+        todo_list_reel_id: reel.id,
+        drive_file_id,
+        drive_file_name,
+        drive_view_url: viewUrl,
+        size_bytes: size_bytes ? Number(size_bytes) : null,
+        mime_type: mime_type || null,
+        version_number: Number(version) || 1,
+      })
+      .select()
+      .single();
+    if (insertErr) return res.status(500).json({ error: `Saving upload failed: ${insertErr.message}` });
+
+    // Bump counter + auto-done if first clip.
+    // Done logic is one-way: first upload sets is_done=true; deleting all
+    // uploads later does NOT revert it. Matches the spec ("non torna mai
+    // indietro").
+    const newCount = (reel.uploads_count || 0) + 1;
+    const updates = { uploads_count: newCount };
+    if (!reel.is_done) {
+      updates.is_done = true;
+      updates.done_at = new Date().toISOString();
+    }
+    await supabase
+      .from('todo_list_reels')
+      .update(updates)
+      .eq('id', reel.id);
+
+    res.json({ ok: true, upload: insertedUpload, became_done: !reel.is_done });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+// GET /api/uploads/public/:token/reels/:todoListReelId
+// Returns the list of clips the creator has uploaded for this reel so far.
+router.get('/public/:token/reels/:todoListReelId', async (req, res) => {
+  try {
+    const ctx = await resolveListByToken(req.params.token);
+    const reel = await verifyReelInList(ctx.list.id, req.params.todoListReelId);
+    const { data, error } = await supabase
+      .from('todo_list_reel_uploads')
+      .select('id, drive_file_id, drive_file_name, drive_view_url, size_bytes, mime_type, version_number, uploaded_at')
+      .eq('todo_list_reel_id', reel.id)
+      .order('version_number', { ascending: true });
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data || []);
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/uploads/public/:token/reels/:todoListReelId/uploads/:uploadId
+// Creator removes a clip she uploaded by mistake. Deletes the file from
+// Drive AND removes the row.
+router.delete('/public/:token/reels/:todoListReelId/uploads/:uploadId', async (req, res) => {
+  try {
+    const ctx = await resolveListByToken(req.params.token);
+    const reel = await verifyReelInList(ctx.list.id, req.params.todoListReelId);
+
+    const { data: upload, error: lookupErr } = await supabase
+      .from('todo_list_reel_uploads')
+      .select('id, drive_file_id')
+      .eq('id', req.params.uploadId)
+      .eq('todo_list_reel_id', reel.id)
+      .maybeSingle();
+    if (lookupErr) return res.status(500).json({ error: lookupErr.message });
+    if (!upload) return res.status(404).json({ error: 'Upload not found' });
+
+    // Try Drive first; if Drive succeeds we delete the row. If Drive fails
+    // (e.g. permission revoked), we surface the error and keep the row so
+    // we don't end up with an orphan file silently lingering.
+    try {
+      await drive.deleteFile(upload.drive_file_id);
+    } catch (err) {
+      return res.status(502).json({ error: `Drive delete failed: ${err.message}` });
+    }
+
+    const { error: delErr } = await supabase
+      .from('todo_list_reel_uploads')
+      .delete()
+      .eq('id', upload.id);
+    if (delErr) return res.status(500).json({ error: delErr.message });
+
+    // Decrement counter (uploads_count). We keep is_done as-is per spec:
+    // once a reel is done, deleting all clips doesn't reverse it. The race
+    // window between two parallel deletes is negligible at our scale.
+    await supabase
+      .from('todo_list_reels')
+      .update({ uploads_count: Math.max(0, (reel.uploads_count || 1) - 1) })
+      .eq('id', reel.id);
+
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+// ============================================================
+// ADMIN endpoints — protected by the existing auth gate.
+// Used by TodoDetailPage to show clip lists per reel and toggle "editato".
+// ============================================================
+
+// GET /api/uploads/reels/:todoListReelId — admin sees all clips for a reel
+router.get('/reels/:todoListReelId', async (req, res) => {
+  const { data, error } = await supabase
+    .from('todo_list_reel_uploads')
+    .select('*')
+    .eq('todo_list_reel_id', req.params.todoListReelId)
+    .order('version_number', { ascending: true });
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data || []);
+});
+
+// PATCH /api/uploads/reels/:todoListReelId/edited — toggle is_edited
+router.patch('/reels/:todoListReelId/edited', async (req, res) => {
+  const { is_edited } = req.body || {};
+  const { data, error } = await supabase
+    .from('todo_list_reels')
+    .update({
+      is_edited: !!is_edited,
+      edited_at: is_edited ? new Date().toISOString() : null,
+    })
+    .eq('id', req.params.todoListReelId)
+    .select('id, is_edited, edited_at')
+    .single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+module.exports = router;
