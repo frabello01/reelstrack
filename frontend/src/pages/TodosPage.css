@@ -22,6 +22,13 @@
 .todo-info { padding: 12px; }
 .todo-name { font-weight: 600; color: white; margin-bottom: 4px; }
 .todo-meta { font-size: 12px; color: rgba(255,255,255,0.5); }
+.todo-meta-stacked {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.todo-meta-pending { color: rgba(253, 230, 138, 0.85); }
+.todo-meta-toedit  { color: rgba(196, 181, 253, 0.85); }
 
 .todo-delete {
   position: absolute; top: 8px; right: 8px;

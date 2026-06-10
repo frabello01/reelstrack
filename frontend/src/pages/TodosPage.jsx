@@ -73,8 +73,13 @@ export default function TodosPage() {
               </div>
               <div className="todo-info">
                 <div className="todo-name">{t.name}</div>
-                <div className="todo-meta">
-                  {t.done_count} / {t.total_reels} done
+                <div className="todo-meta todo-meta-stacked">
+                  <span className="todo-meta-pending">
+                    {(t.pending_count ?? 0)}/{t.total_reels ?? 0} pending
+                  </span>
+                  <span className="todo-meta-toedit">
+                    {(t.to_be_edited_count ?? 0)} to be edited
+                  </span>
                 </div>
               </div>
               <button className="todo-delete" onClick={(e) => handleDelete(t.id, e)}>

@@ -73,20 +73,31 @@ router.get('/', async (req, res) => {
     lists.map(async (l) => {
       const { data: items } = await supabase
         .from('todo_list_reels')
-        .select('is_done, is_hidden, reels(thumbnail_url)')
+        .select('is_done, is_edited, is_hidden, reels(thumbnail_url)')
         .eq('todo_list_id', l.id)
         .order('added_at', { ascending: false });
 
-      // Hidden reels are excluded from BOTH the numerator and the
-      // denominator so the ratio reads "done / active", matching the
-      // user's mental model: total = active + hidden, and the card
-      // shouldn't penalise progress for things you deliberately hid.
+      // Hidden reels are excluded from every count so the card never
+      // surprises the user with progress on things they tucked away.
       const visible = (items || []).filter((i) => !i.is_hidden);
-      const total = visible.length;
+      const total       = visible.length;
+      const pending     = visible.filter((i) => !i.is_done).length;
+      const toBeEdited  = visible.filter((i) => i.is_done && !i.is_edited).length;
+      const edited      = visible.filter((i) => i.is_edited).length;
+      // done_count stays for backward-compat with any old caller (My Day,
+      // dashboards, etc.). pending + toBeEdited + edited == total.
       const done = visible.filter((i) => i.is_done).length;
       const firstThumb = visible.find((i) => i.reels?.thumbnail_url)?.reels?.thumbnail_url || null;
 
-      return { ...l, total_reels: total, done_count: done, preview_thumbnail: firstThumb };
+      return {
+        ...l,
+        total_reels: total,
+        done_count: done,
+        pending_count: pending,
+        to_be_edited_count: toBeEdited,
+        edited_count: edited,
+        preview_thumbnail: firstThumb,
+      };
     })
   );
 
