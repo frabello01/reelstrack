@@ -1,0 +1,19 @@
+Admin to-do UI: Trello-style tabs + clips visible by default
+
+Two UX upgrades to the admin to-do list page:
+
+1) AdminClipBadge now auto-expands and auto-loads the clip list when
+   a reel has uploads. Previously the admin had to click N clip to
+   reveal the Drive links - pointless extra click since seeing the
+   clips is the most useful thing on a reel-with-uploads.
+
+2) Replaces the old Active/Edited 2-tab layout with a 4-bucket
+   Trello-style workflow:
+     PENDING       - creator has not finished yet (not is_done)
+     TO BE EDITED  - clips uploaded, waiting for the editor
+                     (is_done and not is_edited)
+     EDITED        - editor marked the work done (is_edited)
+     HIDDEN        - manually tucked away (unchanged)
+   Each tab gets a colored highlight and a count badge. Default
+   landing tab is PENDING so the admin always sees what is next.
+   Each reel falls into exactly one tab - no overlap, no shuffling.

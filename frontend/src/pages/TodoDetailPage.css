@@ -809,3 +809,42 @@
 .admin-clip-name {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+
+/* ============================================================
+   Trello-style colored tabs (PENDING / TO BE EDITED / EDITED / HIDDEN)
+   ============================================================ */
+.todo-tabs-trello {
+  flex-wrap: wrap;
+}
+
+.todo-tab.tab-pending.active {
+  background: rgba(251, 191, 36, 0.15);
+  color: #fde68a;
+}
+.todo-tab.tab-pending.active .todo-tab-count {
+  background: rgba(251, 191, 36, 0.35);
+  color: white;
+}
+
+.todo-tab.tab-toedit.active {
+  background: rgba(124, 107, 255, 0.18);
+  color: #ddd6fe;
+}
+.todo-tab.tab-toedit.active .todo-tab-count {
+  background: rgba(124, 107, 255, 0.4);
+  color: white;
+}
+
+.todo-tab.tab-edited.active {
+  background: rgba(74, 222, 128, 0.15);
+  color: #bbf7d0;
+}
+.todo-tab.tab-edited.active .todo-tab-count {
+  background: rgba(74, 222, 128, 0.35);
+  color: white;
+}
+
+.todo-tab.tab-hidden.active {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.85);
+}

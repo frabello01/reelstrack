@@ -29,8 +29,13 @@ export default function TodoDetailPage() {
   const [linkError, setLinkError] = useState('');
   const [playingVideoUrl, setPlayingVideoUrl] = useState(null);
 
-  // Active vs Edited (hidden) tab. Defaults to 'active' on every page load.
-  const [tab, setTab] = useState('active'); // 'active' | 'edited'
+  // Trello-style workflow tabs. Default is 'pending' on every page load
+  // so the admin immediately sees the next thing that needs action.
+  //   pending   — creator hasn't uploaded / not done yet
+  //   toedit    — clips uploaded, waiting for the editor
+  //   edited    — editor has marked the work complete
+  //   hidden    — deliberately tucked away from the workflow
+  const [tab, setTab] = useState('pending');
 
   // Editor state for the per-reel note. We track which reel and which kind ('public' | 'private').
   const [editingNote, setEditingNote] = useState(null); // { reelId, kind } or null
@@ -408,8 +413,14 @@ export default function TodoDetailPage() {
           // creator on the share page, AND embedded in the Drive filename.
           // Numbers never recycle on delete — leaves gaps on purpose so
           // "reel #6" stays "reel #6" forever.
-          const activeItems = list.items.filter((it) => !it.is_hidden);
-          const hiddenItems = list.items.filter((it) => it.is_hidden);
+          // Bucket every reel into exactly one of 4 columns based on its
+          // (is_hidden, is_done, is_edited) state. Each reel appears in
+          // exactly one tab.
+          const visible = list.items.filter((it) => !it.is_hidden);
+          const pendingItems = visible.filter((it) => !it.is_done);
+          const toeditItems  = visible.filter((it) => it.is_done && !it.is_edited);
+          const editedItems  = visible.filter((it) => it.is_edited);
+          const hiddenItems  = list.items.filter((it) => it.is_hidden);
 
           const renderItem = (item) => {
             const reel = item.reels;
@@ -611,47 +622,58 @@ export default function TodoDetailPage() {
             );
           };
 
+          const tabConfig = {
+            pending: { items: pendingItems, empty: 'Nessun reel in attesa. Tutto in lavorazione o editato.' },
+            toedit:  { items: toeditItems,  empty: 'Nessun reel da editare.' },
+            edited:  { items: editedItems,  empty: 'Nessun reel editato ancora.' },
+            hidden:  { items: hiddenItems,  empty: 'Nessun reel nascosto.' },
+          };
+          const current = tabConfig[tab] || tabConfig.pending;
+
           return (
             <>
-              {/* Tab switcher: Active vs Edited (hidden) */}
-              <div className="todo-tabs">
+              {/* Trello-style workflow tabs */}
+              <div className="todo-tabs todo-tabs-trello">
                 <button
                   type="button"
-                  className={`todo-tab ${tab === 'active' ? 'active' : ''}`}
-                  onClick={() => setTab('active')}
+                  className={`todo-tab tab-pending ${tab === 'pending' ? 'active' : ''}`}
+                  onClick={() => setTab('pending')}
                 >
-                  Active <span className="todo-tab-count">{activeItems.length}</span>
+                  Pending <span className="todo-tab-count">{pendingItems.length}</span>
                 </button>
                 <button
                   type="button"
-                  className={`todo-tab ${tab === 'edited' ? 'active' : ''}`}
+                  className={`todo-tab tab-toedit ${tab === 'toedit' ? 'active' : ''}`}
+                  onClick={() => setTab('toedit')}
+                >
+                  To be edited <span className="todo-tab-count">{toeditItems.length}</span>
+                </button>
+                <button
+                  type="button"
+                  className={`todo-tab tab-edited ${tab === 'edited' ? 'active' : ''}`}
                   onClick={() => setTab('edited')}
                 >
-                  <EyeOff size={13} /> Edited <span className="todo-tab-count">{hiddenItems.length}</span>
+                  Edited <span className="todo-tab-count">{editedItems.length}</span>
+                </button>
+                <button
+                  type="button"
+                  className={`todo-tab tab-hidden ${tab === 'hidden' ? 'active' : ''}`}
+                  onClick={() => setTab('hidden')}
+                  title="Reels nascosti dal flusso"
+                >
+                  <EyeOff size={13} /> Hidden <span className="todo-tab-count">{hiddenItems.length}</span>
                 </button>
               </div>
 
-              {tab === 'active' ? (
-                <div className="todo-items">
-                  {activeItems.length === 0 ? (
-                    <div className="empty-state-inline">
-                      <p>No active reels — all reels in this list have been edited.</p>
-                    </div>
-                  ) : (
-                    activeItems.map(renderItem)
-                  )}
-                </div>
-              ) : (
-                <div className="todo-items todo-items-hidden">
-                  {hiddenItems.length === 0 ? (
-                    <div className="empty-state-inline">
-                      <p>No edited reels yet. Hide reels from the Active tab to move them here.</p>
-                    </div>
-                  ) : (
-                    hiddenItems.map(renderItem)
-                  )}
-                </div>
-              )}
+              <div className={`todo-items ${tab === 'hidden' ? 'todo-items-hidden' : ''}`}>
+                {current.items.length === 0 ? (
+                  <div className="empty-state-inline">
+                    <p>{current.empty}</p>
+                  </div>
+                ) : (
+                  current.items.map(renderItem)
+                )}
+              </div>
             </>
           );
         })()
@@ -917,7 +939,10 @@ function ChecklistRow({ ok, text }) {
 // for a single reel + the "Editato" toggle. Expandable list.
 // ============================================================
 function AdminClipBadge({ item, onChange }) {
-  const [open, setOpen] = useState(false);
+  // Auto-expanded: the clips list is the most useful thing to see for
+  // a reel that has uploads, so we don't make the admin click a chip
+  // first. Still collapsible for visual cleanup if needed.
+  const [open, setOpen] = useState(true);
   const [clips, setClips] = useState(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -935,6 +960,12 @@ function AdminClipBadge({ item, onChange }) {
       setLoading(false);
     }
   };
+
+  // Eagerly load clips on mount if there are any. The badge mounts
+  // once per reel and is cheap (one Supabase query each).
+  useEffect(() => {
+    if (count > 0 && clips === null && !loading) load();
+  }, [count]);
 
   const toggleOpen = () => {
     setOpen((o) => {
