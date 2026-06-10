@@ -185,16 +185,28 @@ export default function TodoDetailPage() {
     }
   };
 
-  // Toggle the editor-done flag for a reel. Optimistic update. Pure
-  // admin-side state — the creator never sees this flag on the share
-  // page; it just drives the Trello column the reel lives in.
+  // Toggle the editor-done flag for a reel. Optimistic update. Marking
+  // edited implicitly sets done=true (server enforces the same invariant);
+  // un-marking edited leaves is_done alone.
   const handleToggleEdited = async (itemId, currentlyEdited) => {
     const next = !currentlyEdited;
+    const nowIso = new Date().toISOString();
     setList((l) => ({
       ...l,
-      items: l.items.map((it) => it.id === itemId
-        ? { ...it, is_edited: next, edited_at: next ? new Date().toISOString() : null }
-        : it),
+      items: l.items.map((it) => {
+        if (it.id !== itemId) return it;
+        const patch = {
+          is_edited: next,
+          edited_at: next ? nowIso : null,
+        };
+        // When flipping to edited, auto-set done so the reel jumps
+        // straight from Pending to Edited (skipping To-be-edited).
+        if (next && !it.is_done) {
+          patch.is_done = true;
+          patch.done_at = nowIso;
+        }
+        return { ...it, ...patch };
+      }),
     }));
     try {
       await api.setReelEdited(itemId, next);
@@ -417,10 +429,12 @@ export default function TodoDetailPage() {
           // creator on the share page, AND embedded in the Drive filename.
           // Numbers never recycle on delete — leaves gaps on purpose so
           // "reel #6" stays "reel #6" forever.
-          // Bucket every reel into exactly one of 3 columns based on
-          // (is_done, is_edited). is_hidden is no longer used in the UI —
-          // historical hidden reels were migrated to is_edited=true.
-          const pendingItems = list.items.filter((it) => !it.is_done);
+          // Bucket every reel into exactly ONE column. Invariant enforced
+          // server-side: is_edited=true implies is_done=true, so we don't
+          // have to guard against the (false, true) combination. Pending
+          // explicitly excludes is_edited as a belt-and-braces against any
+          // mid-transition state during optimistic UI updates.
+          const pendingItems = list.items.filter((it) => !it.is_done && !it.is_edited);
           const toeditItems  = list.items.filter((it) => it.is_done && !it.is_edited);
           const editedItems  = list.items.filter((it) => it.is_edited);
 

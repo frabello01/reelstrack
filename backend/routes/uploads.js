@@ -384,16 +384,37 @@ router.delete('/reels/:todoListReelId/uploads/:uploadId', async (req, res) => {
 });
 
 // PATCH /api/uploads/reels/:todoListReelId/edited — toggle is_edited
+// Invariant: "edited" implies "done". When the admin flips is_edited=true
+// we also force is_done=true (with a done_at if it wasn't already) so the
+// Trello tabs stay mutually exclusive and a reel never appears in
+// PENDING and EDITED at the same time. Un-flipping is_edited leaves
+// is_done alone (admin would have to un-check done separately, same
+// behaviour as the creator-removes-clip flow).
 router.patch('/reels/:todoListReelId/edited', async (req, res) => {
   const { is_edited } = req.body || {};
+  const nowIso = new Date().toISOString();
+
+  // Read current is_done so we don't clobber an already-true done_at timestamp.
+  const { data: existing } = await supabase
+    .from('todo_list_reels')
+    .select('is_done, done_at')
+    .eq('id', req.params.todoListReelId)
+    .maybeSingle();
+
+  const updates = {
+    is_edited: !!is_edited,
+    edited_at: is_edited ? nowIso : null,
+  };
+  if (is_edited && !existing?.is_done) {
+    updates.is_done = true;
+    updates.done_at = nowIso;
+  }
+
   const { data, error } = await supabase
     .from('todo_list_reels')
-    .update({
-      is_edited: !!is_edited,
-      edited_at: is_edited ? new Date().toISOString() : null,
-    })
+    .update(updates)
     .eq('id', req.params.todoListReelId)
-    .select('id, is_edited, edited_at')
+    .select('id, is_edited, edited_at, is_done, done_at')
     .single();
   if (error) return res.status(500).json({ error: error.message });
   res.json(data);
