@@ -75,9 +75,7 @@ export default function TodosPage() {
                 <div className="todo-name">{t.name}</div>
                 <div className="todo-meta todo-meta-stacked">
                   <span className="todo-meta-pending">
-                    {/* Denominator excludes EDITED reels — those are off the
-                        creator/editor workflow and shouldn't inflate the ratio. */}
-                    {(t.pending_count ?? 0)}/{(t.pending_count ?? 0) + (t.to_be_edited_count ?? 0)} pending
+                    {(t.pending_count ?? 0)} pending
                   </span>
                   <span className="todo-meta-toedit">
                     {(t.to_be_edited_count ?? 0)} to be edited
