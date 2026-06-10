@@ -665,6 +665,13 @@ router.get('/public/:token', async (req, res) => {
 
   // IMPORTANT: select only public_note, never private_note
   // Also: hidden reels are NEVER shown on the public share page
+  // Public share page only shows what the creator still has to act on:
+  //   - PENDING       (no clip uploaded yet)
+  //   - TO BE EDITED  (clips uploaded, editor hasn't finished — she
+  //                    can still amend / add more versions)
+  // EDITED reels are filtered out — from the creator's perspective the
+  // work is done and there's nothing to do. If the admin un-marks a
+  // reel as edited later, it reappears on the share page automatically.
   const { data: items } = await supabase
     .from('todo_list_reels')
     .select(`
@@ -679,6 +686,7 @@ router.get('/public/:token', async (req, res) => {
     `)
     .eq('todo_list_id', list.id)
     .eq('is_hidden', false)
+    .eq('is_edited', false)
     .order('priority', { ascending: false })
     .order('added_at', { ascending: true });
 
