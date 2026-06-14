@@ -158,7 +158,19 @@ export default function PublicLandingPage() {
       className={`pl-shell ${bgImage ? 'pl-has-image' : 'pl-no-image'}`}
       style={{ '--pl-accent': accent }}
     >
-      {/* Fixed full-viewport image — content scrolls over it (parallax-ish feel) */}
+      {/* Desktop-only ambient backdrop: same image stretched full-viewport
+          with heavy blur, sits BEHIND the phone-card so the area outside
+          the card gets a soft glow of the photo's colours instead of
+          being flat black. Hidden on mobile via CSS. */}
+      {bgImage && (
+        <div
+          className="pl-bg-ambient"
+          style={{ backgroundImage: `url(${bgImage})` }}
+          aria-hidden
+        />
+      )}
+
+      {/* Phone-card sharp image (mobile = full viewport, desktop = card-sized) */}
       {bgImage && (
         <div
           className="pl-bg"

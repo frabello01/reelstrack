@@ -25,6 +25,10 @@
   overflow-x: hidden;
 }
 
+/* Ambient backdrop is a desktop-only effect — hidden on mobile where
+   the sharp .pl-bg already covers the full viewport. */
+.pl-bg-ambient { display: none; }
+
 /* Fixed bg image — sits at z:0, never moves, content scrolls over it */
 .pl-bg {
   position: fixed;
@@ -364,12 +368,31 @@
     border-radius: 36px;
   }
 
-  /* Soft fade around the edges — an inset shadow in the canvas
-     colour creates a dark halo just inside the rounded rectangle,
-     fading smoothly into the photo over ~60px. The phone visually
-     dissolves into the dark canvas instead of having a hard cut. */
-  .pl-bg {
-    box-shadow: inset 0 0 60px 20px #0a0a0f;
+  /* Ambient external glow: the same photo rendered as a full-viewport
+     blurred backdrop behind the phone-card. The area OUTSIDE the card
+     becomes a soft, dimmed wash of the photo's colours instead of
+     flat black — the dark canvas no longer feels heavy. The card
+     itself stays sharp because .pl-bg paints over the ambient inside
+     the phone box. */
+  .pl-bg-ambient {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    background-size: cover;
+    background-position: center;
+    /* Heavy blur turns the photo into a colour wash; scale prevents
+       the blur from showing canvas at the viewport edges. */
+    filter: blur(80px) saturate(115%) brightness(0.55);
+    transform: scale(1.15);
+    pointer-events: none;
+  }
+
+  /* The .pl-shell solid canvas isn't needed anymore — the ambient
+     paints the whole viewport. Keep a fallback for the no-image case
+     where ambient doesn't render. */
+  .pl-shell.pl-has-image {
+    background: #050507;
   }
 
   /* No-image gradient fallback — same phone-card geometry */
