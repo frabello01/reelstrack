@@ -328,32 +328,53 @@
    Desktop: phone-card layout (≥ 900px)
 
    Below 900px we keep the immersive mobile hero (bg fills the
-   viewport). Above 900px the visual stack (bg + overlay +
-   vignette) is clipped via clip-path to a centred phone-shaped
-   rectangle, with a neutral dark canvas around. The page now
-   reads as "a phone displayed on a desktop screen" — the
-   familiar Linktree desktop pattern — instead of a giant cropped
-   profile photo.
+   viewport). Above 900px we render the page as if it were a
+   real phone screen sitting in the centre of the desktop.
 
-   Pure CSS: no JSX wrapper added. The fixed positioning of the
-   visual layers is preserved (so they don't scroll with content)
-   and clip-path crops them into the phone shape.
+   Key: the visual layers (bg / overlay / vignette) are SIZED
+   to the phone-card box (420 × ~viewport-height), NOT scaled
+   to fill the entire 1920×1080 viewport. That keeps the
+   creator's already-cropped image at the same aspect ratio
+   they prepared for mobile, instead of cover-scaling a 9:16
+   photo across an ultrawide canvas (which would zoom into a
+   tiny slice once cropped to phone width).
    ============================================================= */
 @media (min-width: 900px) {
   .pl-shell {
-    /* Surrounding canvas — neutral dark so the clipped phone "pops" */
+    /* Surrounding canvas — neutral dark so the phone "pops" */
     background: #0a0a0f;
   }
 
-  /* Crop every visual layer (image bg, dark overlay, vignette,
-     and the no-image gradient fallback) to a centred phone-shaped
-     rectangle. 210px = half of the 420px phone width; 24px = top/
-     bottom margin from the viewport edges. */
+  /* All visual layers become phone-card-sized rectangles,
+     centred horizontally, with rounded corners. Background-size:
+     cover now scales relative to the 420 × ~852 box — matching
+     the mobile aspect — instead of relative to the full window. */
   .pl-bg,
   .pl-overlay,
-  .pl-vignette,
+  .pl-vignette {
+    /* Override the base inset:0 so we're not full-viewport anymore */
+    top: 24px;
+    right: auto;
+    bottom: auto;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 420px;
+    height: calc(100vh - 48px);
+    height: calc(100dvh - 48px);
+    border-radius: 36px;
+  }
+
+  /* No-image gradient fallback — same phone-card geometry */
   .pl-no-image::before {
-    clip-path: inset(24px calc(50% - 210px) 24px calc(50% - 210px) round 36px);
+    top: 24px;
+    right: auto;
+    bottom: auto;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 420px;
+    height: calc(100vh - 48px);
+    height: calc(100dvh - 48px);
+    border-radius: 36px;
   }
 
   /* Constrain the content stage to the same phone width and
@@ -363,9 +384,9 @@
     padding: 32px 24px 40px;
   }
 
-  /* Bezel: soft shadow + 1px inner highlight around the phone
-     so the card feels lifted off the dark canvas. pointer-events
-     none so clicks pass through to the content underneath. */
+  /* Bezel: soft outer shadow + 1px inner highlight around the
+     phone so the card feels lifted off the dark canvas.
+     pointer-events:none so clicks pass through. */
   .pl-shell::after {
     content: '';
     position: fixed;
