@@ -5,6 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>ReelsTrack App</title>
 
+    <!-- ============================================================
+         Crawler directives — hardcoded so they're visible to crawlers
+         that don't execute JavaScript (Meta's facebookexternalhit, the
+         OG preview generator, googlebot, etc). Without these in the
+         static HTML, the React injection in PublicLandingPage would
+         only reach JS-capable bots — which is the minority.
+
+         Applied globally across the SPA: landings on custom domains,
+         admin app on app.reelstrack.io, redirect deeplinks — none of
+         these should ever be indexed by search engines, and none
+         should leak the originating URL to the click destination.
+         ============================================================ -->
+    <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex, nocache" />
+    <meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet, noimageindex" />
+    <meta name="referrer" content="no-referrer" />
+
     <!-- Favicon (browser tab) -->
     <link rel="icon" type="image/png" href="/favicon.png" />
 
