@@ -5,6 +5,11 @@ const { uploadImageDataUrl } = require('../lib/imageUpload');
 const { encodeUrl } = require('../lib/linkCipher');
 const { italyDateOf, italyLastNDates, italyPeriodStartIso } = require('../lib/dateUtils');
 const { geoLookup } = require('../lib/geoLookup');
+const linkJwt = require('../lib/linkJwt');
+
+// The hostname we hand out for bot-protected landings. Configurable so we
+// can swap the sacrificial domain without a deploy if it ever gets blocked.
+const REDIRECTOR_HOST = process.env.REDIRECTOR_HOST || 'parrocchiasanbasilio.com';
 
 // Classify the visitor's traffic source based on Meta-UA detection +
 // referrer host + UTM tag (if provided). First non-empty wins.
@@ -99,20 +104,58 @@ router.get('/public/lookup', async (req, res) => {
   const links = (data.landing_links || [])
     .filter((l) => l.enabled)
     .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
-  // Strip click_count from the public payload — admins see it in the editor, but
-  // there's no reason to leak counters to every visitor.
-  // URL is NEVER returned in plain form on the public endpoint. We ship
-  // an obfuscated blob under a non-obvious key ("u") so grep-style
-  // scrapers can't find URLs in the response. The client decodes only
-  // at click time. See backend/lib/linkCipher.js for the algorithm.
-  const publicLinks = links.map((l) => ({
-    id: l.id,
-    label: l.label,
-    u: encodeUrl(l.url),
-    icon: l.icon,
-    age_gate: l.age_gate,
-    animation: l.animation || null,
-  }));
+
+  // Two modes for the link payload:
+  //
+  // (a) bot_protection_enabled = FALSE (default):
+  //     URL is XOR-encoded under "u". The frontend decodes at click time
+  //     and navigates directly to the destination. Same as before.
+  //
+  // (b) bot_protection_enabled = TRUE:
+  //     URL is wrapped in a JWT and exposed as redirect_url pointing to
+  //     parrocchiasanbasilio.com (the sacrificial redirector domain).
+  //     The destination is NEVER shipped to the client in any decodable
+  //     form. The redirector applies bot detection + 410 cloaking on its
+  //     own host before doing the 302.
+  let publicLinks;
+  if (data.bot_protection_enabled) {
+    try {
+      publicLinks = links.map((l) => {
+        const token = linkJwt.sign({ slug: data.slug, link_id: l.id, dest: l.url });
+        const redirectUrl = `https://${REDIRECTOR_HOST}/r/${encodeURIComponent(data.slug)}?t=${token}`;
+        return {
+          id: l.id,
+          label: l.label,
+          redirect_url: redirectUrl,
+          icon: l.icon,
+          age_gate: l.age_gate,
+          animation: l.animation || null,
+        };
+      });
+    } catch (err) {
+      // JWT signing failed (most likely REDIRECTOR_JWT_SECRET not set on
+      // Render). Fall back to the legacy XOR mode so the landing keeps
+      // working — better than a broken page.
+      console.error('[landings] JWT signing failed, falling back to XOR:', err.message);
+      publicLinks = links.map((l) => ({
+        id: l.id,
+        label: l.label,
+        u: encodeUrl(l.url),
+        icon: l.icon,
+        age_gate: l.age_gate,
+        animation: l.animation || null,
+      }));
+    }
+  } else {
+    publicLinks = links.map((l) => ({
+      id: l.id,
+      label: l.label,
+      u: encodeUrl(l.url),
+      icon: l.icon,
+      age_gate: l.age_gate,
+      animation: l.animation || null,
+    }));
+  }
 
   res.json({
     id: data.id,
@@ -124,6 +167,7 @@ router.get('/public/lookup', async (req, res) => {
     verified: data.verified,
     theme: data.theme || {},
     age_gate_default: data.age_gate_default,
+    bot_protection_enabled: !!data.bot_protection_enabled,
     links: publicLinks,
   });
 });
@@ -587,7 +631,7 @@ router.post('/', async (req, res) => {
 // PATCH /api/landings/:id — partial update
 router.patch('/:id', async (req, res) => {
   const allowed = ['talent_id', 'my_account_id', 'host', 'slug', 'title', 'subtitle', 'bio', 'avatar_url',
-    'background_url', 'verified', 'theme', 'published', 'age_gate_default'];
+    'background_url', 'verified', 'theme', 'published', 'age_gate_default', 'bot_protection_enabled'];
   const updates = {};
   for (const k of allowed) {
     if (k in (req.body || {})) updates[k] = req.body[k];

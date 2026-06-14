@@ -20,6 +20,15 @@ function applyHeadMetadata(landing) {
   const image = landing.background_url || landing.avatar_url || '';
   const url = typeof window !== 'undefined' ? window.location.href : '';
 
+  // When bot-protection is on, lock down the page to crawlers and
+  // strip the referrer so destinations don't see where we came from.
+  // These tags don't change the user experience — only what crawlers see.
+  if (landing.bot_protection_enabled) {
+    upsertMeta('name', 'robots', 'noindex, nofollow, noarchive, nosnippet, noimageindex, nocache');
+    upsertMeta('name', 'googlebot', 'noindex, nofollow, noarchive, nosnippet, noimageindex');
+    upsertMeta('name', 'referrer', 'no-referrer');
+  }
+
   document.title = title;
 
   // Favicon: prefer the landing's avatar; fall back to background.
@@ -117,18 +126,32 @@ export default function PublicLandingPage() {
   };
 
   const fireLinkOpen = (link) => {
-    try {
-      const url = new URL(window.location.href);
-      api.recordLandingClick(link.id, {
-        meta_platform: metaPlatformRef.current,
-        referrer: document.referrer || null,
-        utm_source: url.searchParams.get('utm_source') || null,
-      });
-    } catch {}
-    // The plaintext URL never lives in React state — decode it ONLY here,
-    // moments before navigating. A bot that dumps the rendered DOM or the
-    // React fiber tree won't find any usable URL anywhere on the page.
-    const dest = decodeUrl(link.u);
+    // Two paths depending on which landing-mode we're in:
+    //
+    // (a) Legacy (bot_protection OFF): link has a "u" field with XOR-
+    //     encoded URL. We decode + fire the click event + navigate.
+    //
+    // (b) Bot-protected (bot_protection ON): link has redirect_url that
+    //     points to parrocchiasanbasilio.com with a signed JWT. The
+    //     redirector records the click server-side (so we DON'T fire
+    //     api.recordLandingClick here — would double-count) and applies
+    //     bot detection before doing the 302 to the real destination.
+    let dest = null;
+    if (link.redirect_url) {
+      dest = link.redirect_url;
+    } else if (link.u) {
+      try {
+        const url = new URL(window.location.href);
+        api.recordLandingClick(link.id, {
+          meta_platform: metaPlatformRef.current,
+          referrer: document.referrer || null,
+          utm_source: url.searchParams.get('utm_source') || null,
+        });
+      } catch {}
+      // Decode only at the moment of navigation. A bot that dumps the
+      // rendered DOM or React fiber tree won't find any usable URL.
+      dest = decodeUrl(link.u);
+    }
     if (!dest) return;
     setTimeout(() => openExternal(dest), 30);
   };
@@ -184,6 +207,24 @@ export default function PublicLandingPage() {
 
       {/* Subtle corner vignette for cinematic finish */}
       <div className="pl-vignette" aria-hidden />
+
+      {/* Honeypot canary anchors — rendered only when bot-protection is
+          on. A real human cannot click these (display:none + offscreen),
+          but a scraper that follows every <a href> in the DOM trips
+          them and lands its IP in the canary blacklist server-side. */}
+      {landing.bot_protection_enabled && (
+        <>
+          <div style={{ display: 'none' }} aria-hidden="true">
+            <a href={`/api/canary?landing_id=${landing.id}&t=hidden`}>.</a>
+          </div>
+          <div
+            style={{ position: 'absolute', left: -9999, top: -9999 }}
+            aria-hidden="true"
+          >
+            <a href={`/api/canary?landing_id=${landing.id}&t=offscreen`}>.</a>
+          </div>
+        </>
+      )}
 
       <main className="pl-stage">
         {/* Spacer pushes content downward — content sits in lower portion of hero */}

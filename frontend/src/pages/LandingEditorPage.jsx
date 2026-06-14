@@ -310,6 +310,23 @@ function ProfileTab({ landing, saveField, savingField, reload }) {
             />
             <span>Age-gate su tutti i link (18+)</span>
           </label>
+          <label
+            className="editor-toggle"
+            title={
+              'Quando attivo, i link non puntano più direttamente alla destinazione: ' +
+              'passano da parrocchiasanbasilio.com con un JWT firmato. Quel dominio ' +
+              'rileva bot Meta/datacenter e risponde 410 invece di redirect. ' +
+              'In più, la landing pubblica diventa noindex/no-referrer/no-cache e ' +
+              'ospita 2 honeypot canary per rilevare scraper.'
+            }
+          >
+            <input
+              type="checkbox"
+              checked={!!landing.bot_protection_enabled}
+              onChange={(e) => saveField({ bot_protection_enabled: e.target.checked })}
+            />
+            <span>🛡️ Bot protection (anti-Meta scanner)</span>
+          </label>
         </div>
       </div>
 

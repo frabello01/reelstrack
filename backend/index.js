@@ -29,6 +29,8 @@ const landingsRouter = require('./routes/landings');
 const inflowwRouter = require('./routes/infloww');
 const videoStudioRouter = require('./routes/videoStudio');
 const redirectsRouter = require('./routes/redirects');
+const redirectorRouter = require('./routes/redirector');
+const canaryRouter = require('./routes/canary');
 const driveRouter = require('./routes/drive');
 const uploadsRouter = require('./routes/uploads');
 const { requireAuth } = require('./middleware/auth');
@@ -45,6 +47,32 @@ const app = express();
 // geolocation on landing-page clicks to work.
 app.set('trust proxy', true);
 const PORT = process.env.PORT || 3001;
+
+// ============================================================
+// BOT-PROTECTION REDIRECTOR DOMAIN
+//
+// Hosts listed here are mapped to the redirector router. Any request
+// arriving on these hostnames is handled BEFORE the regular API stack
+// — no CORS, no auth gate, no rate-limit interference. The redirector
+// does its own bot detection + JWT validation + 302/410 dispatch.
+//
+// To add a new sacrificial domain: just add the host here and point
+// its DNS at this Render service. Nothing else changes.
+// ============================================================
+const REDIRECTOR_HOSTS = new Set([
+  'parrocchiasanbasilio.com',
+  'www.parrocchiasanbasilio.com',
+]);
+
+app.use((req, res, next) => {
+  const host = (req.hostname || '').toLowerCase();
+  if (REDIRECTOR_HOSTS.has(host)) {
+    // The redirector handles /r/:slug — everything else from this host
+    // gets a generic 404 (defined inside the router).
+    return redirectorRouter(req, res, next);
+  }
+  return next();
+});
 
 // ============================================================
 // Middleware
@@ -82,6 +110,9 @@ app.use((req, res, next) => {
   if (req.path.startsWith('/api/uploads/public/')) {
     return publicLandingsCors(req, res, next);
   }
+  if (req.path === '/api/canary') {
+    return publicLandingsCors(req, res, next);
+  }
   return strictCors(req, res, next);
 });
 app.use(express.json({ limit: '15mb' }));
@@ -113,6 +144,9 @@ app.use('/api', (req, res, next) => {
   // Public agency branding (logo, display_name) used on share pages — must
   // be readable without auth so the share link renders the agency logo.
   if (req.path === '/settings/public') return next();
+  // Canary honeypot — fired by scrapers that follow hidden <a> tags. Must
+  // be reachable without auth so the trap actually springs.
+  if (req.path === '/canary') return next();
   // Google OAuth callback is a browser-initiated GET from Google's domain
   // — there's no JWT to attach. CSRF is enforced via HMAC state inside
   // the handler.
@@ -161,6 +195,9 @@ app.use('/api/activity-log', activityLogRouter);
 app.use('/api/guide-completions', guideCompletionsRouter);
 app.use('/api/suggestions', suggestionsRouter);
 app.use('/api/landings', landingsRouter);
+// Canary honeypot. Mounted at /api/canary (matches the path used in the
+// hidden <a> tags on bot-protected landings).
+app.use('/api', canaryRouter);
 app.use('/api/infloww', inflowwRouter);
 app.use('/api/video-studio', videoStudioRouter);
 app.use('/api/redirects', redirectsRouter);
