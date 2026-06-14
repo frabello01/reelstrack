@@ -354,9 +354,6 @@ export default function LandingsDashboardPage() {
         </div>
       </div>
 
-      {/* Bot Protection monitoring */}
-      <BotProtectionPanel />
-
       {/* Live feed */}
       <div className="ldb-card">
         <h3 className="ldb-card-title">
@@ -382,6 +379,9 @@ export default function LandingsDashboardPage() {
           </ul>
         )}
       </div>
+
+      {/* Bot Protection monitoring */}
+      <BotProtectionPanel />
     </div>
   );
 }
