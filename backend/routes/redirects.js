@@ -3,7 +3,6 @@ const router = express.Router();
 const supabase = require('../lib/supabase');
 const { encodeUrl } = require('../lib/linkCipher');
 const { geoLookup } = require('../lib/geoLookup');
-const botDetect = require('../lib/botDetect');
 
 // ============================================================
 // Helpers (mirror landings.js — keeping inline to avoid a
@@ -89,29 +88,6 @@ router.get('/public/lookup', async (req, res) => {
   if (error) return res.status(500).json({ error: error.message });
   if (!data) return res.status(404).json({ error: 'Redirect not found' });
 
-  // Bot cloaking: for redirects we go harder than landings — the whole
-  // point of the link is to bounce to a destination. If a bot asks for
-  // it, we just say "doesn't exist" (404) so they don't even see that
-  // a redirect with this slug is registered.
-  const ip = (req.ip || '').toString();
-  const ua = (req.headers['user-agent'] || '').toString();
-  const verdict = botDetect.detect(ip, ua);
-  if (verdict) {
-    const geo = geoLookup(ip);
-    supabase.from('bot_hits').insert({
-      resource_kind: 'redirect',
-      resource_id: data.id,
-      slug: data.slug,
-      ip: geo.ip_truncated,
-      full_ip: ip.slice(0, 64),
-      detection_kind: verdict.kind,
-      reason: verdict.reason,
-      user_agent: ua.slice(0, 500),
-      path: req.path,
-    }).then(() => {}, (e) => console.warn('[bot_hits] insert failed:', e.message));
-    return res.status(404).json({ error: 'Redirect not found' });
-  }
-
   res.json({
     id: data.id,
     slug: data.slug,
@@ -133,11 +109,6 @@ router.post('/public/click/:id', async (req, res) => {
     ? req.body.age_gate_confirmed : null;
   const geo = geoLookup(req.ip);
   const source = classifySource({ metaPlatform, referrerHost, utmSource });
-
-  // Skip recording entirely for bots — keeps the dashboard honest.
-  if (botDetect.detect((req.ip || '').toString(), ua)) {
-    return res.json({ ok: true });
-  }
 
   const { data: link, error: lookupErr } = await supabase
     .from('redirect_links')

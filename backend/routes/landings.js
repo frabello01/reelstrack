@@ -5,29 +5,6 @@ const { uploadImageDataUrl } = require('../lib/imageUpload');
 const { encodeUrl } = require('../lib/linkCipher');
 const { italyDateOf, italyLastNDates, italyPeriodStartIso } = require('../lib/dateUtils');
 const { geoLookup } = require('../lib/geoLookup');
-const botDetect = require('../lib/botDetect');
-
-// Helper: classify the request as bot/human, log if bot, return verdict.
-// Fire-and-forget DB write so the lookup endpoint stays fast.
-function classifyAndLog(req, resourceKind, resourceId, slug) {
-  const ip = (req.ip || '').toString();
-  const ua = (req.headers['user-agent'] || '').toString();
-  const verdict = botDetect.detect(ip, ua);
-  if (!verdict) return null;
-  const geo = geoLookup(ip);
-  supabase.from('bot_hits').insert({
-    resource_kind: resourceKind,
-    resource_id: resourceId,
-    slug,
-    ip: geo.ip_truncated,
-    full_ip: ip.slice(0, 64),
-    detection_kind: verdict.kind,
-    reason: verdict.reason,
-    user_agent: ua.slice(0, 500),
-    path: req.path,
-  }).then(() => {}, (e) => console.warn('[bot_hits] insert failed:', e.message));
-  return verdict;
-}
 
 // Classify the visitor's traffic source based on Meta-UA detection +
 // referrer host + UTM tag (if provided). First non-empty wins.
@@ -118,12 +95,6 @@ router.get('/public/lookup', async (req, res) => {
   if (error) return res.status(500).json({ error: error.message });
   if (!data) return res.status(404).json({ error: 'Landing not found' });
 
-  // Bot detection. If the requester matches Meta's IP ranges, a cloud
-  // datacenter, or a known bot UA, we serve the landing's branding but
-  // with ZERO links. From the scanner's POV the page exists and looks
-  // normal but contains no off-domain destinations to crawl/penalise.
-  const botVerdict = classifyAndLog(req, 'landing', data.id, data.slug);
-
   // Filter + sort links server-side so the client gets exactly what it should render
   const links = (data.landing_links || [])
     .filter((l) => l.enabled)
@@ -134,16 +105,14 @@ router.get('/public/lookup', async (req, res) => {
   // an obfuscated blob under a non-obvious key ("u") so grep-style
   // scrapers can't find URLs in the response. The client decodes only
   // at click time. See backend/lib/linkCipher.js for the algorithm.
-  const publicLinks = botVerdict
-    ? []  // ← cloaking: bots see no links at all
-    : links.map((l) => ({
-        id: l.id,
-        label: l.label,
-        u: encodeUrl(l.url),
-        icon: l.icon,
-        age_gate: l.age_gate,
-        animation: l.animation || null,
-      }));
+  const publicLinks = links.map((l) => ({
+    id: l.id,
+    label: l.label,
+    u: encodeUrl(l.url),
+    icon: l.icon,
+    age_gate: l.age_gate,
+    animation: l.animation || null,
+  }));
 
   res.json({
     id: data.id,
@@ -170,12 +139,6 @@ router.post('/public/click/:linkId', async (req, res) => {
   const utmSource = req.body?.utm_source || null;
   const geo = geoLookup(req.ip);
   const source = classifySource({ metaPlatform, referrerHost, utmSource });
-
-  // Skip recording entirely if it's a bot — keeps the analytics dashboard
-  // honest (only real human clicks counted).
-  if (botDetect.detect((req.ip || '').toString(), ua)) {
-    return res.json({ ok: true });
-  }
 
   const { data: link, error: lookupErr } = await supabase
     .from('landing_links')
@@ -228,11 +191,6 @@ router.post('/public/view/:landingId', async (req, res) => {
   const ua = (req.headers['user-agent'] || '').toString().slice(0, 250);
   const geo = geoLookup(req.ip);
   const source = classifySource({ metaPlatform, referrerHost, utmSource });
-
-  // Skip recording for bots so the dashboard counts only real visitors.
-  if (botDetect.detect((req.ip || '').toString(), ua)) {
-    return res.json({ ok: true });
-  }
 
   // Respond instantly — DB writes are best-effort.
   res.json({ ok: true });
