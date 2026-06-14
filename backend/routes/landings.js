@@ -629,6 +629,18 @@ router.delete('/:id', async (req, res) => {
   res.json({ success: true });
 });
 
+// Cache-buster appended to the stored URL on every (re)upload.
+// Same Supabase storage path is reused (upsert overwrites the file),
+// so without this the URL would be identical across uploads and the
+// browser would serve the stale image for 1 week (cacheControl).
+// Public visitors still benefit from the long cache because the URL
+// only changes when the admin re-uploads.
+function withCacheBuster(url) {
+  if (!url) return url;
+  const sep = url.includes('?') ? '&' : '?';
+  return `${url}${sep}v=${Date.now()}`;
+}
+
 // POST /api/landings/:id/avatar  →  body { image_data_url }
 router.post('/:id/avatar', async (req, res) => {
   const { image_data_url } = req.body || {};
@@ -637,7 +649,7 @@ router.post('/:id/avatar', async (req, res) => {
     const url = await uploadImageDataUrl(image_data_url, `landings/${req.params.id}-avatar`);
     const { data, error } = await supabase
       .from('landings')
-      .update({ avatar_url: url, updated_at: new Date().toISOString() })
+      .update({ avatar_url: withCacheBuster(url), updated_at: new Date().toISOString() })
       .eq('id', req.params.id)
       .select()
       .single();
@@ -656,7 +668,7 @@ router.post('/:id/background', async (req, res) => {
     const url = await uploadImageDataUrl(image_data_url, `landings/${req.params.id}-bg`);
     const { data, error } = await supabase
       .from('landings')
-      .update({ background_url: url, updated_at: new Date().toISOString() })
+      .update({ background_url: withCacheBuster(url), updated_at: new Date().toISOString() })
       .eq('id', req.params.id)
       .select()
       .single();
