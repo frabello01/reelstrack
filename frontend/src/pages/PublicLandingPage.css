@@ -324,6 +324,66 @@
   }
 }
 
+/* =============================================================
+   Desktop: phone-card layout (≥ 900px)
+
+   Below 900px we keep the immersive mobile hero (bg fills the
+   viewport). Above 900px the visual stack (bg + overlay +
+   vignette) is clipped via clip-path to a centred phone-shaped
+   rectangle, with a neutral dark canvas around. The page now
+   reads as "a phone displayed on a desktop screen" — the
+   familiar Linktree desktop pattern — instead of a giant cropped
+   profile photo.
+
+   Pure CSS: no JSX wrapper added. The fixed positioning of the
+   visual layers is preserved (so they don't scroll with content)
+   and clip-path crops them into the phone shape.
+   ============================================================= */
+@media (min-width: 900px) {
+  .pl-shell {
+    /* Surrounding canvas — neutral dark so the clipped phone "pops" */
+    background: #0a0a0f;
+  }
+
+  /* Crop every visual layer (image bg, dark overlay, vignette,
+     and the no-image gradient fallback) to a centred phone-shaped
+     rectangle. 210px = half of the 420px phone width; 24px = top/
+     bottom margin from the viewport edges. */
+  .pl-bg,
+  .pl-overlay,
+  .pl-vignette,
+  .pl-no-image::before {
+    clip-path: inset(24px calc(50% - 210px) 24px calc(50% - 210px) round 36px);
+  }
+
+  /* Constrain the content stage to the same phone width and
+     centre it on screen. */
+  .pl-stage {
+    max-width: 420px;
+    padding: 32px 24px 40px;
+  }
+
+  /* Bezel: soft shadow + 1px inner highlight around the phone
+     so the card feels lifted off the dark canvas. pointer-events
+     none so clicks pass through to the content underneath. */
+  .pl-shell::after {
+    content: '';
+    position: fixed;
+    top: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 420px;
+    height: calc(100vh - 48px);
+    height: calc(100dvh - 48px);
+    border-radius: 36px;
+    box-shadow:
+      0 30px 80px rgba(0, 0, 0, 0.55),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+    pointer-events: none;
+    z-index: 1;
+  }
+}
+
 /* ----- Age-gate modal (kept from previous design, tightened) ----- */
 .pl-modal-backdrop {
   position: fixed;
