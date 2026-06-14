@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   Activity, MousePointerClick, Eye as EyeIcon, Globe2, Radio,
   ArrowLeft, RefreshCw, UserPlus,
+  Shield, ShieldAlert, ShieldCheck, AlertTriangle, CheckCircle2, Server, Bot, Loader2,
 } from 'lucide-react';
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
@@ -353,6 +354,9 @@ export default function LandingsDashboardPage() {
         </div>
       </div>
 
+      {/* Bot Protection monitoring */}
+      <BotProtectionPanel />
+
       {/* Live feed */}
       <div className="ldb-card">
         <h3 className="ldb-card-title">
@@ -413,4 +417,203 @@ function meaningfulCtr(clicks, views, ctr) {
   if (dataIncomplete(clicks, views)) return '—';
   if (ctr == null) return '—';
   return `${ctr.toFixed(2)}%`;
+}
+
+// ============================================================
+// BotProtectionPanel — embedded subsection of LandingsDashboardPage
+//
+// Auto-refreshes every 30s. Shows:
+//  1. CIDR list health (last refresh from GitHub, list sizes, error state)
+//  2. KPI cards: bot hits in last 24h / 7d / 30d, broken down by kind
+//  3. Top 10 landings hit in last 30 days
+//  4. Recent bot_hits feed (last 100 events with full IP, UA, reason)
+// ============================================================
+function BotProtectionPanel() {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const load = async () => {
+    try {
+      const d = await api.getBotProtectionStatus();
+      setData(d);
+      setError('');
+    } catch (err) {
+      setError(err.message || 'Failed to load');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+    const id = setInterval(load, 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  if (loading && !data) {
+    return (
+      <div className="ldb-card">
+        <h3 className="ldb-card-title"><Shield size={16} /> Bot protection</h3>
+        <div className="ldb-empty"><Loader2 size={14} className="spin" /> Caricamento…</div>
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div className="ldb-card">
+        <h3 className="ldb-card-title"><Shield size={16} /> Bot protection</h3>
+        <div className="ldb-empty">Errore: {error}</div>
+      </div>
+    );
+  }
+  if (!data) return null;
+
+  const { cidr_status, summary, top_landings, recent } = data;
+
+  const lastRefreshAt = cidr_status.last_refresh ? new Date(cidr_status.last_refresh) : null;
+  const hoursSinceRefresh = lastRefreshAt ? (Date.now() - lastRefreshAt.getTime()) / 3_600_000 : null;
+  let cidrHealth = 'green';
+  let cidrHealthLabel = 'OK';
+  if (cidr_status.last_error) {
+    cidrHealth = 'red';
+    cidrHealthLabel = `Errore: ${cidr_status.last_error}`;
+  } else if (!lastRefreshAt) {
+    cidrHealth = 'yellow';
+    cidrHealthLabel = 'Mai aggiornato dal boot';
+  } else if (hoursSinceRefresh > 30) {
+    cidrHealth = 'yellow';
+    cidrHealthLabel = `Ultimo refresh ${hoursSinceRefresh.toFixed(1)}h fa (attendi 24h)`;
+  }
+
+  const kindEmoji = (k) => ({
+    meta: '🟣', cloud: '☁️', crawler: '🤖', canary: '🪤',
+  }[k] || '❓');
+  const kindLabel = (k) => ({
+    meta: 'Meta', cloud: 'Cloud DC', crawler: 'UA crawler', canary: 'Canary trap',
+  }[k] || k);
+
+  return (
+    <div className="ldb-card">
+      <h3 className="ldb-card-title">
+        <Shield size={16} /> Bot protection — monitoring
+        <span className="ldb-feed-hint">Auto-refresh ogni 30s</span>
+      </h3>
+
+      {/* === Block 1: CIDR list status === */}
+      <div className="ldb-bp-status">
+        <div className={`ldb-bp-status-icon ldb-bp-${cidrHealth}`}>
+          {cidrHealth === 'green' && <ShieldCheck size={28} />}
+          {cidrHealth === 'yellow' && <ShieldAlert size={28} />}
+          {cidrHealth === 'red' && <AlertTriangle size={28} />}
+        </div>
+        <div className="ldb-bp-status-info">
+          <div className="ldb-bp-status-headline">
+            Lista CIDR Meta da GitHub — <strong>{cidrHealthLabel}</strong>
+          </div>
+          <div className="ldb-bp-status-details">
+            <span><Server size={12} /> <strong>{formatIntIT(cidr_status.ipv4_count || 0)}</strong> fasce IPv4</span>
+            <span> · <strong>{formatIntIT(cidr_status.ipv6_count || 0)}</strong> fasce IPv6</span>
+            {lastRefreshAt && (
+              <span> · Ultimo refresh: <strong>{lastRefreshAt.toLocaleString('it-IT')}</strong></span>
+            )}
+          </div>
+          <div className="ldb-bp-status-source">
+            Source: <code>{cidr_status.source_url || '—'}</code>
+          </div>
+        </div>
+      </div>
+
+      {/* === Block 2: hits per periodo === */}
+      <div className="ldb-bp-section-label">Bot bloccati per periodo</div>
+      <div className="ldb-bp-period-grid">
+        {[
+          { key: 'h24', label: 'Ultime 24h', data: summary.h24 },
+          { key: 'd7',  label: 'Ultimi 7 giorni', data: summary.d7 },
+          { key: 'd30', label: 'Ultimi 30 giorni', data: summary.d30 },
+        ].map((p) => (
+          <div key={p.key} className="ldb-bp-period">
+            <div className="ldb-bp-period-label">{p.label}</div>
+            <div className="ldb-bp-period-total">{formatIntIT(p.data.total)}</div>
+            <div className="ldb-bp-period-breakdown">
+              {Object.entries(p.data.by_kind || {}).length === 0 ? (
+                <span className="ldb-bp-period-empty">Nessun hit</span>
+              ) : (
+                Object.entries(p.data.by_kind).map(([kind, count]) => (
+                  <span key={kind} className="ldb-bp-period-chip" title={kindLabel(kind)}>
+                    {kindEmoji(kind)} {kindLabel(kind)}: <strong>{count}</strong>
+                  </span>
+                ))
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* === Block 3: top landings === */}
+      {top_landings.length > 0 && (
+        <>
+          <div className="ldb-bp-section-label">Landing più scansionate (30 giorni)</div>
+          <div className="ldb-bp-top-list">
+            {top_landings.map((l) => (
+              <div key={`${l.kind}:${l.slug}`} className="ldb-bp-top-item">
+                <span className="ldb-bp-top-slug">/{l.slug}</span>
+                <span className="ldb-bp-top-count">{formatIntIT(l.count)} hit</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* === Block 4: feed recente === */}
+      <div className="ldb-bp-section-label">
+        <Bot size={13} /> Ultimi {recent.length} eventi
+      </div>
+      {recent.length === 0 ? (
+        <div className="ldb-empty">Nessun bot rilevato ancora. La lista si riempirà da sola appena un crawler tenta uno dei tuoi redirect.</div>
+      ) : (
+        <div className="ldb-bp-feed-wrap">
+          <table className="ldb-bp-feed-table">
+            <thead>
+              <tr>
+                <th>Quando</th>
+                <th>Tipo</th>
+                <th>IP</th>
+                <th>Path / Slug</th>
+                <th>Motivo</th>
+                <th>UA</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recent.map((h) => (
+                <tr key={h.id} className={`ldb-bp-row ldb-bp-row-${h.detection_kind}`}>
+                  <td className="ldb-bp-time" title={new Date(h.created_at).toLocaleString('it-IT')}>
+                    {timeAgoIT(h.created_at)}
+                  </td>
+                  <td><span className="ldb-bp-kind-chip">{kindEmoji(h.detection_kind)} {kindLabel(h.detection_kind)}</span></td>
+                  <td className="ldb-bp-ip" title={h.full_ip || h.ip}>{h.full_ip || h.ip || '—'}</td>
+                  <td className="ldb-bp-path">
+                    {h.slug ? <code>/{h.slug}</code> : <span className="ldb-bp-muted">{h.path}</span>}
+                  </td>
+                  <td className="ldb-bp-reason" title={h.reason}>{h.reason || '—'}</td>
+                  <td className="ldb-bp-ua" title={h.user_agent}>
+                    {(h.user_agent || '').slice(0, 60)}{(h.user_agent || '').length > 60 ? '…' : ''}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function timeAgoIT(iso) {
+  if (!iso) return '—';
+  const sec = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+  if (sec < 60) return `${sec}s fa`;
+  if (sec < 3600) return `${Math.floor(sec / 60)}m fa`;
+  if (sec < 86400) return `${Math.floor(sec / 3600)}h fa`;
+  return `${Math.floor(sec / 86400)}g fa`;
 }

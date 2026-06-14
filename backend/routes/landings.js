@@ -267,6 +267,85 @@ router.post('/public/view/:landingId', async (req, res) => {
 // ============================================================
 
 // GET /api/landings/analytics/overview?period=day|week|month&talent_id=&landing_id=
+// ============================================================
+// Bot-protection monitoring endpoint.
+// Returns:
+//   - cidr_status: state of the auto-refreshed Meta CIDR list
+//   - summary: bot_hits aggregated by detection_kind for last 24h / 7d / 30d
+//   - top_landings: which landings get the most bot hits in last 30d
+//   - recent: last 100 bot_hits events
+// All in one call so the dashboard does a single fetch every refresh.
+// ============================================================
+router.get('/bot-protection', async (req, res) => {
+  const botCidrs = require('../lib/botCidrs');
+  const cidr_status = botCidrs.status();
+
+  // Period boundaries (UTC — bot_hits.created_at is timestamptz, comparison
+  // is by absolute time, not Italy-local day)
+  const now = new Date();
+  const d24h = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+  const d7d  = new Date(now.getTime() - 7  * 24 * 60 * 60 * 1000).toISOString();
+  const d30d = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+  // Helper: fetch counts grouped by detection_kind for a period
+  async function summaryFor(sinceIso) {
+    const { data, error } = await supabase
+      .from('bot_hits')
+      .select('detection_kind')
+      .gte('created_at', sinceIso);
+    if (error) return { total: 0, by_kind: {}, error: error.message };
+    const by_kind = {};
+    for (const row of data || []) {
+      by_kind[row.detection_kind] = (by_kind[row.detection_kind] || 0) + 1;
+    }
+    return { total: (data || []).length, by_kind };
+  }
+
+  const [s24, s7, s30, topLandingsRes, recentRes] = await Promise.all([
+    summaryFor(d24h),
+    summaryFor(d7d),
+    summaryFor(d30d),
+    // Top landings hit in last 30 days (slug + count, descending)
+    supabase
+      .from('bot_hits')
+      .select('slug, resource_kind')
+      .gte('created_at', d30d)
+      .not('slug', 'is', null),
+    // Last 100 events with all useful fields
+    supabase
+      .from('bot_hits')
+      .select('id, resource_kind, resource_id, slug, ip, full_ip, detection_kind, reason, user_agent, path, created_at')
+      .order('created_at', { ascending: false })
+      .limit(100),
+  ]);
+
+  // Tally top landings client-side (cheaper than a SQL group-by for our scale)
+  const topLandingsMap = new Map();
+  for (const row of topLandingsRes.data || []) {
+    const key = `${row.resource_kind}:${row.slug}`;
+    topLandingsMap.set(key, (topLandingsMap.get(key) || 0) + 1);
+  }
+  const top_landings = Array.from(topLandingsMap.entries())
+    .map(([key, count]) => {
+      const [kind, slug] = key.split(':', 2);
+      return { kind, slug, count };
+    })
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 10);
+
+  res.json({
+    cidr_status,
+    summary: {
+      h24: s24,
+      d7: s7,
+      d30: s30,
+    },
+    top_landings,
+    recent: recentRes.data || [],
+    generated_at: now.toISOString(),
+  });
+});
+
 // One-shot aggregation for the live dashboard. Returns everything the
 // page needs (totals, hourly/daily series, by-source, by-country, top
 // landings, recent feed, active-now). Designed to be refreshed every

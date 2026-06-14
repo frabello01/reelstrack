@@ -493,6 +493,7 @@ export const api = {
     const q = qs.toString();
     return request(`/api/landings/analytics/overview${q ? `?${q}` : ''}`);
   },
+  getBotProtectionStatus: () => request('/api/landings/bot-protection'),
 
   // Explore Creators (suggestion scans)
   getSuggestions: (listId) => request(`/api/suggestions/lists/${listId}`),

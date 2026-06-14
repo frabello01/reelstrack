@@ -262,3 +262,226 @@
 
 /* ----- Charts container ----- */
 .ldb-chart-wrap { padding: 4px 0; }
+
+/* ============================================================
+   Bot Protection monitoring panel
+   ============================================================ */
+.spin { animation: ldb-spin 1s linear infinite; }
+@keyframes ldb-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+/* Block 1 — CIDR list status row */
+.ldb-bp-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 12px 14px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 16px;
+}
+.ldb-bp-status-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+}
+.ldb-bp-green  { color: #34d399; background: rgba(52, 211, 153, 0.12); }
+.ldb-bp-yellow { color: #fbbf24; background: rgba(251, 191, 36, 0.12); }
+.ldb-bp-red    { color: #f87171; background: rgba(248, 113, 113, 0.12); }
+.ldb-bp-status-info { flex: 1; min-width: 0; }
+.ldb-bp-status-headline {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.ldb-bp-status-details {
+  font-size: 12px;
+  color: var(--text2);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+}
+.ldb-bp-status-details strong { color: var(--text); font-weight: 600; }
+.ldb-bp-status-source {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text2);
+}
+.ldb-bp-status-source code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  background: var(--bg2);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.ldb-bp-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text2);
+  margin: 14px 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Block 2 — periodi (24h/7g/30g) */
+.ldb-bp-period-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+@media (max-width: 700px) { .ldb-bp-period-grid { grid-template-columns: 1fr; } }
+.ldb-bp-period {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.ldb-bp-period-label {
+  font-size: 11px;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 4px;
+}
+.ldb-bp-period-total {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 8px;
+  line-height: 1;
+}
+.ldb-bp-period-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.ldb-bp-period-chip {
+  font-size: 11px;
+  padding: 2px 8px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text2);
+}
+.ldb-bp-period-chip strong { color: var(--text); }
+.ldb-bp-period-empty { font-size: 11px; color: var(--text2); font-style: italic; }
+
+/* Block 3 — top landings */
+.ldb-bp-top-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ldb-bp-top-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 12px;
+}
+.ldb-bp-top-slug {
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text);
+  font-weight: 500;
+}
+.ldb-bp-top-count { color: var(--text2); font-size: 11px; }
+
+/* Block 4 — feed tabella */
+.ldb-bp-feed-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  max-height: 420px;
+  overflow-y: auto;
+}
+.ldb-bp-feed-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.ldb-bp-feed-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--bg2);
+  text-align: left;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text2);
+  font-weight: 600;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.ldb-bp-feed-table tbody td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  vertical-align: middle;
+}
+.ldb-bp-feed-table tbody tr:last-child td { border-bottom: none; }
+.ldb-bp-time {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text2);
+  white-space: nowrap;
+}
+.ldb-bp-kind-chip {
+  display: inline-block;
+  font-size: 11px;
+  padding: 1px 7px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  white-space: nowrap;
+}
+.ldb-bp-row-meta    .ldb-bp-kind-chip { border-color: rgba(167, 139, 250, 0.5); }
+.ldb-bp-row-cloud   .ldb-bp-kind-chip { border-color: rgba(96, 165, 250, 0.5); }
+.ldb-bp-row-crawler .ldb-bp-kind-chip { border-color: rgba(251, 191, 36, 0.5); }
+.ldb-bp-row-canary  .ldb-bp-kind-chip { border-color: rgba(248, 113, 113, 0.5); }
+.ldb-bp-ip {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ldb-bp-path code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  background: var(--bg);
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: var(--text);
+}
+.ldb-bp-muted { color: var(--text2); font-size: 11px; }
+.ldb-bp-reason {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text2);
+}
+.ldb-bp-ua {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text2);
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
