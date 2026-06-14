@@ -13,24 +13,9 @@
  *   - backend/routes/canary.js     — to log + cache the bot's IP
  */
 
-const META_CIDRS = [
-  '31.13.24.0/21',
-  '31.13.64.0/18',
-  '31.13.96.0/19',
-  '66.220.144.0/20',
-  '66.220.152.0/21',
-  '69.63.176.0/20',
-  '69.171.224.0/19',
-  '69.171.250.0/24',
-  '74.119.76.0/22',
-  '102.132.96.0/20',
-  '129.134.0.0/16',
-  '157.240.0.0/16',
-  '173.252.64.0/18',
-  '179.60.192.0/22',
-  '185.60.216.0/22',
-  '204.15.20.0/22',
-];
+// Meta IP ranges now come from botCidrs, which auto-refreshes daily from
+// a BGP-derived public source. See backend/lib/botCidrs.js.
+const botCidrs = require('./botCidrs');
 
 const CLOUD_CIDRS = [
   // AWS US-WEST-2 (Oregon) — observed Meta probes here
@@ -117,7 +102,7 @@ function isInCanaryBlacklist(ip) {
   return true;
 }
 
-// ====== CIDR membership check (IPv4 only) ====================
+// ====== IPv4 CIDR membership check ===========================================
 function ipv4ToInt(ip) {
   const parts = ip.split('.');
   if (parts.length !== 4) return null;
@@ -130,7 +115,7 @@ function ipv4ToInt(ip) {
   return n >>> 0;
 }
 
-function inCidr(ip, cidr) {
+function inCidrV4(ip, cidr) {
   const [range, bitsStr] = cidr.split('/');
   const bits = parseInt(bitsStr, 10);
   if (Number.isNaN(bits) || bits < 0 || bits > 32) return false;
@@ -142,40 +127,98 @@ function inCidr(ip, cidr) {
   return (ipN & mask) === (rangeN & mask);
 }
 
-function matchAnyCidr(ip, cidrs) {
-  for (const cidr of cidrs) if (inCidr(ip, cidr)) return cidr;
+function matchAnyCidrV4(ip, cidrs) {
+  for (const cidr of cidrs) if (inCidrV4(ip, cidr)) return cidr;
+  return null;
+}
+
+// ====== IPv6 CIDR membership check ===========================================
+// Uses BigInt arithmetic since IPv6 addresses are 128-bit.
+function ipv6ToBigInt(addr) {
+  if (!addr || typeof addr !== 'string') return null;
+  // Handle the :: zero-compression
+  let parts;
+  if (addr.includes('::')) {
+    const [head, tail] = addr.split('::');
+    const headParts = head ? head.split(':') : [];
+    const tailParts = tail ? tail.split(':') : [];
+    if (headParts.length + tailParts.length > 8) return null;
+    const missing = 8 - headParts.length - tailParts.length;
+    parts = [...headParts, ...new Array(missing).fill('0'), ...tailParts];
+  } else {
+    parts = addr.split(':');
+  }
+  if (parts.length !== 8) return null;
+  let result = 0n;
+  for (const p of parts) {
+    const num = parseInt(p || '0', 16);
+    if (Number.isNaN(num) || num < 0 || num > 0xffff) return null;
+    result = (result << 16n) | BigInt(num);
+  }
+  return result;
+}
+
+function inCidrV6(ip, cidr) {
+  const [range, bitsStr] = cidr.split('/');
+  const bits = parseInt(bitsStr, 10);
+  if (Number.isNaN(bits) || bits < 0 || bits > 128) return false;
+  const ipN = ipv6ToBigInt(ip);
+  const rangeN = ipv6ToBigInt(range);
+  if (ipN === null || rangeN === null) return false;
+  if (bits === 0) return true;
+  const allOnes = (1n << 128n) - 1n;
+  const mask = allOnes ^ ((1n << BigInt(128 - bits)) - 1n);
+  return (ipN & mask) === (rangeN & mask);
+}
+
+function matchAnyCidrV6(ip, cidrs) {
+  for (const cidr of cidrs) if (inCidrV6(ip, cidr)) return cidr;
   return null;
 }
 
 /**
  * Detect whether a request is from a known bot/crawler.
  * Returns null for humans, or { kind, reason } for bots.
+ * Supports both IPv4 and IPv6 source addresses.
  */
 function detect(ip, userAgent) {
   if (!ip) return null;
 
-  const ipv4 = ip.startsWith('::ffff:') ? ip.slice(7) : ip;
+  // Strip the IPv4-in-IPv6 prefix some proxies leave on req.ip
+  const stripped = ip.startsWith('::ffff:') ? ip.slice(7) : ip;
 
   // Localhost / private IPs are never bots
   if (
-    ipv4 === '127.0.0.1' ||
-    ipv4 === '::1' ||
-    ipv4.startsWith('10.') ||
-    ipv4.startsWith('192.168.') ||
-    /^172\.(1[6-9]|2\d|3[0-1])\./.test(ipv4)
+    stripped === '127.0.0.1' ||
+    stripped === '::1' ||
+    stripped.startsWith('10.') ||
+    stripped.startsWith('192.168.') ||
+    /^172\.(1[6-9]|2\d|3[0-1])\./.test(stripped) ||
+    stripped.startsWith('fc') || stripped.startsWith('fd')   // IPv6 ULA
   ) {
     return null;
   }
 
-  if (isInCanaryBlacklist(ipv4)) {
-    return { kind: 'canary', reason: `IP ${ipv4} previously hit canary` };
+  // Canary blacklist check (works with both v4 and v6 strings)
+  if (isInCanaryBlacklist(stripped)) {
+    return { kind: 'canary', reason: `IP ${stripped} previously hit canary` };
   }
 
-  const metaHit = matchAnyCidr(ipv4, META_CIDRS);
-  if (metaHit) return { kind: 'meta', reason: `IP ${ipv4} in Meta CIDR ${metaHit}` };
+  // Decide IPv4 vs IPv6 — IPv6 contains colons and isn't a plain dotted-quad.
+  const isIpv4 = /^\d+\.\d+\.\d+\.\d+$/.test(stripped);
 
-  const cloudHit = matchAnyCidr(ipv4, CLOUD_CIDRS);
-  if (cloudHit) return { kind: 'cloud', reason: `IP ${ipv4} in cloud DC CIDR ${cloudHit}` };
+  if (isIpv4) {
+    const metaHit = matchAnyCidrV4(stripped, botCidrs.getMetaCidrsV4());
+    if (metaHit) return { kind: 'meta', reason: `IPv4 ${stripped} in Meta CIDR ${metaHit}` };
+
+    const cloudHit = matchAnyCidrV4(stripped, CLOUD_CIDRS);
+    if (cloudHit) return { kind: 'cloud', reason: `IPv4 ${stripped} in cloud DC CIDR ${cloudHit}` };
+  } else if (stripped.includes(':')) {
+    const metaHit = matchAnyCidrV6(stripped, botCidrs.getMetaCidrsV6());
+    if (metaHit) return { kind: 'meta', reason: `IPv6 ${stripped} in Meta CIDR ${metaHit}` };
+    // (No IPv6 cloud CIDRs hardcoded — Meta is the main source we care
+    //  about, and Render-bound traffic is overwhelmingly IPv4.)
+  }
 
   if (userAgent && BOT_UA_REGEX.test(userAgent)) {
     return { kind: 'crawler', reason: `UA matches bot regex` };
@@ -188,7 +231,6 @@ module.exports = {
   detect,
   addToCanaryBlacklist,
   isInCanaryBlacklist,
-  META_CIDRS,
   CLOUD_CIDRS,
   BOT_UA_REGEX,
 };

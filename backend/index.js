@@ -263,6 +263,17 @@ cron.schedule('1 0 * * *', async () => {
   timezone: 'Europe/Rome',
 });
 
+// ============================================================
+// Bot Protection — Meta CIDR list bootstrap
+// Fetches the BGP-derived Meta IP ranges from GitHub on startup,
+// then refreshes every 24h. If the first fetch fails the redirector
+// falls back to a hardcoded subset (defined in botCidrs.js).
+// ============================================================
+const botCidrs = require('./lib/botCidrs');
+botCidrs.refresh()
+  .then(() => botCidrs.startRefreshLoop())
+  .catch((err) => console.warn('[boot] botCidrs initial refresh threw:', err.message));
+
 app.listen(PORT, () => {
   console.log(`✅ Reels Tracker API running on port ${PORT}`);
 });
