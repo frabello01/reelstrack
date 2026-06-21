@@ -100,11 +100,11 @@ export default function Layout() {
           </NavLink>
           <NavLink to="/studio" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
             <Film size={18} />
-            Studio
+            AI Selfie Studio
           </NavLink>
           <NavLink to="/video-studio" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
             <Clapperboard size={18} />
-            Video Studio
+            AI Video Studio
           </NavLink>
           <NavLink to="/guides" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
             <BookOpen size={18} />
