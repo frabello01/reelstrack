@@ -111,7 +111,7 @@ export default function VideoStudioPage() {
   const [step1Aspect, setStep1Aspect] = useState('2:3');
   const [step1Quality, setStep1Quality] = useState('high');
   const [step1Generating, setStep1Generating] = useState(false);
-  const [step1Result, setStep1Result] = useState(null);  // last completed generation row
+  const [step1History, setStep1History] = useState([]);     // persisted gallery, newest first
   const [step1Error, setStep1Error] = useState('');
   const [transferredFromStep1, setTransferredFromStep1] = useState(false);
   const [showCreatorsModal, setShowCreatorsModal] = useState(false);
@@ -140,6 +140,7 @@ export default function VideoStudioPage() {
 
   useEffect(() => { if (configured) loadGens(); }, [configured]);
   useEffect(() => { if (configured) loadCreators(); }, [configured]);
+  useEffect(() => { if (configured) loadStep1History(); }, [configured]);
 
   const loadCreators = async () => {
     try {
@@ -147,6 +148,15 @@ export default function VideoStudioPage() {
       setCreators(data?.creators || []);
     } catch (err) {
       console.warn('[video-studio] creators load failed:', err.message);
+    }
+  };
+
+  const loadStep1History = async () => {
+    try {
+      const data = await api.getStartingImages({ limit: 50 });
+      setStep1History(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.warn('[video-studio] step1 history load failed:', err.message);
     }
   };
 
@@ -265,7 +275,8 @@ export default function VideoStudioPage() {
         aspect_ratio: step1Aspect,
         quality: step1Quality,
       });
-      setStep1Result(row);
+      // Prepend to the gallery so the user sees the new image immediately
+      if (row?.id) setStep1History((h) => [row, ...h.filter((x) => x.id !== row.id)]);
     } catch (err) {
       setStep1Error(err.message || 'Generation failed');
     } finally {
@@ -273,20 +284,33 @@ export default function VideoStudioPage() {
     }
   };
 
-  // Transfer the Step 1 image to Step 2 — bypasses upload because the
+  // Transfer a Step 1 image to Step 2 — bypasses upload because the
   // image is already at a public URL in our generated-images bucket.
-  const handleTransferStep1 = () => {
-    if (!step1Result?.image_url) return;
+  const handleTransferToStep2 = (row) => {
+    if (!row?.image_url) return;
     if (imagePreview && imagePreview.startsWith('blob:')) URL.revokeObjectURL(imagePreview);
     setImageFile(null);
-    setImagePreview(step1Result.image_url);
-    setImageUrl(step1Result.image_url);
+    setImagePreview(row.image_url);
+    setImageUrl(row.image_url);
     setTransferredFromStep1(true);
     setError('');
-    // scroll Step 2 into view so the user sees the change
     setTimeout(() => {
       document.getElementById('vs-step2-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 50);
+  };
+
+  const handleDeleteStep1 = async (row) => {
+    if (!confirm('Eliminare questa immagine? Non potrai recuperarla.')) return;
+    try {
+      await api.deleteStartingImage(row.id);
+      setStep1History((h) => h.filter((x) => x.id !== row.id));
+      // If this image was active in Step 2, clear it
+      if (imageUrl === row.image_url) {
+        handleClearImage();
+      }
+    } catch (err) {
+      alert(`Delete failed: ${err.message}`);
+    }
   };
 
   // ============================================================
@@ -473,37 +497,90 @@ export default function VideoStudioPage() {
           </div>
         </div>
 
-        {step1Result && step1Result.status === 'completed' && step1Result.image_url && (
-          <div className="vs-step1-result">
-            <div className="vs-step1-result-image">
-              <img src={step1Result.image_url} alt="Generated starting image" />
+        {step1History.length > 0 && (
+          <div className="vs-step1-gallery-wrap">
+            <div className="vs-step1-gallery-header">
+              <span className="vs-step1-gallery-label">
+                Generate ({step1History.length})
+              </span>
+              <button className="vs-refresh-btn" onClick={loadStep1History} title="Aggiorna">
+                <RefreshCw size={12} />
+              </button>
             </div>
-            <div className="vs-step1-result-body">
-              <div className="vs-step1-result-label">Pronto!</div>
-              <div className="vs-step1-result-prompt" title={step1Result.final_prompt || ''}>
-                {(step1Result.final_prompt || '').slice(0, 200)}
-                {(step1Result.final_prompt || '').length > 200 ? '…' : ''}
-              </div>
-              <div className="vs-step1-result-actions">
-                <button
-                  className="btn btn-primary"
-                  onClick={handleTransferStep1}
-                  disabled={transferredFromStep1 && imageUrl === step1Result.image_url}
-                >
-                  {transferredFromStep1 && imageUrl === step1Result.image_url
-                    ? <><Camera size={14} /> Già in Step 2</>
-                    : <>Use as starting image <ArrowRight size={14} /></>}
-                </button>
-                <a
-                  className="btn btn-secondary"
-                  href={step1Result.image_url}
-                  download={`starting-${step1Result.id.slice(0, 8)}.webp`}
-                  rel="noopener noreferrer"
-                  target="_blank"
-                >
-                  <Download size={14} /> Download
-                </a>
-              </div>
+            <div className="vs-step1-gallery">
+              {step1History.map((row) => {
+                const isActive = transferredFromStep1 && imageUrl === row.image_url;
+                const isFailed = row.status === 'failed' || row.status === 'nsfw';
+                return (
+                  <div key={row.id} className={`vs-step1-tile ${isActive ? 'vs-step1-tile-active' : ''} ${isFailed ? 'vs-step1-tile-failed' : ''}`}>
+                    <div className="vs-step1-tile-media">
+                      {row.image_url ? (
+                        <img src={row.image_url} alt={row.script || 'starting image'} />
+                      ) : isFailed ? (
+                        <div className="vs-step1-tile-failed-box">
+                          <AlertCircle size={22} />
+                          <span>{row.status}</span>
+                        </div>
+                      ) : (
+                        <div className="vs-step1-tile-failed-box">
+                          <Loader2 size={22} className="spin" />
+                        </div>
+                      )}
+                      {isActive && (
+                        <div className="vs-step1-tile-active-badge">
+                          <Camera size={11} /> in Step 2
+                        </div>
+                      )}
+                    </div>
+                    <div className="vs-step1-tile-body">
+                      <div className="vs-step1-tile-meta">
+                        <strong>{row.creator_name || '—'}</strong>
+                        <span>· {fmtDate(row.created_at)}</span>
+                      </div>
+                      <p className="vs-step1-tile-script" title={row.script}>
+                        {(row.script || '').slice(0, 140)}
+                        {(row.script || '').length > 140 ? '…' : ''}
+                      </p>
+                      {isFailed && row.error_message && (
+                        <p className="vs-step1-tile-error" title={row.error_message}>
+                          {row.error_message.slice(0, 100)}
+                        </p>
+                      )}
+                      <div className="vs-step1-tile-actions">
+                        {row.image_url && (
+                          <button
+                            className="btn btn-primary btn-sm"
+                            onClick={() => handleTransferToStep2(row)}
+                            disabled={isActive}
+                            title="Usa come immagine di partenza per Step 2"
+                          >
+                            {isActive ? <><Camera size={12} /> Attiva</> : <>Use in Step 2 <ArrowRight size={12} /></>}
+                          </button>
+                        )}
+                        {row.image_url && (
+                          <a
+                            className="vs-card-btn"
+                            href={row.image_url}
+                            download={`starting-${row.id.slice(0, 8)}.webp`}
+                            rel="noopener noreferrer"
+                            target="_blank"
+                            title="Download"
+                          >
+                            <Download size={12} />
+                          </a>
+                        )}
+                        <button
+                          className="vs-card-btn vs-card-btn-danger"
+                          onClick={() => handleDeleteStep1(row)}
+                          title="Elimina"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
