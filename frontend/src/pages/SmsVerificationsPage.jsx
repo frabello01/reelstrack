@@ -491,7 +491,10 @@ function NewSmsModal({ onClose, onPurchased }) {
           />
 
           <div className="sms-price-row">
-            <span>Prezzo:</span>
+            <div>
+              <span>Prezzo</span>
+              <div className="sms-price-caption">Pool con highest success rate</div>
+            </div>
             <strong>
               {loadingPrice ? <Loader2 size={12} className="spin" /> : dollars(price)}
             </strong>

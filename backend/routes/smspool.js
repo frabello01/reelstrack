@@ -77,7 +77,10 @@ router.get('/price', smspoolHandler(async (req, res) => {
   if (!country || !service) {
     return res.status(400).json({ error: 'country and service are required' });
   }
-  const data = await smspool.getPrice({ country, service, pool });
+  // pricing_option=1 to mirror what /purchase actually uses — without it
+  // the modal would show the cheapest-pool price and then SMSPool would
+  // charge more when we hit /purchase/sms with pricing_option=1.
+  const data = await smspool.getPrice({ country, service, pool, pricing_option: 1 });
   res.json(data);
 }));
 
@@ -148,14 +151,20 @@ router.post('/purchase', smspoolHandler(async (req, res) => {
   // than abort the purchase.
   let cost = null;
   try {
-    const priceRes = await smspool.getPrice({ country, service, pool });
+    const priceRes = await smspool.getPrice({ country, service, pool, pricing_option: 1 });
     if (priceRes && (priceRes.price || priceRes.price === 0)) {
       cost = Number(priceRes.price);
     }
   } catch { /* swallow */ }
 
+  // pricing_option=1 → SMSPool selects the pool with the HIGHEST success
+  // rate (vs 0 = cheapest, which is SMSPool's default). For verification
+  // SMS the worst case is paying for a number whose SMS never arrives,
+  // so we trade a bit of price for reliability. If we ever want to expose
+  // a "cheapest" toggle in the UI, this is the knob to wire up.
   const order = await smspool.purchaseSms({
     country, service, pool, max_price, areacode,
+    pricing_option: 1,
   });
 
   // SMSPool's purchase response (per docs):

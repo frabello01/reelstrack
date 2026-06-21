@@ -464,6 +464,7 @@
   color: var(--text2);
 }
 .sms-price-row strong { color: var(--text); font-size: 16px; font-family: 'JetBrains Mono', monospace; }
+.sms-price-caption { font-size: 11px; color: var(--text2); margin-top: 2px; }
 
 .spin { animation: sms-spin 1s linear infinite; }
 @keyframes sms-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }

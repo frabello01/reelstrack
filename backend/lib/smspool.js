@@ -84,8 +84,8 @@ const getBalance       = () => call('/request/balance');
 const getActiveOrders  = () => call('/request/active');
 const getOrderHistory  = () => call('/request/history');
 const archiveOrders    = () => call('/request/archive');
-const getPrice = ({ country, service, pool }) =>
-  call('/request/price', { country, service, pool });
+const getPrice = ({ country, service, pool, pricing_option }) =>
+  call('/request/price', { country, service, pool, pricing_option });
 
 // ---- One-shot SMS lifecycle ----
 const purchaseSms = ({ country, service, pool, max_price, pricing_option, areacode, exclude }) =>
