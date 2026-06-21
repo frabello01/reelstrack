@@ -675,7 +675,7 @@ export default function VideoStudioPage() {
             rows={4}
           />
           <div className="vs-step1-hint">
-            <Sparkles size={11} /> Riscritto da gpt-5-mini per image-to-video + vincolo hardcoded <strong>camera fissa</strong> (no zoom/pan/dolly).
+            <Sparkles size={11} /> Riscritto da gpt-5-mini per image-to-video + vincoli hardcoded: <strong>camera fissa</strong> (no zoom/pan/dolly) + <strong>nessun VFX aggiunto</strong> (no particelle, sparks, lens flares, smoke).
           </div>
         </div>
 

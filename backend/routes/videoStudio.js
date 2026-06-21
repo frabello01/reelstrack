@@ -187,32 +187,41 @@ const SYS_IMAGE_GEN =
 const SYS_IMAGE_TO_VIDEO =
   `You rewrite user scripts into prompts for xAI Grok Imagine Video (image-to-video). ` +
   `The user has selected a STARTING IMAGE — it's the first frame. Your prompt MUST ` +
-  `describe what happens AFTER that frame: subject motion and mood progression. ` +
-  `Critical rules:\n` +
+  `describe what happens AFTER that frame: subtle, natural subject motion and mood ` +
+  `progression. Critical rules:\n` +
   `- Output ONLY the final prompt text. No preamble, no explanation.\n` +
   `- DO NOT redescribe the static scene already visible in the starting image.\n` +
-  `- HARD CONSTRAINT: the camera is LOCKED OFF / completely static. No zoom, no pan, ` +
-  `no tilt, no dolly, no push-in, no pull-out, no handheld sway, no orbit. Treat it ` +
-  `as if the camera is bolted to a tripod and never moves. The only motion in the ` +
-  `frame comes from the subject and environment.\n` +
-  `- DO describe: subject's motion (turn head, walk, smile, breathe, blink), ` +
-  `lighting evolution (golden hour fading, neon flicker), micro-actions (hair sways ` +
-  `in wind, fabric shifts, eyelashes flutter).\n` +
+  `- HARD CONSTRAINT #1 — CAMERA: the camera is LOCKED OFF / completely static. ` +
+  `No zoom, no pan, no tilt, no dolly, no push-in, no pull-out, no handheld sway, ` +
+  `no orbit, no reframe, no crop change. Framing is identical to the starting image ` +
+  `for the entire shot. Treat the camera as bolted to a tripod and never moves.\n` +
+  `- HARD CONSTRAINT #2 — NO ADDED VFX: do not introduce any element that is not ` +
+  `already in the starting image. NO floating particles, NO sparks, NO dust motes, ` +
+  `NO embers, NO bokeh balls, NO snow, NO rain, NO confetti, NO lens flares, ` +
+  `NO light streaks, NO glitches, NO chromatic aberration, NO film grain animation, ` +
+  `NO smoke or mist unless it's already visible in the starting frame. ` +
+  `Color palette and lighting must remain consistent with the starting image.\n` +
+  `- DO describe: subject's natural motion (turn head, smile, blink, breathe, slight ` +
+  `body shift), micro-actions (hair sways gently, fabric shifts), and only ` +
+  `pre-existing environmental motion (wind on hair that was already implied).\n` +
   `- Use cinematographer language. Concise and concrete.\n` +
   `- Keep it under 400 characters.`;
 
-// Hard-product constraint that must reach xAI Grok regardless of whether
-// the LLM rewriter ran (or even succeeded). We never want a moving camera
-// in our videos — only the subject and environment should animate.
-// Applied at the route layer after the rewrite-or-skip decision so it
-// covers BOTH the LLM-rewritten path AND the skip_rewrite escape hatch.
-const STATIC_CAMERA_SUFFIX = ' Camera is fully static (locked tripod): no zoom, no pan, no tilt, no dolly, no handheld movement.';
-const STATIC_CAMERA_DETECT = /\b(static camera|locked off|locked[- ]?tripod|fixed camera|no zoom|no pan|no dolly|no tilt|tripod[- ]?locked)\b/i;
+// Hard-product constraints that must reach xAI Grok regardless of whether the
+// LLM rewriter ran (or even succeeded). We always want:
+//   (1) camera fully static — no zoom/pan/tilt/dolly/reframe
+//   (2) no added VFX — no particles/sparks/dust/lens-flares/smoke/snow/etc.
+// Applied at the route layer after the rewrite-or-skip decision so it covers
+// BOTH the LLM-rewritten path AND the skip_rewrite escape hatch.
+const HARD_CONSTRAINTS_SUFFIX =
+  ' Camera fully static (locked tripod): no zoom, no pan, no tilt, no dolly, no handheld movement, framing identical to the starting image. ' +
+  'No added VFX: no floating particles, no sparks, no dust motes, no bokeh balls, no lens flares, no light streaks, no smoke, no mist, no snow, no rain, no glitches — keep visuals consistent with the starting image.';
+const HARD_CONSTRAINTS_DETECT = /\b(no added VFX|no floating particles|no particles|no sparks|no lens flares|no glitches|no bokeh)\b/i;
 
-function enforceStaticCamera(prompt) {
+function enforceHardConstraints(prompt) {
   if (!prompt) return prompt;
-  if (STATIC_CAMERA_DETECT.test(prompt)) return prompt;
-  const out = (prompt.trimEnd() + STATIC_CAMERA_SUFFIX).trim();
+  if (HARD_CONSTRAINTS_DETECT.test(prompt)) return prompt;
+  const out = (prompt.trimEnd() + HARD_CONSTRAINTS_SUFFIX).trim();
   return out.length > MAX_PROMPT_CHARS ? out.slice(0, MAX_PROMPT_CHARS) : out;
 }
 
@@ -520,12 +529,14 @@ router.post('/generate', async (req, res) => {
   // instead of redescribing the static scene already in the start frame.
   // Fail-soft: if the rewriter errors we use the raw script.
   //
-  // After the rewrite (or skip), we enforce a hard product constraint:
-  // the camera must be static (no zoom/pan/tilt/dolly). This guarantee
-  // holds even when skip_rewrite is on, and even when the LLM forgets.
+  // After the rewrite (or skip), we enforce TWO hard product constraints:
+  //   (1) camera fully static — no zoom/pan/tilt/dolly/reframe
+  //   (2) no added VFX — no particles/sparks/lens-flares/smoke/snow/etc.
+  // Both guarantees hold even when skip_rewrite is on, and even when
+  // the LLM forgets.
   const userScript = prompt.trim();
   const rewritten = skip_rewrite ? userScript : await rewriteForImageToVideo(userScript);
-  const finalPrompt = enforceStaticCamera(rewritten);
+  const finalPrompt = enforceHardConstraints(rewritten);
   if (!VALID_RESOLUTIONS.includes(resolution)) {
     return res.status(400).json({ error: `resolution must be one of ${VALID_RESOLUTIONS.join(', ')}` });
   }
