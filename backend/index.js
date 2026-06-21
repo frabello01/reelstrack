@@ -33,6 +33,7 @@ const redirectorRouter = require('./routes/redirector');
 const canaryRouter = require('./routes/canary');
 const driveRouter = require('./routes/drive');
 const uploadsRouter = require('./routes/uploads');
+const smspoolRouter = require('./routes/smspool');
 const { requireAuth } = require('./middleware/auth');
 const { requireAdminForWrites } = require('./middleware/requireAdminForWrites');
 const { autoLogMiddleware } = require('./middleware/autoLogMiddleware');
@@ -203,6 +204,7 @@ app.use('/api/video-studio', videoStudioRouter);
 app.use('/api/redirects', redirectsRouter);
 app.use('/api/drive', driveRouter);
 app.use('/api/uploads', uploadsRouter);
+app.use('/api/smspool', smspoolRouter);
 
 // ============================================================
 // CRONS (unchanged + new log retention cleanup)
