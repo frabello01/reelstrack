@@ -187,15 +187,34 @@ const SYS_IMAGE_GEN =
 const SYS_IMAGE_TO_VIDEO =
   `You rewrite user scripts into prompts for xAI Grok Imagine Video (image-to-video). ` +
   `The user has selected a STARTING IMAGE — it's the first frame. Your prompt MUST ` +
-  `describe what happens AFTER that frame: motion, camera moves, subject action, mood ` +
-  `progression. Critical rules:\n` +
+  `describe what happens AFTER that frame: subject motion and mood progression. ` +
+  `Critical rules:\n` +
   `- Output ONLY the final prompt text. No preamble, no explanation.\n` +
   `- DO NOT redescribe the static scene already visible in the starting image.\n` +
-  `- DO describe: subject's motion (turn head, walk, smile, breathe), camera moves ` +
-  `(slow dolly in, pan left, handheld sway, static), lighting evolution (golden hour fading, ` +
-  `neon flicker), micro-actions (hair sways in wind, fabric shifts).\n` +
+  `- HARD CONSTRAINT: the camera is LOCKED OFF / completely static. No zoom, no pan, ` +
+  `no tilt, no dolly, no push-in, no pull-out, no handheld sway, no orbit. Treat it ` +
+  `as if the camera is bolted to a tripod and never moves. The only motion in the ` +
+  `frame comes from the subject and environment.\n` +
+  `- DO describe: subject's motion (turn head, walk, smile, breathe, blink), ` +
+  `lighting evolution (golden hour fading, neon flicker), micro-actions (hair sways ` +
+  `in wind, fabric shifts, eyelashes flutter).\n` +
   `- Use cinematographer language. Concise and concrete.\n` +
   `- Keep it under 400 characters.`;
+
+// Hard-product constraint that must reach xAI Grok regardless of whether
+// the LLM rewriter ran (or even succeeded). We never want a moving camera
+// in our videos — only the subject and environment should animate.
+// Applied at the route layer after the rewrite-or-skip decision so it
+// covers BOTH the LLM-rewritten path AND the skip_rewrite escape hatch.
+const STATIC_CAMERA_SUFFIX = ' Camera is fully static (locked tripod): no zoom, no pan, no tilt, no dolly, no handheld movement.';
+const STATIC_CAMERA_DETECT = /\b(static camera|locked off|locked[- ]?tripod|fixed camera|no zoom|no pan|no dolly|no tilt|tripod[- ]?locked)\b/i;
+
+function enforceStaticCamera(prompt) {
+  if (!prompt) return prompt;
+  if (STATIC_CAMERA_DETECT.test(prompt)) return prompt;
+  const out = (prompt.trimEnd() + STATIC_CAMERA_SUFFIX).trim();
+  return out.length > MAX_PROMPT_CHARS ? out.slice(0, MAX_PROMPT_CHARS) : out;
+}
 
 const rewriteForImageGen     = (script) => llmRewrite({ systemPrompt: SYS_IMAGE_GEN,      userScript: script, label: 'i2i' });
 const rewriteForImageToVideo = (script) => llmRewrite({ systemPrompt: SYS_IMAGE_TO_VIDEO, userScript: script, label: 'i2v' });
@@ -497,11 +516,16 @@ router.post('/generate', async (req, res) => {
   }
 
   // Run the user's script through gpt-5-mini with an image-to-video
-  // system prompt so it focuses on motion/camera/mood progression
+  // system prompt so it focuses on subject motion/mood progression
   // instead of redescribing the static scene already in the start frame.
   // Fail-soft: if the rewriter errors we use the raw script.
+  //
+  // After the rewrite (or skip), we enforce a hard product constraint:
+  // the camera must be static (no zoom/pan/tilt/dolly). This guarantee
+  // holds even when skip_rewrite is on, and even when the LLM forgets.
   const userScript = prompt.trim();
-  const finalPrompt = skip_rewrite ? userScript : await rewriteForImageToVideo(userScript);
+  const rewritten = skip_rewrite ? userScript : await rewriteForImageToVideo(userScript);
+  const finalPrompt = enforceStaticCamera(rewritten);
   if (!VALID_RESOLUTIONS.includes(resolution)) {
     return res.status(400).json({ error: `resolution must be one of ${VALID_RESOLUTIONS.join(', ')}` });
   }
