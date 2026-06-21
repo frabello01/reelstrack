@@ -376,6 +376,11 @@
 }
 .ldb-bp-period-chip strong { color: var(--text); }
 .ldb-bp-period-empty { font-size: 11px; color: var(--text2); font-style: italic; }
+.ldb-bp-period-breakdown-res {
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border);
+}
 
 /* Block 3 — top landings */
 .ldb-bp-top-list {

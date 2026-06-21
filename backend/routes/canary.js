@@ -31,8 +31,13 @@ const { geoLookup } = require('../lib/geoLookup');
 router.get('/canary', (req, res) => {
   const ip = (req.ip || '').toString();
   const ua = (req.headers['user-agent'] || '').toString();
-  const landingId = (req.query.landing_id || '').toString().slice(0, 64);
+  // Accept either landing_id (legacy) or redirect_id so the canary can
+  // trap scrapers on both surfaces. Whichever is present wins.
+  const landingId  = (req.query.landing_id  || '').toString().slice(0, 64);
+  const redirectId = (req.query.redirect_id || '').toString().slice(0, 64);
   const trapKind = (req.query.t || '').toString().slice(0, 32) || 'unknown';
+  const resourceKind = redirectId ? 'canary-redirect' : 'canary';
+  const resourceId = redirectId || landingId || null;
 
   // 1) Add to runtime blacklist (immediate effect, in-memory)
   botDetect.addToCanaryBlacklist(ip);
@@ -40,8 +45,8 @@ router.get('/canary', (req, res) => {
   // 2) Persist to bot_hits for audit + future restart-warm
   const geo = geoLookup(ip);
   supabase.from('bot_hits').insert({
-    resource_kind: 'canary',
-    resource_id: landingId || null,
+    resource_kind: resourceKind,
+    resource_id: resourceId,
     slug: null,
     ip: geo.ip_truncated,
     full_ip: ip.slice(0, 64),

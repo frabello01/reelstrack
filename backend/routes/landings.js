@@ -121,7 +121,7 @@ router.get('/public/lookup', async (req, res) => {
   if (data.bot_protection_enabled) {
     try {
       publicLinks = links.map((l) => {
-        const token = linkJwt.sign({ slug: data.slug, link_id: l.id, dest: l.url });
+        const token = linkJwt.sign({ kind: 'landing', slug: data.slug, link_id: l.id, dest: l.url });
         const redirectUrl = `https://${REDIRECTOR_HOST}/r/${encodeURIComponent(data.slug)}?t=${token}`;
         return {
           id: l.id,
@@ -287,18 +287,28 @@ router.get('/bot-protection', async (req, res) => {
   const d7d  = new Date(now.getTime() - 7  * 24 * 60 * 60 * 1000).toISOString();
   const d30d = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
-  // Helper: fetch counts grouped by detection_kind for a period
+  // Helper: fetch counts grouped by detection_kind AND resource_kind for
+  // a period. Surfaces both dimensions so the dashboard can answer:
+  //   "how many bots / which type" (by_kind)
+  //   "hitting landings vs redirect_links vs canary" (by_resource_kind)
   async function summaryFor(sinceIso) {
     const { data, error } = await supabase
       .from('bot_hits')
-      .select('detection_kind')
+      .select('detection_kind, resource_kind')
       .gte('created_at', sinceIso);
-    if (error) return { total: 0, by_kind: {}, error: error.message };
+    if (error) return { total: 0, by_kind: {}, by_resource_kind: {}, error: error.message };
     const by_kind = {};
+    const by_resource_kind = {};
     for (const row of data || []) {
       by_kind[row.detection_kind] = (by_kind[row.detection_kind] || 0) + 1;
+      const rk = row.resource_kind || 'unknown';
+      by_resource_kind[rk] = (by_resource_kind[rk] || 0) + 1;
     }
-    return { total: (data || []).length, by_kind };
+    return {
+      total: (data || []).length,
+      by_kind,
+      by_resource_kind,
+    };
   }
 
   const [s24, s7, s30, topLandingsRes, recentRes] = await Promise.all([

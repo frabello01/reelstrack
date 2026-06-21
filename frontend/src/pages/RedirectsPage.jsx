@@ -301,6 +301,7 @@ function RedirectModal({ redirect, talents, accounts, onClose, onSaved }) {
   const [myAccountId, setMyAccountId] = useState(redirect?.my_account_id || '');
   const [notes, setNotes] = useState(redirect?.notes || '');
   const [isActive, setIsActive] = useState(redirect ? !!redirect.is_active : true);
+  const [botProtection, setBotProtection] = useState(!!redirect?.bot_protection_enabled);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -330,6 +331,7 @@ function RedirectModal({ redirect, talents, accounts, onClose, onSaved }) {
       my_account_id: myAccountId || null,
       notes: notes.trim() || null,
       is_active: isActive,
+      bot_protection_enabled: botProtection,
     };
 
     setSaving(true);
@@ -446,6 +448,18 @@ function RedirectModal({ redirect, talents, accounts, onClose, onSaved }) {
               <span>
                 <Power size={13} />
                 Attivo — i visitatori possono usarlo
+              </span>
+            </label>
+            <label className="rp-toggle">
+              <input
+                type="checkbox"
+                checked={botProtection}
+                onChange={(e) => setBotProtection(e.target.checked)}
+                disabled={saving}
+              />
+              <span>
+                🛡️ Bot Protection — wrappa il link in JWT verso il dominio
+                sacrificale (parrocchiasanbasilio.com), cloak 410 ai crawler Meta
               </span>
             </label>
           </div>

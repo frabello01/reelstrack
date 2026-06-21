@@ -94,6 +94,16 @@ export default function PublicRedirectPage() {
     if (bouncedRef.current) return;
     bouncedRef.current = true;
 
+    // ----- Mode A: bot-protection ON → use the JWT-wrapped redirect_url -----
+    // The redirector domain (parrocchiasanbasilio.com) handles bot detection
+    // + 410 cloaking + click logging server-side. We just hand off the URL.
+    // The destination NEVER reaches React state / DOM in any decodable form.
+    if (linkData.redirect_url) {
+      setTimeout(() => openExternal(linkData.redirect_url), 30);
+      return;
+    }
+
+    // ----- Mode B: bot-protection OFF → legacy XOR flow -----
     // Record the click — fire-and-forget. We do this BEFORE the bounce
     // so analytics doesn't depend on whether the user returns.
     try {
@@ -134,6 +144,26 @@ export default function PublicRedirectPage() {
 
   // === RENDER ===
 
+  // Canary honeypot anchors — rendered only when bot-protection is on for
+  // this redirect_link. A real human cannot click these (display:none +
+  // off-screen), but a scraper that follows every <a href> in the DOM
+  // trips them and lands its IP in the canary blacklist server-side.
+  // After that, any subsequent attempt to follow the JWT redirect_url
+  // returns 410 at the redirector.
+  const canary = link?.bot_protection_enabled ? (
+    <>
+      <div style={{ display: 'none' }} aria-hidden="true">
+        <a href={`/api/canary?redirect_id=${link.id}&t=hidden`}>.</a>
+      </div>
+      <div
+        style={{ position: 'absolute', left: -9999, top: -9999 }}
+        aria-hidden="true"
+      >
+        <a href={`/api/canary?redirect_id=${link.id}&t=offscreen`}>.</a>
+      </div>
+    </>
+  ) : null;
+
   if (error) {
     return (
       <div className="rd-shell rd-error">
@@ -157,6 +187,7 @@ export default function PublicRedirectPage() {
   if (loading || !link) {
     return (
       <div className="rd-shell rd-loading">
+        {canary}
         <div className="rd-spinner" />
       </div>
     );
@@ -166,6 +197,7 @@ export default function PublicRedirectPage() {
   if (link.age_gate) {
     return (
       <div className="rd-shell rd-gate">
+        {canary}
         <div className="rd-gate-card">
           <div className="rd-gate-icon"><ShieldAlert size={28} /></div>
           <h1>Contenuto maturo</h1>
@@ -195,6 +227,7 @@ export default function PublicRedirectPage() {
   // No age gate — already bouncing. Spinner.
   return (
     <div className="rd-shell rd-loading">
+      {canary}
       <div className="rd-spinner" />
     </div>
   );

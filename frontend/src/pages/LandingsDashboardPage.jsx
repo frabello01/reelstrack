@@ -492,6 +492,26 @@ function BotProtectionPanel() {
   const kindLabel = (k) => ({
     meta: 'Meta', cloud: 'Cloud DC', crawler: 'UA crawler', canary: 'Canary trap',
   }[k] || k);
+  // Per-resource icons. resource_kind values that can show up:
+  //   'landing'        — landing page lookup or click
+  //   'redirect_link'  — redirect-link lookup or click
+  //   'canary'         — landing canary trap
+  //   'canary-redirect'— redirect-link canary trap
+  //   'redirect'       — legacy value from the redirector route
+  const resEmoji = (k) => ({
+    landing: '🌐',
+    redirect_link: '🔗',
+    redirect: '🔗',
+    canary: '🪤',
+    'canary-redirect': '🪤',
+  }[k] || '❓');
+  const resLabel = (k) => ({
+    landing: 'Landing',
+    redirect_link: 'Redirect',
+    redirect: 'Redirect',
+    canary: 'Canary',
+    'canary-redirect': 'Canary',
+  }[k] || k);
 
   return (
     <div className="ldb-card">
@@ -546,6 +566,17 @@ function BotProtectionPanel() {
                 ))
               )}
             </div>
+            {Object.entries(p.data.by_resource_kind || {}).length > 0 && (
+              <div className="ldb-bp-period-breakdown ldb-bp-period-breakdown-res">
+                {Object.entries(p.data.by_resource_kind)
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([rk, count]) => (
+                    <span key={rk} className="ldb-bp-period-chip" title={resLabel(rk)}>
+                      {resEmoji(rk)} {resLabel(rk)}: <strong>{count}</strong>
+                    </span>
+                  ))}
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -553,11 +584,13 @@ function BotProtectionPanel() {
       {/* === Block 3: top landings === */}
       {top_landings.length > 0 && (
         <>
-          <div className="ldb-bp-section-label">Landing più scansionate (30 giorni)</div>
+          <div className="ldb-bp-section-label">Risorse più scansionate (30 giorni)</div>
           <div className="ldb-bp-top-list">
             {top_landings.map((l) => (
               <div key={`${l.kind}:${l.slug}`} className="ldb-bp-top-item">
-                <span className="ldb-bp-top-slug">/{l.slug}</span>
+                <span className="ldb-bp-top-slug" title={resLabel(l.kind)}>
+                  {resEmoji(l.kind)} /{l.slug}
+                </span>
                 <span className="ldb-bp-top-count">{formatIntIT(l.count)} hit</span>
               </div>
             ))}
@@ -577,6 +610,7 @@ function BotProtectionPanel() {
             <thead>
               <tr>
                 <th>Quando</th>
+                <th>Risorsa</th>
                 <th>Tipo</th>
                 <th>IP</th>
                 <th>Path / Slug</th>
@@ -590,6 +624,7 @@ function BotProtectionPanel() {
                   <td className="ldb-bp-time" title={new Date(h.created_at).toLocaleString('it-IT')}>
                     {timeAgoIT(h.created_at)}
                   </td>
+                  <td><span className="ldb-bp-kind-chip" title={resLabel(h.resource_kind)}>{resEmoji(h.resource_kind)} {resLabel(h.resource_kind)}</span></td>
                   <td><span className="ldb-bp-kind-chip">{kindEmoji(h.detection_kind)} {kindLabel(h.detection_kind)}</span></td>
                   <td className="ldb-bp-ip" title={h.full_ip || h.ip}>{h.full_ip || h.ip || '—'}</td>
                   <td className="ldb-bp-path">

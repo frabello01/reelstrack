@@ -26,11 +26,13 @@ const botDetect = require('../lib/botDetect');
 const linkJwt = require('../lib/linkJwt');
 const { geoLookup } = require('../lib/geoLookup');
 
-// Async fire-and-forget bot_hits insert
-function logBotHit({ ip, ua, kind, reason, slug, resourceId, path }) {
+// Async fire-and-forget bot_hits insert. `resourceKind` says whether the
+// JWT being attempted was for a landing or a redirect_link — important so
+// the dashboard can split stats per surface.
+function logBotHit({ ip, ua, kind, reason, slug, resourceId, resourceKind, path }) {
   const geo = geoLookup(ip);
   supabase.from('bot_hits').insert({
-    resource_kind: 'redirect',
+    resource_kind: resourceKind || 'landing',
     resource_id: resourceId,
     slug,
     ip: geo.ip_truncated,
@@ -40,6 +42,23 @@ function logBotHit({ ip, ua, kind, reason, slug, resourceId, path }) {
     user_agent: (ua || '').slice(0, 500),
     path,
   }).then(() => {}, (e) => console.warn('[redirector] bot_hit insert failed:', e.message));
+}
+
+// Best-effort UNVERIFIED peek at the JWT payload to extract `kind`. The
+// signature isn't checked here — this is purely a labelling concern so
+// the bot_hit row before JWT verify gets the right resource_kind. If a
+// bot fakes `kind` they only mislabel our internal stats; the redirect
+// still 410s on the bot-detect verdict.
+function peekKindFromToken(token) {
+  if (!token || typeof token !== 'string') return null;
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+  try {
+    const padded = parts[1] + '='.repeat((4 - (parts[1].length % 4)) % 4);
+    const json = Buffer.from(padded.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');
+    const obj = JSON.parse(json);
+    return typeof obj?.kind === 'string' ? obj.kind : null;
+  } catch { return null; }
 }
 
 // Same source classification we use on landings, kept inline for now to
@@ -72,12 +91,18 @@ router.get('/r/:slug', async (req, res) => {
   const slug = req.params.slug;
   const token = req.query.t;
 
+  // Resource kind for logging. UNVERIFIED peek — only used to label the
+  // bot_hit row. Defaults to 'landing' to match historic JWTs that didn't
+  // carry a kind field.
+  const peekedKind = peekKindFromToken(token) || 'landing';
+  const resourceKind = peekedKind === 'redirect_link' ? 'redirect_link' : 'landing';
+
   // ---- 1) Bot detection ---------------------------------------------------
   const verdict = botDetect.detect(ip, ua);
   if (verdict) {
     logBotHit({
       ip, ua, kind: verdict.kind, reason: verdict.reason,
-      slug, resourceId: null, path: req.path,
+      slug, resourceId: null, resourceKind, path: req.path,
     });
     return res.status(410).end();
   }
@@ -100,6 +125,10 @@ router.get('/r/:slug', async (req, res) => {
   }
 
   // ---- 4) Record click (humans only) --------------------------------------
+  // Two cases keyed by payload.kind:
+  //   - 'redirect_link' → increment redirect_links.click_count + insert
+  //                       a row in redirect_link_clicks
+  //   - default ('landing' / missing) → landing_links + landing_link_clicks
   const metaPlatform = detectMetaPlatformFromUa(ua);
   const refRaw = (req.headers['referer'] || req.headers['referrer'] || '').toString();
   let referrerHost = null;
@@ -107,7 +136,35 @@ router.get('/r/:slug', async (req, res) => {
   const source = classifySource({ metaPlatform, referrerHost });
   const geo = geoLookup(ip);
 
-  if (payload.link_id) {
+  if (payload.kind === 'redirect_link' && payload.redirect_id) {
+    supabase.from('redirect_links')
+      .select('click_count')
+      .eq('id', payload.redirect_id)
+      .maybeSingle()
+      .then(({ data: rl }) => {
+        if (!rl) return;
+        supabase.from('redirect_links')
+          .update({ click_count: (rl.click_count || 0) + 1 })
+          .eq('id', payload.redirect_id)
+          .then(() => {}, () => {});
+
+        supabase.from('redirect_link_clicks').insert({
+          redirect_link_id: payload.redirect_id,
+          user_agent: ua.slice(0, 250),
+          meta_platform: metaPlatform,
+          ip: geo.ip_truncated,
+          country_code: geo.country_code,
+          country_name: geo.country_name,
+          region: geo.region,
+          city: geo.city,
+          lat: geo.lat,
+          lng: geo.lng,
+          timezone: geo.timezone,
+          referrer_host: referrerHost,
+          source_kind: source,
+        }).then(() => {}, () => {});
+      }, () => {});
+  } else if (payload.link_id) {
     supabase.from('landing_links')
       .select('click_count, landing_id')
       .eq('id', payload.link_id)

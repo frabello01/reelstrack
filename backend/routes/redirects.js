@@ -3,6 +3,10 @@ const router = express.Router();
 const supabase = require('../lib/supabase');
 const { encodeUrl } = require('../lib/linkCipher');
 const { geoLookup } = require('../lib/geoLookup');
+const botDetect = require('../lib/botDetect');
+const linkJwt = require('../lib/linkJwt');
+
+const REDIRECTOR_HOST = process.env.REDIRECTOR_HOST || 'parrocchiasanbasilio.com';
 
 // ============================================================
 // Helpers (mirror landings.js — keeping inline to avoid a
@@ -72,15 +76,21 @@ function normaliseUrl(raw) {
 
 // GET /api/redirects/public/lookup?slug=biancajorio
 // Returns minimal info needed to render the redirect / age-gate.
-// The destination URL is shipped XOR-encoded under "u" so scraper bots
-// that dump JSON never see plain destination URLs.
+// Two modes (mirrors landings):
+//   (a) bot_protection_enabled = FALSE → destination shipped XOR-encoded
+//       under "u". Frontend decodes at click time and navigates.
+//   (b) bot_protection_enabled = TRUE  → destination wrapped in JWT and
+//       exposed as redirect_url pointing to the sacrificial redirector
+//       domain (parrocchiasanbasilio.com). Real destination is never sent
+//       to the client in any decodable form. The redirector applies bot
+//       detection + 410 cloaking before doing the 302.
 router.get('/public/lookup', async (req, res) => {
   const slug = normaliseSlug(req.query.slug);
   if (!slug) return res.status(400).json({ error: 'slug required' });
 
   const { data, error } = await supabase
     .from('redirect_links')
-    .select('id, slug, destination_url, title, age_gate, is_active')
+    .select('id, slug, destination_url, title, age_gate, is_active, bot_protection_enabled')
     .eq('slug', slug)
     .eq('is_active', true)
     .maybeSingle();
@@ -88,17 +98,44 @@ router.get('/public/lookup', async (req, res) => {
   if (error) return res.status(500).json({ error: error.message });
   if (!data) return res.status(404).json({ error: 'Redirect not found' });
 
-  res.json({
+  const base = {
     id: data.id,
     slug: data.slug,
     title: data.title || null,
     age_gate: !!data.age_gate,
-    u: encodeUrl(data.destination_url),
-  });
+    bot_protection_enabled: !!data.bot_protection_enabled,
+  };
+
+  if (data.bot_protection_enabled) {
+    try {
+      const token = linkJwt.sign({
+        kind: 'redirect_link',
+        slug: data.slug,
+        redirect_id: data.id,
+        dest: data.destination_url,
+      });
+      return res.json({
+        ...base,
+        redirect_url: `https://${REDIRECTOR_HOST}/r/${encodeURIComponent(data.slug)}?t=${token}`,
+      });
+    } catch (err) {
+      // JWT signing failed (most likely REDIRECTOR_JWT_SECRET unset on
+      // Render). Fall back to the XOR mode so the link still works.
+      console.error('[redirects] JWT signing failed, falling back to XOR:', err.message);
+    }
+  }
+
+  res.json({ ...base, u: encodeUrl(data.destination_url) });
 });
 
 // POST /api/redirects/public/click/:id
 // Body: { meta_platform?, referrer?, utm_source?, age_gate_confirmed? }
+//
+// Even when bot_protection_enabled is OFF (no JWT mode), we still run
+// bot detection here so that crawler "clicks" don't pollute click_count
+// and stats. Detected bots get a 410 + a bot_hits row tagged
+// resource_kind='redirect_link', without bumping the counter or
+// inserting into redirect_link_clicks.
 router.post('/public/click/:id', async (req, res) => {
   const { id } = req.params;
   const metaPlatform = req.body?.meta_platform || null;
@@ -112,11 +149,28 @@ router.post('/public/click/:id', async (req, res) => {
 
   const { data: link, error: lookupErr } = await supabase
     .from('redirect_links')
-    .select('id, click_count')
+    .select('id, slug, click_count')
     .eq('id', id)
     .maybeSingle();
   if (lookupErr) return res.status(500).json({ error: lookupErr.message });
   if (!link) return res.status(404).json({ error: 'Redirect not found' });
+
+  // Bot check — same detector used by the redirector route.
+  const verdict = botDetect.detect(req.ip, req.headers['user-agent'] || '');
+  if (verdict) {
+    supabase.from('bot_hits').insert({
+      resource_kind: 'redirect_link',
+      resource_id: link.id,
+      slug: link.slug,
+      ip: geo.ip_truncated,
+      full_ip: (req.ip || '').slice(0, 64),
+      detection_kind: verdict.kind,
+      reason: verdict.reason,
+      user_agent: ua,
+      path: req.path,
+    }).then(() => {}, (e) => console.warn('[redirects] bot_hit insert failed:', e.message));
+    return res.status(410).end();
+  }
 
   // Respond instantly — DB writes are best-effort.
   res.json({ ok: true });
@@ -208,6 +262,7 @@ router.post('/', async (req, res) => {
     talent_id: req.body?.talent_id || null,
     my_account_id: req.body?.my_account_id || null,
     is_active: req.body?.is_active !== false,
+    bot_protection_enabled: !!req.body?.bot_protection_enabled,
     notes: (req.body?.notes || '').toString().trim().slice(0, 500) || null,
   };
 
@@ -249,6 +304,7 @@ router.patch('/:id', async (req, res) => {
   if ('talent_id' in req.body) update.talent_id = req.body.talent_id || null;
   if ('my_account_id' in req.body) update.my_account_id = req.body.my_account_id || null;
   if ('is_active' in req.body) update.is_active = !!req.body.is_active;
+  if ('bot_protection_enabled' in req.body) update.bot_protection_enabled = !!req.body.bot_protection_enabled;
   if ('notes' in req.body) {
     update.notes = (req.body.notes || '').toString().trim().slice(0, 500) || null;
   }
