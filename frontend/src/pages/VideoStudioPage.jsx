@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Clapperboard, Wand2, Upload, X, Image as ImageIcon, Loader2, AlertCircle,
-  Trash2, Download, Film, Info, RefreshCw,
+  Trash2, Download, Film, Info, RefreshCw, User, Settings, Plus, ArrowRight,
+  Sparkles, Camera,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { supabase } from '../lib/supabase';
@@ -32,6 +33,20 @@ const MAX_DURATION = 15;
 const MAX_IMAGE_MB = 10;
 const REF_BUCKET = 'studio-reference-photos';   // re-used (already public)
 const REF_PREFIX = 'video-refs';
+const CREATOR_REF_PREFIX = 'video-studio-creator-refs';
+
+// gpt-image-2 (Step 1) supports only 1:1, 3:2, 2:3
+const STEP1_ASPECT_OPTIONS = [
+  { value: '2:3', label: '2:3 — Portrait (recommended for reels)' },
+  { value: '3:2', label: '3:2 — Landscape' },
+  { value: '1:1', label: '1:1 — Square' },
+];
+const STEP1_QUALITY_OPTIONS = [
+  { value: 'high',   label: 'High — best (slower)' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'low',    label: 'Low — fast draft' },
+  { value: 'auto',   label: 'Auto' },
+];
 
 // ============================================================
 // HELPERS
@@ -89,8 +104,25 @@ export default function VideoStudioPage() {
   const [generations, setGenerations] = useState([]);
   const [loadingGens, setLoadingGens] = useState(true);
 
+  // ---- Step 1 (optional starting-image generator) ----
+  const [creators, setCreators] = useState([]);
+  const [step1CreatorId, setStep1CreatorId] = useState('');
+  const [step1Script, setStep1Script] = useState('');
+  const [step1Aspect, setStep1Aspect] = useState('2:3');
+  const [step1Quality, setStep1Quality] = useState('high');
+  const [step1Generating, setStep1Generating] = useState(false);
+  const [step1Result, setStep1Result] = useState(null);  // last completed generation row
+  const [step1Error, setStep1Error] = useState('');
+  const [transferredFromStep1, setTransferredFromStep1] = useState(false);
+  const [showCreatorsModal, setShowCreatorsModal] = useState(false);
+
   const fileInputRef = useRef(null);
   const dropZoneRef = useRef(null);
+
+  const selectedCreator = useMemo(
+    () => creators.find((c) => c.id === step1CreatorId) || null,
+    [creators, step1CreatorId],
+  );
 
   // ============================================================
   // LIFECYCLE
@@ -107,6 +139,23 @@ export default function VideoStudioPage() {
   }, []);
 
   useEffect(() => { if (configured) loadGens(); }, [configured]);
+  useEffect(() => { if (configured) loadCreators(); }, [configured]);
+
+  const loadCreators = async () => {
+    try {
+      const data = await api.getVideoStudioCreators();
+      setCreators(data?.creators || []);
+    } catch (err) {
+      console.warn('[video-studio] creators load failed:', err.message);
+    }
+  };
+
+  // When a creator is selected, snap the Step 1 defaults to that creator's.
+  useEffect(() => {
+    if (!selectedCreator) return;
+    if (selectedCreator.default_aspect_ratio) setStep1Aspect(selectedCreator.default_aspect_ratio);
+    if (selectedCreator.default_quality)      setStep1Quality(selectedCreator.default_quality);
+  }, [selectedCreator]);
 
   // Clean up object URLs when the staged file changes / unmounts
   useEffect(() => {
@@ -139,17 +188,19 @@ export default function VideoStudioPage() {
       return setError(`Image must be ≤ ${MAX_IMAGE_MB} MB (yours is ${(file.size / 1024 / 1024).toFixed(1)} MB)`);
     }
     setError('');
-    if (imagePreview) URL.revokeObjectURL(imagePreview);
+    if (imagePreview && imagePreview.startsWith('blob:')) URL.revokeObjectURL(imagePreview);
     setImageFile(file);
     setImagePreview(URL.createObjectURL(file));
-    setImageUrl(''); // force re-upload on next generate
+    setImageUrl('');               // force re-upload on next generate
+    setTransferredFromStep1(false); // manual upload supersedes the transfer
   };
 
   const handleClearImage = () => {
-    if (imagePreview) URL.revokeObjectURL(imagePreview);
+    if (imagePreview && imagePreview.startsWith('blob:')) URL.revokeObjectURL(imagePreview);
     setImageFile(null);
     setImagePreview('');
     setImageUrl('');
+    setTransferredFromStep1(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -172,8 +223,11 @@ export default function VideoStudioPage() {
   };
 
   const uploadImageIfNeeded = async () => {
-    if (!imageFile) return null;
+    // If we already have a public URL (e.g. transferred from Step 1, or
+    // re-using a previously uploaded file in the same session), use it
+    // directly — no need for a roundtrip.
     if (imageUrl) return imageUrl;
+    if (!imageFile) return null;
     setUploading(true);
     try {
       const ext = imageFile.type.includes('png') ? 'png'
@@ -194,6 +248,45 @@ export default function VideoStudioPage() {
     } finally {
       setUploading(false);
     }
+  };
+
+  // ============================================================
+  // STEP 1 — GENERATE STARTING IMAGE
+  // ============================================================
+  const handleGenerateStartingImage = async () => {
+    setStep1Error('');
+    if (!step1CreatorId) return setStep1Error('Select a creator first');
+    if (!step1Script.trim()) return setStep1Error('Script is required');
+    setStep1Generating(true);
+    try {
+      const row = await api.generateStartingImage({
+        creator_id: step1CreatorId,
+        script: step1Script.trim(),
+        aspect_ratio: step1Aspect,
+        quality: step1Quality,
+      });
+      setStep1Result(row);
+    } catch (err) {
+      setStep1Error(err.message || 'Generation failed');
+    } finally {
+      setStep1Generating(false);
+    }
+  };
+
+  // Transfer the Step 1 image to Step 2 — bypasses upload because the
+  // image is already at a public URL in our generated-images bucket.
+  const handleTransferStep1 = () => {
+    if (!step1Result?.image_url) return;
+    if (imagePreview && imagePreview.startsWith('blob:')) URL.revokeObjectURL(imagePreview);
+    setImageFile(null);
+    setImagePreview(step1Result.image_url);
+    setImageUrl(step1Result.image_url);
+    setTransferredFromStep1(true);
+    setError('');
+    // scroll Step 2 into view so the user sees the change
+    setTimeout(() => {
+      document.getElementById('vs-step2-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
   };
 
   // ============================================================
@@ -275,12 +368,169 @@ export default function VideoStudioPage() {
         </div>
       </div>
 
-      <div className="vs-form-card">
+      {/* ============================================================
+          STEP 1 — generate a starting image with gpt-image-2 from a
+          creator's fixed reference photos + a per-shoot script.
+          Optional: you can skip and upload an image directly to Step 2.
+          ============================================================ */}
+      <div className="vs-step1-card">
+        <div className="vs-step-header">
+          <div className="vs-step-badge">Step 1 · Optional</div>
+          <h2 className="vs-step-title">
+            <Camera size={16} /> Generate starting image
+            <span className="vs-step-model">openai/gpt-image-2</span>
+          </h2>
+        </div>
+
+        <div className="vs-step1-row">
+          <div className="vs-step1-col">
+            <label className="vs-label-row">
+              <span><User size={12} /> Creator</span>
+              <button
+                type="button"
+                className="vs-manage-btn"
+                onClick={() => setShowCreatorsModal(true)}
+                title="Manage creators (reference photos)"
+              >
+                <Settings size={12} /> Manage
+              </button>
+            </label>
+            <select
+              className="vs-select-block"
+              value={step1CreatorId}
+              onChange={(e) => setStep1CreatorId(e.target.value)}
+              disabled={step1Generating}
+            >
+              <option value="">— pick a creator —</option>
+              {creators.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} ({(c.reference_image_urls || []).length} foto)
+                </option>
+              ))}
+            </select>
+
+            {selectedCreator && (
+              <div className="vs-ref-grid">
+                {(selectedCreator.reference_image_urls || []).map((u, i) => (
+                  <div key={i} className="vs-ref-thumb">
+                    <img src={u} alt={`ref ${i + 1}`} />
+                  </div>
+                ))}
+              </div>
+            )}
+            {!selectedCreator && creators.length === 0 && (
+              <div className="vs-step1-hint">
+                Nessun creator ancora. Clicca <strong>Manage</strong> per crearne uno con almeno 1 foto reference.
+              </div>
+            )}
+          </div>
+
+          <div className="vs-step1-col">
+            <label className="vs-label-row">
+              <span><Sparkles size={12} /> Script</span>
+              <span className={`vs-counter ${step1Script.length > 600 ? 'warn' : ''}`}>
+                {step1Script.length}/800
+              </span>
+            </label>
+            <textarea
+              className="vs-textarea"
+              placeholder='es. "in spiaggia al tramonto, costume rosso, sguardo in camera, light golden hour"'
+              value={step1Script}
+              onChange={(e) => setStep1Script(e.target.value.slice(0, 800))}
+              disabled={step1Generating}
+              rows={4}
+            />
+            <div className="vs-step1-hint">
+              <Sparkles size={11} /> Lo script viene riscritto da gpt-5-mini in un prompt fotografico ottimizzato.
+            </div>
+
+            <div className="vs-row vs-row-tight">
+              <div className="vs-cell">
+                <label>Aspect ratio</label>
+                <select value={step1Aspect} onChange={(e) => setStep1Aspect(e.target.value)} disabled={step1Generating}>
+                  {STEP1_ASPECT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+              <div className="vs-cell">
+                <label>Quality</label>
+                <select value={step1Quality} onChange={(e) => setStep1Quality(e.target.value)} disabled={step1Generating}>
+                  {STEP1_QUALITY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+            </div>
+
+            {step1Error && <div className="vs-error"><AlertCircle size={14} /> {step1Error}</div>}
+
+            <button
+              className="btn btn-primary vs-step1-btn"
+              onClick={handleGenerateStartingImage}
+              disabled={step1Generating || !step1CreatorId || !step1Script.trim()}
+            >
+              {step1Generating
+                ? <><Loader2 size={14} className="spin" /> Generazione… (~30s)</>
+                : <><Wand2 size={14} /> Generate image</>}
+            </button>
+          </div>
+        </div>
+
+        {step1Result && step1Result.status === 'completed' && step1Result.image_url && (
+          <div className="vs-step1-result">
+            <div className="vs-step1-result-image">
+              <img src={step1Result.image_url} alt="Generated starting image" />
+            </div>
+            <div className="vs-step1-result-body">
+              <div className="vs-step1-result-label">Pronto!</div>
+              <div className="vs-step1-result-prompt" title={step1Result.final_prompt || ''}>
+                {(step1Result.final_prompt || '').slice(0, 200)}
+                {(step1Result.final_prompt || '').length > 200 ? '…' : ''}
+              </div>
+              <div className="vs-step1-result-actions">
+                <button
+                  className="btn btn-primary"
+                  onClick={handleTransferStep1}
+                  disabled={transferredFromStep1 && imageUrl === step1Result.image_url}
+                >
+                  {transferredFromStep1 && imageUrl === step1Result.image_url
+                    ? <><Camera size={14} /> Già in Step 2</>
+                    : <>Use as starting image <ArrowRight size={14} /></>}
+                </button>
+                <a
+                  className="btn btn-secondary"
+                  href={step1Result.image_url}
+                  download={`starting-${step1Result.id.slice(0, 8)}.webp`}
+                  rel="noopener noreferrer"
+                  target="_blank"
+                >
+                  <Download size={14} /> Download
+                </a>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ============================================================
+          STEP 2 — animate the starting image with xAI Grok Imagine.
+          ============================================================ */}
+      <div className="vs-form-card" id="vs-step2-card">
+        <div className="vs-step-header vs-step-header-inline">
+          <div className="vs-step-badge vs-step-badge-active">Step 2</div>
+          <h2 className="vs-step-title">
+            <Film size={16} /> Generate video
+            <span className="vs-step-model">xai/grok-imagine-video</span>
+          </h2>
+        </div>
+
         {/* === Reference image === */}
         <div className="vs-section">
           <div className="vs-section-label">
             <ImageIcon size={14} />
             Reference image <span className="vs-optional">(optional — image-to-video)</span>
+            {transferredFromStep1 && (
+              <span className="vs-transferred-badge">
+                <Sparkles size={11} /> from Step 1
+              </span>
+            )}
           </div>
 
           {imagePreview ? (
@@ -296,7 +546,11 @@ export default function VideoStudioPage() {
                 <X size={14} />
               </button>
               <div className="vs-image-meta">
-                {imageFile?.name} · {(imageFile?.size / 1024 / 1024).toFixed(1)} MB
+                {imageFile
+                  ? <>{imageFile.name} · {(imageFile.size / 1024 / 1024).toFixed(1)} MB</>
+                  : transferredFromStep1
+                    ? <>Transferred from Step 1</>
+                    : <>External image</>}
                 {uploading && <span className="vs-uploading"><Loader2 size={11} className="spin" /> Uploading…</span>}
               </div>
             </div>
@@ -343,6 +597,9 @@ export default function VideoStudioPage() {
             disabled={generating}
             rows={4}
           />
+          <div className="vs-step1-hint">
+            <Sparkles size={11} /> Riscritto da gpt-5-mini con focus su moto/camera/mood (specifico per image-to-video).
+          </div>
         </div>
 
         {/* === Settings === */}
@@ -431,6 +688,14 @@ export default function VideoStudioPage() {
           </div>
         )}
       </div>
+
+      {showCreatorsModal && (
+        <CreatorsManagerModal
+          creators={creators}
+          onClose={() => setShowCreatorsModal(false)}
+          onChange={loadCreators}
+        />
+      )}
     </div>
   );
 }
@@ -493,6 +758,225 @@ function VideoCard({ gen, onDelete, onDownload }) {
             <Trash2 size={12} />
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// CREATORS MANAGER MODAL — list, create, edit, delete the per-creator
+// reference photo sets used by Step 1 of the Video Studio.
+// ============================================================
+function CreatorsManagerModal({ creators, onClose, onChange }) {
+  const [editing, setEditing] = useState(null);  // creator being edited (null = list view)
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleDelete = async (c) => {
+    if (!confirm(`Eliminare il creator "${c.name}" e tutte le sue foto reference? (i video già generati restano)`)) return;
+    try {
+      await api.deleteVideoStudioCreator(c.id);
+      onChange();
+    } catch (err) { alert(err.message); }
+  };
+
+  return (
+    <div className="vs-modal-backdrop" onClick={onClose}>
+      <div className="vs-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="vs-modal-header">
+          <h2>
+            <User size={18} />
+            {editing || creating ? (editing ? `Modifica: ${editing.name}` : 'Nuovo creator') : 'Video Studio creators'}
+          </h2>
+          <button className="vs-icon-btn" onClick={onClose}><X size={16} /></button>
+        </div>
+
+        {!editing && !creating ? (
+          <div className="vs-modal-body">
+            {creators.length === 0 ? (
+              <div className="vs-modal-empty">
+                Nessun creator ancora. Crea il primo per usare lo Step 1 con set di foto reference fissi.
+              </div>
+            ) : (
+              <div className="vs-creators-list">
+                {creators.map((c) => (
+                  <div key={c.id} className="vs-creator-row">
+                    <div className="vs-creator-thumbs">
+                      {(c.reference_image_urls || []).slice(0, 4).map((u, i) => (
+                        <img key={i} src={u} alt="" />
+                      ))}
+                      {(c.reference_image_urls || []).length > 4 && (
+                        <div className="vs-creator-thumb-more">+{c.reference_image_urls.length - 4}</div>
+                      )}
+                    </div>
+                    <div className="vs-creator-info">
+                      <strong>{c.name}</strong>
+                      <span className="vs-creator-meta">
+                        {(c.reference_image_urls || []).length} foto · default {c.default_aspect_ratio} · {c.default_quality}
+                      </span>
+                      {c.notes && <span className="vs-creator-notes">{c.notes}</span>}
+                    </div>
+                    <div className="vs-creator-actions">
+                      <button className="vs-card-btn" onClick={() => setEditing(c)} title="Modifica">
+                        <Settings size={12} /> Edit
+                      </button>
+                      <button className="vs-card-btn vs-card-btn-danger" onClick={() => handleDelete(c)} title="Elimina">
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button className="btn btn-primary vs-creators-new-btn" onClick={() => setCreating(true)}>
+              <Plus size={14} /> Nuovo creator
+            </button>
+          </div>
+        ) : (
+          <CreatorEditor
+            initial={editing}
+            onSaved={() => { setEditing(null); setCreating(false); onChange(); }}
+            onCancel={() => { setEditing(null); setCreating(false); setError(''); }}
+            onError={setError}
+          />
+        )}
+
+        {error && <div className="vs-error" style={{ margin: '0 20px 16px' }}>{error}</div>}
+      </div>
+    </div>
+  );
+}
+
+// Inline editor for a single creator (used for both "new" and "edit").
+function CreatorEditor({ initial, onSaved, onCancel, onError }) {
+  const [name, setName] = useState(initial?.name || '');
+  const [refs, setRefs] = useState(initial?.reference_image_urls || []);
+  const [aspect, setAspect] = useState(initial?.default_aspect_ratio || '2:3');
+  const [quality, setQuality] = useState(initial?.default_quality || 'high');
+  const [notes, setNotes] = useState(initial?.notes || '');
+  const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const fileRef = useRef(null);
+
+  const uploadFiles = async (files) => {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    const uploaded = [];
+    for (const file of files) {
+      if (!/image\/(jpe?g|png|webp)/i.test(file.type)) continue;
+      if (file.size > MAX_IMAGE_MB * 1024 * 1024) continue;
+      try {
+        const ext = file.type.includes('png') ? 'png' : file.type.includes('webp') ? 'webp' : 'jpg';
+        const path = `${CREATOR_REF_PREFIX}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+        const { error: upErr } = await supabase.storage
+          .from(REF_BUCKET)
+          .upload(path, file, { contentType: file.type, cacheControl: '604800', upsert: false });
+        if (upErr) { onError?.(upErr.message); continue; }
+        const { data: pub } = supabase.storage.from(REF_BUCKET).getPublicUrl(path);
+        if (pub?.publicUrl) uploaded.push(pub.publicUrl);
+      } catch (err) { onError?.(err.message); }
+    }
+    setRefs((r) => [...r, ...uploaded].slice(0, 16));
+    setUploading(false);
+    if (fileRef.current) fileRef.current.value = '';
+  };
+
+  const removeRef = (i) => setRefs((r) => r.filter((_, idx) => idx !== i));
+
+  const save = async () => {
+    if (!name.trim()) return onError?.('Nome richiesto');
+    if (refs.length < 1) return onError?.('Almeno 1 foto reference');
+    setSaving(true);
+    try {
+      const payload = {
+        name: name.trim(),
+        reference_image_urls: refs,
+        default_aspect_ratio: aspect,
+        default_quality: quality,
+        notes: notes.trim() || null,
+      };
+      if (initial?.id) {
+        await api.updateVideoStudioCreator(initial.id, payload);
+      } else {
+        await api.createVideoStudioCreator(payload);
+      }
+      onSaved();
+    } catch (err) {
+      onError?.(err.message);
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="vs-modal-body">
+      <label className="vs-label-row"><span>Nome</span></label>
+      <input
+        className="vs-modal-input"
+        value={name}
+        onChange={(e) => setName(e.target.value.slice(0, 100))}
+        placeholder="es. Giulia, Sofia, etc."
+      />
+
+      <label className="vs-label-row vs-mt">
+        <span>Foto reference ({refs.length}/16)</span>
+        <span className="vs-creator-meta">jpg/png/webp · max {MAX_IMAGE_MB} MB ciascuna</span>
+      </label>
+      <div className="vs-ref-grid vs-ref-grid-editable">
+        {refs.map((u, i) => (
+          <div key={i} className="vs-ref-thumb">
+            <img src={u} alt={`ref ${i + 1}`} />
+            <button className="vs-ref-thumb-remove" onClick={() => removeRef(i)} title="Rimuovi">
+              <X size={11} />
+            </button>
+          </div>
+        ))}
+        <button
+          className="vs-ref-add"
+          onClick={() => fileRef.current?.click()}
+          disabled={uploading || refs.length >= 16}
+        >
+          {uploading ? <Loader2 size={18} className="spin" /> : <Plus size={18} />}
+          <span>{uploading ? 'Upload…' : 'Aggiungi'}</span>
+        </button>
+      </div>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        multiple
+        onChange={(e) => uploadFiles(Array.from(e.target.files || []))}
+        style={{ display: 'none' }}
+      />
+
+      <div className="vs-row vs-row-tight vs-mt">
+        <div className="vs-cell">
+          <label>Aspect default</label>
+          <select value={aspect} onChange={(e) => setAspect(e.target.value)}>
+            {STEP1_ASPECT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+        <div className="vs-cell">
+          <label>Quality default</label>
+          <select value={quality} onChange={(e) => setQuality(e.target.value)}>
+            {STEP1_QUALITY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+      </div>
+
+      <label className="vs-label-row vs-mt"><span>Note (opzionali)</span></label>
+      <textarea
+        className="vs-textarea"
+        value={notes}
+        onChange={(e) => setNotes(e.target.value.slice(0, 500))}
+        placeholder="Note interne — es. 'questi sono i set di Giulia da OF'"
+        rows={2}
+      />
+
+      <div className="vs-modal-footer">
+        <button className="btn btn-secondary" onClick={onCancel} disabled={saving}>Annulla</button>
+        <button className="btn btn-primary" onClick={save} disabled={saving || !name.trim() || refs.length < 1}>
+          {saving ? <><Loader2 size={14} className="spin" /> Salvataggio…</> : 'Salva'}
+        </button>
       </div>
     </div>
   );

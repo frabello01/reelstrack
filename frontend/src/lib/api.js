@@ -312,6 +312,28 @@ export const api = {
   deleteVideoStudioGeneration: (id) =>
     request(`/api/video-studio/generations/${id}`, { method: 'DELETE' }),
 
+  // Video Studio — Step 1 creators (per-creator reference photo sets)
+  getVideoStudioCreators: () => request('/api/video-studio/creators'),
+  createVideoStudioCreator: (body) =>
+    request('/api/video-studio/creators', { method: 'POST', body: JSON.stringify(body) }),
+  updateVideoStudioCreator: (id, body) =>
+    request(`/api/video-studio/creators/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteVideoStudioCreator: (id) =>
+    request(`/api/video-studio/creators/${id}`, { method: 'DELETE' }),
+
+  // Video Studio — Step 1 starting-image generator (gpt-image-2)
+  generateStartingImage: (body) =>
+    request('/api/video-studio/generate-starting-image', { method: 'POST', body: JSON.stringify(body) }),
+  getStartingImages: (params = {}) => {
+    const q = new URLSearchParams();
+    if (params.limit) q.set('limit', params.limit);
+    if (params.creator_id) q.set('creator_id', params.creator_id);
+    const qs = q.toString();
+    return request(`/api/video-studio/starting-images${qs ? `?${qs}` : ''}`);
+  },
+  deleteStartingImage: (id) =>
+    request(`/api/video-studio/starting-images/${id}`, { method: 'DELETE' }),
+
   // Redirect deeplinks — admin
   getRedirects: () => request('/api/redirects'),
   getRedirect: (id) => request(`/api/redirects/${id}`),

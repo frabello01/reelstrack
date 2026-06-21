@@ -462,3 +462,363 @@
 /* ===== Spinner ===== */
 .spin { animation: vs-spin 0.9s linear infinite; }
 @keyframes vs-spin { to { transform: rotate(360deg); } }
+
+/* ============================================================
+   Step 1 card — starting-image generator (gpt-image-2)
+   ============================================================ */
+.vs-step1-card {
+  background: linear-gradient(180deg, rgba(99, 102, 241, 0.07), rgba(0,0,0,0));
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: 12px;
+  padding: 18px 20px;
+  margin-bottom: 18px;
+}
+.vs-step-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.vs-step-header-inline { margin-bottom: 16px; }
+.vs-step-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  padding: 3px 10px;
+  background: rgba(99, 102, 241, 0.18);
+  color: #a5b4fc;
+  border-radius: 11px;
+  border: 1px solid rgba(99, 102, 241, 0.35);
+}
+.vs-step-badge-active {
+  background: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.4);
+}
+.vs-step-title {
+  margin: 0;
+  font-family: 'Syne', sans-serif;
+  font-size: 16px;
+  color: white;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+.vs-step-title svg { color: #fbbf24; }
+.vs-step-model {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: rgba(255,255,255,0.5);
+  font-weight: 400;
+  background: rgba(255,255,255,0.05);
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: auto;
+}
+.vs-step1-row {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 18px;
+}
+@media (max-width: 760px) {
+  .vs-step1-row { grid-template-columns: 1fr; }
+}
+.vs-step1-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.vs-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: rgba(255,255,255,0.55);
+  font-weight: 600;
+}
+.vs-label-row span { display: inline-flex; align-items: center; gap: 5px; }
+.vs-select-block {
+  width: 100%;
+  background: rgba(0,0,0,0.35);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 7px;
+  font-size: 13px;
+  outline: none;
+}
+.vs-select-block:focus { border-color: rgba(99, 102, 241, 0.5); }
+.vs-manage-btn {
+  background: none;
+  border: 1px solid rgba(255,255,255,0.18);
+  color: rgba(255,255,255,0.7);
+  padding: 3px 9px;
+  border-radius: 5px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.vs-manage-btn:hover { color: white; background: rgba(255,255,255,0.06); }
+.vs-ref-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+.vs-ref-grid-editable { grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); }
+.vs-ref-thumb {
+  position: relative;
+  aspect-ratio: 1;
+  background: rgba(0,0,0,0.35);
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.vs-ref-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.vs-ref-thumb-remove {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.7);
+  border: none;
+  color: white;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.vs-ref-thumb-remove:hover { background: rgba(220,38,38,0.85); }
+.vs-ref-add {
+  aspect-ratio: 1;
+  background: rgba(255,255,255,0.03);
+  border: 2px dashed rgba(255,255,255,0.15);
+  border-radius: 6px;
+  color: rgba(255,255,255,0.55);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 11px;
+}
+.vs-ref-add:hover { border-color: rgba(99,102,241,0.5); color: white; }
+.vs-ref-add:disabled { opacity: 0.5; cursor: default; }
+.vs-step1-hint {
+  font-size: 11px;
+  color: rgba(255,255,255,0.45);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+}
+.vs-step1-hint svg { color: rgba(99,102,241,0.7); }
+.vs-step1-hint strong { color: rgba(255,255,255,0.85); font-weight: 600; }
+.vs-row-tight { margin-top: 6px; }
+.vs-step1-btn { margin-top: 8px; width: 100%; }
+.vs-step1-result {
+  margin-top: 16px;
+  padding: 12px;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: 10px;
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 14px;
+}
+@media (max-width: 600px) {
+  .vs-step1-result { grid-template-columns: 1fr; }
+}
+.vs-step1-result-image img {
+  width: 100%;
+  height: auto;
+  max-height: 240px;
+  object-fit: cover;
+  border-radius: 6px;
+  display: block;
+}
+.vs-step1-result-body { display: flex; flex-direction: column; gap: 8px; }
+.vs-step1-result-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #34d399;
+  font-weight: 700;
+}
+.vs-step1-result-prompt {
+  font-size: 12px;
+  color: rgba(255,255,255,0.7);
+  line-height: 1.4;
+  font-style: italic;
+  flex: 1;
+}
+.vs-step1-result-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.vs-transferred-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  color: #a5b4fc;
+  background: rgba(99, 102, 241, 0.15);
+  padding: 2px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(99,102,241,0.3);
+  text-transform: none;
+  letter-spacing: 0;
+  margin-left: 8px;
+}
+
+/* ============================================================
+   Creators manager modal
+   ============================================================ */
+.vs-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  padding: 20px;
+}
+.vs-modal {
+  background: #0f0f17;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  max-width: 720px;
+  width: 100%;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+.vs-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.vs-modal-header h2 {
+  margin: 0;
+  font-family: 'Syne', sans-serif;
+  font-size: 15px;
+  color: white;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.vs-modal-body {
+  padding: 18px 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+.vs-modal-footer {
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.vs-icon-btn {
+  background: none;
+  border: 1px solid rgba(255,255,255,0.15);
+  color: rgba(255,255,255,0.7);
+  padding: 5px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  display: inline-flex;
+}
+.vs-icon-btn:hover { color: white; }
+.vs-modal-empty {
+  padding: 24px;
+  text-align: center;
+  color: rgba(255,255,255,0.5);
+  font-size: 13px;
+  background: rgba(255,255,255,0.03);
+  border-radius: 8px;
+  border: 1px dashed rgba(255,255,255,0.1);
+}
+.vs-modal-input {
+  width: 100%;
+  background: rgba(0,0,0,0.4);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 7px;
+  font-size: 13px;
+  outline: none;
+  margin-top: 4px;
+}
+.vs-modal-input:focus { border-color: rgba(99,102,241,0.5); }
+.vs-mt { margin-top: 14px; }
+.vs-creators-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.vs-creator-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+}
+.vs-creator-thumbs { display: flex; gap: 3px; flex-shrink: 0; }
+.vs-creator-thumbs img {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 5px;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.vs-creator-thumb-more {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,0.05);
+  border-radius: 5px;
+  font-size: 10px;
+  color: rgba(255,255,255,0.5);
+  font-weight: 600;
+}
+.vs-creator-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.vs-creator-info strong { color: white; font-size: 13px; font-weight: 600; }
+.vs-creator-meta { font-size: 11px; color: rgba(255,255,255,0.5); }
+.vs-creator-notes {
+  font-size: 11px;
+  color: rgba(255,255,255,0.4);
+  font-style: italic;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vs-creator-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.vs-creators-new-btn { width: 100%; justify-content: center; }
