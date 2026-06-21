@@ -90,7 +90,7 @@ function fmtSeconds(s) {
 export default function VideoStudioPage() {
   const [configured, setConfigured] = useState(true);
   const [prompt, setPrompt] = useState('');
-  const [aspectRatio, setAspectRatio] = useState('auto');
+  const [aspectRatio, setAspectRatio] = useState('3:4');
   const [resolution, setResolution] = useState('720p');
   const [duration, setDuration] = useState(5);
 
