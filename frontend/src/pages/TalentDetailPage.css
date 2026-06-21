@@ -19,6 +19,7 @@
   color: rgba(255,255,255,0.55); font-size: 14px; margin-top: 4px;
 }
 .banned-stat { color: #f87171; }
+.private-stat { color: #fbbf24; }
 
 /* ===== Profiles section ===== */
 .profiles-section {

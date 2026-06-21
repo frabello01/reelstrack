@@ -188,8 +188,11 @@ export default function TalentDetailPage() {
           <h1>{talent.name}</h1>
           <div className="talent-detail-stats">
             {talent.profiles.length} {talent.profiles.length === 1 ? 'profile' : 'profiles'}
-            {m.active_profiles_count != null && m.active_profiles_count !== talent.profiles.length && (
-              <span className="banned-stat"> · {talent.profiles.length - m.active_profiles_count} not active</span>
+            {(m.banned_or_inactive_count ?? 0) > 0 && (
+              <span className="banned-stat"> · {m.banned_or_inactive_count} banned/inactive</span>
+            )}
+            {(m.private_count ?? 0) > 0 && (
+              <span className="private-stat"> · {m.private_count} private</span>
             )}
           </div>
           <LanguagePicker
