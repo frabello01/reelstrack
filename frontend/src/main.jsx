@@ -31,6 +31,7 @@ import LandingsDashboardPage from './pages/LandingsDashboardPage';
 import PublicLandingPage from './pages/PublicLandingPage';
 import PublicRedirectPage from './pages/PublicRedirectPage';
 import RedirectsPage from './pages/RedirectsPage';
+import SmsVerificationsPage from './pages/SmsVerificationsPage';
 import TeamPage from './pages/TeamPage';
 import LogPage from './pages/LogPage';
 import Layout from './components/Layout';
@@ -172,6 +173,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="landings/dashboard" element={<LandingsDashboardPage />} />
             <Route path="landings/:id" element={<LandingEditorPage />} />
             <Route path="redirects" element={<RedirectsPage />} />
+            <Route path="sms" element={<SmsVerificationsPage />} />
             <Route path="todos" element={<TodosPage />} />
             <Route path="todos/:id" element={<TodoDetailPage />} />
             <Route path="my-accounts" element={<MyAccountsPage />} />

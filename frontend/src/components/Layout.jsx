@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { LayoutDashboard, ListVideo, LogOut, CheckSquare, Menu, X, BarChart3, Music, Sparkles, BookOpen, Layers, Film, Users, ScrollText, Compass, Globe, Clapperboard, Link2 } from 'lucide-react';
+import { LayoutDashboard, ListVideo, LogOut, CheckSquare, Menu, X, BarChart3, Music, Sparkles, BookOpen, Layers, Film, Users, ScrollText, Compass, Globe, Clapperboard, Link2, MessageSquare } from 'lucide-react';
 import FetchProgress from './FetchProgress';
 import './Layout.css';
 
@@ -85,6 +85,10 @@ export default function Layout() {
           <NavLink to="/redirects" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
             <Link2 size={18} />
             Redirect Links
+          </NavLink>
+          <NavLink to="/sms" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+            <MessageSquare size={18} />
+            SMS Verifications
           </NavLink>
           <NavLink to="/converter" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
             <Music size={18} />

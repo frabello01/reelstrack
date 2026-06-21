@@ -495,6 +495,29 @@ export const api = {
   },
   getBotProtectionStatus: () => request('/api/landings/bot-protection'),
 
+  // ============================================================
+  // SMSPool — SMS verifications
+  // ============================================================
+  getSmsBalance:   () => request('/api/smspool/balance'),
+  getSmsCountries: () => request('/api/smspool/countries'),
+  getSmsServices:  (country) => request(`/api/smspool/services${country ? `?country=${encodeURIComponent(country)}` : ''}`),
+  getSmsPrice:     ({ country, service, pool }) => {
+    const q = new URLSearchParams({ country, service });
+    if (pool) q.set('pool', pool);
+    return request(`/api/smspool/price?${q.toString()}`);
+  },
+  getSmsOrders:    (limit = 100) => request(`/api/smspool/orders?limit=${limit}`),
+  getSmsActive:    () => request('/api/smspool/orders/active'),
+  purchaseSms:     (payload) => request('/api/smspool/purchase', {
+    method: 'POST', body: JSON.stringify(payload),
+  }),
+  checkSms:        (orderId) => request(`/api/smspool/check/${encodeURIComponent(orderId)}`),
+  cancelSms:       (orderId) => request(`/api/smspool/cancel/${encodeURIComponent(orderId)}`, { method: 'POST' }),
+  resendSms:       (orderId) => request(`/api/smspool/resend/${encodeURIComponent(orderId)}`, { method: 'POST' }),
+  updateSmsNote:   (orderId, note) => request(`/api/smspool/orders/${encodeURIComponent(orderId)}`, {
+    method: 'PATCH', body: JSON.stringify({ note }),
+  }),
+
   // Explore Creators (suggestion scans)
   getSuggestions: (listId) => request(`/api/suggestions/lists/${listId}`),
   triggerSuggestionScan: (listId) =>
