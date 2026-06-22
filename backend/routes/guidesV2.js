@@ -118,14 +118,20 @@ function tableFor(type) {
 // ============================================================
 router.get('/categories', async (req, res) => {
   try {
+    // Alphabetical, case-insensitive, Italian locale (handles accents).
+    // The legacy sort_order column is preserved on the row (and the
+    // /categories/reorder endpoint still writes to it) but it no longer
+    // affects this listing. Sort done client-side because Postgres'
+    // default ORDER BY is byte-wise ASCII — 'Zoom' would sort before
+    // 'alfa' since 'Z' (0x5A) < 'a' (0x61).
     const { data, error } = await supabase
       .from('guide_categories')
-      .select('*')
-      .order('sort_order', { ascending: true })
-      .order('created_at', { ascending: true });
+      .select('*');
     if (error) throw error;
 
-    const cats = data || [];
+    const cats = (data || []).slice().sort((a, b) =>
+      (a.name || '').localeCompare(b.name || '', 'it', { sensitivity: 'base' })
+    );
     const counts = await Promise.all(
       cats.map(async (c) => {
         const [{ count: aCount }, { count: lCount }] = await Promise.all([
