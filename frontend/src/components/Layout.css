@@ -20,6 +20,8 @@
   display: flex;
   flex-direction: column;
   padding: 20px 12px;
+  height: 100vh;
+  min-height: 0;
 }
 
 .sidebar-logo {
@@ -30,6 +32,7 @@
   border-bottom: 1px solid var(--border);
   margin-bottom: 16px;
   position: relative;
+  flex-shrink: 0;
 }
 
 .sidebar-logo img {
@@ -47,7 +50,16 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  flex: 1;
+  flex: 1 1 0;
+  /* min-height:0 is the flexbox quirk that lets a flex item shrink below
+     its content's intrinsic height. Without it, on short viewports (1080p)
+     the nav grows past the sidebar and the footer falls off-screen. */
+  min-height: 0;
+  /* Scroll just this section if the nav gets too tall to fit. The logo
+     up top and the footer (settings + sign out) stay pinned. */
+  overflow-y: auto;
+  /* Reserve space for the scrollbar but keep things tidy. */
+  scrollbar-gutter: stable;
 }
 
 .nav-item {
@@ -77,6 +89,7 @@
   padding-top: 12px;
   margin-top: 8px;
   border-top: 1px solid var(--border);
+  flex-shrink: 0;
 }
 
 /* The Settings link reuses .nav-item but swaps the icon for the user avatar */
